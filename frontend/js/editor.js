@@ -13,6 +13,7 @@ function openEditor(n,pending){
   document.getElementById('suggests').style.display='flex';
   document.getElementById('msgs').innerHTML='';
   setMode('preview');
+  var _rb0=document.getElementById('runLiveBtn');if(_rb0)_rb0.style.display='none';
   addAI('Это шаблон <b>'+escapeHtml(tplTitle(n))+'</b>. Опиши, что изменить — текст, цвета, шрифты, разделы. Я перепишу его, а справа всё обновится. Хочешь — нажми «Проверить сайт», прогоню аудит.');
   document.getElementById('pvUrl').textContent=tplPageUrl(n);
   setDevice('desktop');
@@ -29,6 +30,7 @@ function openScratch(pending){
   document.getElementById('suggests').style.display='none';
   document.getElementById('msgs').innerHTML='';
   setMode('preview');
+  var _rb1=document.getElementById('runLiveBtn');if(_rb1)_rb1.style.display='none';
   addAI('Начнём с чистого листа. Опиши подробно: тема, разделы, стиль, цвета — и я соберу сайт с нуля по крафт-планке качества.');
   renderHtml(current.html);
   document.getElementById('pvUrl').textContent='новый сайт';
@@ -103,7 +105,7 @@ async function sendMessage(){
   const th=startThink('Думаю над дизайном…');
   const imgs=atts.filter(a=>a.kind==='image');
   const htmlAtt=atts.find(a=>a.kind==='html');
-  if(imgs.length)th.line(imgs.length+' изображение(й) как референс','act','▣');
+  if(imgs.length)th.line(imgs.length+' скриншот(ов) → распознаю текст через OCR.space (его увидит любая модель)','act','▣');
   if(htmlAtt){th.line('Взял приложенный HTML как основу','act','⎘');current.html=htmlAtt.data;current.scratch=false;}
   th.line('Формирую промпт с крафт-планкой (impeccable)','act','✎');
 

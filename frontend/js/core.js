@@ -130,12 +130,26 @@ function renderAttachStrip(){
   if(!attachments.length){s.className='attach-strip';s.innerHTML='';return;}
   s.className='attach-strip on';
   s.innerHTML=attachments.map((a,i)=>{
-    const tile=a.kind==='image'?'<div class="tile" style="background-image:url('+String(a.data).replace(/"/g,'&quot;')+')"></div>'
+    const tile=a.kind==='image'?'<div class="tile" style="background-image:url('+String(a.data).replace(/"/g,'&quot;')+')"><button class="ocrbtn" onclick="previewOcr('+i+')" title="Посмотреть, что увидит модель (OCR)">OCR</button></div>'
       :'<div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-5-5H8z"/><path d="M14 3v5h5"/></svg></div>';
     return '<div class="att">'+tile+'<div class="nm" title="'+escapeHtml(a.name)+'">'+escapeHtml(a.name)+'</div><button class="rm" onclick="removeAttach('+i+')">✕</button></div>';
   }).join('');
 }
 function removeAttach(i){attachments.splice(i,1);renderAttachStrip();}
+/* show exactly what any model will "read" from a screenshot via OCR.space */
+async function previewOcr(i){
+  const a=attachments[i];if(!a||a.kind!=='image'){toast('OCR доступен только для изображений');return;}
+  toast('Распознаю через OCR.space…');
+  try{
+    const r=await ocrExtract([a]);
+    const txt=((r&&r.text)||'').trim();
+    openModal('Что модель видит на скрине','OCR.space распознал текст на «'+a.name+'». Именно он передаётся любой выбранной модели вместе с твоим запросом.','Понятно');
+    const body=document.getElementById('mdBody');
+    if(body)body.innerHTML='<pre style="white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;max-height:340px;overflow:auto;margin:0">'+(txt?escapeHtml(txt):'<span style="color:var(--faint)">Текст на изображении не распознан.</span>')+'</pre>';
+  }catch(e){
+    toast(e&&e.offline?'Бэкенд недоступен':e&&e.ocrOff?'OCR отключён на сервере (OCR_ENABLED=0)':'OCR: '+(e&&e.message||'ошибка'));
+  }
+}
 
 /* ---- ZIP ---- */
 let _jszip=null;
@@ -279,6 +293,8 @@ function mountProject(files,name){
   document.getElementById('tplName').textContent=name;
   document.getElementById('suggests').style.display='none';
   document.getElementById('pvUrl').textContent=name+(entry?'/'+entry:'');
+  const runBtn=document.getElementById('runLiveBtn');
+  if(runBtn)runBtn.style.display=(start.kind==='build')?'':'none';
   const fileCount=Object.keys(files).length;
   let entryToUse=entry;
   if(start.prebuilt)entryToUse=start.prebuilt;
@@ -287,13 +303,13 @@ function mountProject(files,name){
     current.html=inlined;renderHtml(inlined);hideLoading();
     let msg='Загрузил проект <b>'+escapeHtml(name)+'</b> ('+fileCount+' файлов). Точка входа: <b>'+escapeHtml(entryToUse)+'</b>.';
     if(start.framework)msg+=' Обнаружен: <b>'+escapeHtml(start.framework)+'</b>.';
-    if(start.kind==='build')msg+='<br><br>⚙️ Это проект со сборкой. Стартовая команда: <code>'+escapeHtml(start.startCmd)+'</code>. Живой предпросмотр статики показан, но для полноценного запуска React/Next/Vite нужен Node-сервер (в браузере без бэкенда JS-сборка не выполняется). Я показываю HTML как есть.';
+    if(start.kind==='build')msg+='<br><br>⚙️ Это проект со сборкой. Стартовая команда: <code>'+escapeHtml(start.startCmd)+'</code>. Показал статический предпросмотр. Для настоящей сборки нажми <b>▶ «Запустить вживую»</b> вверху — соберу и подниму dev-сервер прямо в браузере (Chromium, WebContainers).';
     else msg+=' Собрал предпросмотр — правь его в чате или проверь аудитом.';
     addAI(msg);
     const rep=runAudit(current.html);setAuditBadge(rep);
   }else if(start.kind==='build'){
     hideLoading();current.html=buildInfoHtml(name,start,files);renderHtml(current.html);
-    addAI('Загрузил <b>'+escapeHtml(name)+'</b> ('+fileCount+' файлов) — HTML-точки входа нет, это проект со сборкой (<b>'+escapeHtml(start.framework)+'</b>).<br><br>Стартовая команда: <code>'+escapeHtml(start.startCmd)+'</code>. В браузере без сервера его не поднять — покажу карточку с инструкцией. На бэкенде это можно запускать автоматически.');
+    addAI('Загрузил <b>'+escapeHtml(name)+'</b> ('+fileCount+' файлов) — HTML-точки входа нет, это проект со сборкой (<b>'+escapeHtml(start.framework)+'</b>).<br><br>Стартовая команда: <code>'+escapeHtml(start.startCmd)+'</code>. Нажми <b>▶ «Запустить вживую»</b> вверху — соберу и подниму его прямо в браузере через WebContainers (Chromium).');
   }else{
     hideLoading();toast('В архиве нет HTML-файла для предпросмотра');
     addAI('В <b>'+escapeHtml(name)+'</b> не нашёл ни одного HTML-файла для предпросмотра. Добавь index.html или скажи, что собрать.',true);

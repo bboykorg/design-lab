@@ -108,6 +108,20 @@ function projectSave(p){return _json('POST','/api/projects',p);}
 function projectLoad(id){return _json('GET','/api/projects/'+encodeURIComponent(id));}
 function projectDelete(id){return _json('DELETE','/api/projects/'+encodeURIComponent(id));}
 
+/* ---- OCR: POST /api/ocr {images:[dataURL…]} -> {text, per_image, engine, ok}
+   Lets ANY model "see" a screenshot: the server sends it to OCR.space and the
+   recognized text is what gets fed to the model. ---- */
+async function ocrExtract(images){
+  const imgs=(images||[]).map(a=>a&&a.data?a.data:a).filter(Boolean).slice(0,6);
+  if(!imgs.length)return {text:'',per_image:[],ok:false};
+  let res;
+  try{res=await fetch(apiUrl('/api/ocr'),{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({images:imgs})});}
+  catch(e){const er=new Error('OFFLINE');er.offline=true;throw er;}
+  if(res.status===503){const e=new Error('OCR_OFF');e.ocrOff=true;throw e;}
+  if(!res.ok){let d='';try{d=(await res.json()).detail||'';}catch(_){}throw new Error('HTTP '+res.status+(d?': '+d:''));}
+  return await res.json();
+}
+
 /* ---- optional server-side audit (falls back to local runAudit) ---- */
 async function serverAudit(html){
   try{const res=await fetch(apiUrl('/api/audit'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({html:html})});

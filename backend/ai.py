@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from . import config
 from .models import AIRequest, AIResponse
+from .ocr import ocr_images_safe
 from .prompts import build_system_prompt, build_user_message
 
 router = APIRouter(prefix="/api", tags=["ai"])
@@ -66,6 +67,22 @@ def _payload(req: AIRequest, stream: bool):
     }
 
 
+async def _with_ocr(req: AIRequest) -> AIRequest:
+    """If screenshots are attached, recognize them via OCR.space and fold the
+    text into the message so any model (vision-capable or not) can 'see' them.
+    Vision models still receive the raw images too."""
+    if not (req.images and config.OCR_ENABLED):
+        return req
+    text = await ocr_images_safe(req.images)
+    if not text:
+        return req
+    merged = (req.message or "") + (
+        "\n\n[Текст, распознанный на приложённых скриншотах через OCR.space "
+        "— учитывай его как содержимое изображения]:\n" + text[:8000]
+    )
+    return req.model_copy(update={"message": merged})
+
+
 def _headers():
     return {"Authorization": f"Bearer {config.AI_API_KEY}", "Content-Type": "application/json"}
 
@@ -84,6 +101,7 @@ async def generate(req: AIRequest):
     if not config.has_ai_key():
         raise HTTPException(status_code=503, detail="AI_API_KEY не задан на сервере (.env)")
 
+    req = await _with_ocr(req)
     url = config.AI_BASE_URL + "/chat/completions"
     try:
         async with httpx.AsyncClient(timeout=config.AI_TIMEOUT) as client:
@@ -143,6 +161,7 @@ async def generate_stream(req: AIRequest):
     if not config.has_ai_key():
         raise HTTPException(status_code=503, detail="AI_API_KEY не задан на сервере (.env)")
 
+    req = await _with_ocr(req)
     url = config.AI_BASE_URL + "/chat/completions"
     payload, headers = _payload(req, True), _headers()
 

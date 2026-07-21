@@ -451,5 +451,12 @@ body.cursor-down #cursorDot{width:12px;height:12px}
 .plan.hot::before{left:auto;right:auto;top:auto;inset:-1px;height:auto;border-radius:17px;padding:1px;background:conic-gradient(from var(--ang),rgba(200,206,236,.06),rgba(238,240,246,.95) 12%,rgba(200,206,236,.06) 30%,rgba(200,206,236,.06) 55%,rgba(238,240,246,.5) 66%,rgba(200,206,236,.06) 80%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;animation:spinAng 5.5s linear infinite;pointer-events:none}
 @keyframes spinAng{to{--ang:360deg}}
 
+/* --- OCR button on screenshot attachments + live-run toolbar button --- */
+.att .tile{position:relative}
+.att .ocrbtn{position:absolute;bottom:4px;left:4px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;color:#0a0a0b;background:var(--silver-bright);border-radius:5px;padding:2px 5px;line-height:1;opacity:.92;transition:.15s var(--ease)}
+.att .ocrbtn:hover{background:#fff;box-shadow:0 0 10px rgba(214,220,240,.55);transform:translateY(-1px)}
+.run-live{color:var(--silver-bright)}
+.run-live:hover{border-color:var(--patina);color:#8fd0c9}
+
 @media(max-width:620px){.bg-fx .current-grid{opacity:.5}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
