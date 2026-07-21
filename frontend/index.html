@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div class="bg-fx"><div class="grid"></div><div class="aura"></div></div>
+<div class="bg-fx"><div class="grid"></div><svg class="current-grid" viewBox="0 0 1406 729" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="currentTrace" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="rgba(255,255,255,0)"/><stop offset=".42" stop-color="#fff"/><stop offset=".62" stop-color="#eef1fb"/><stop offset="1" stop-color="rgba(255,255,255,0)"/></linearGradient></defs><path class="track" d="M74 296 H296 V148 H592 V370 H962 V222 H1258"/><path class="track" d="M0 444 H222 V296 H518 V518 H814 V370 H1184 V592 H1406"/><path class="track" d="M148 74 V222 H444 V74 H740 V296 H1036 V148 H1332"/><path class="charge c1" d="M74 296 H296 V148 H592 V370 H962 V222 H1258"/><path class="charge c2" d="M0 444 H222 V296 H518 V518 H814 V370 H1184 V592 H1406"/><path class="charge c3" d="M148 74 V222 H444 V74 H740 V296 H1036 V148 H1332"/><circle class="spark s1" r="3.2"/><circle class="spark s2" r="2.8"/><circle class="spark s3" r="2.4"/></svg><div class="halo"></div><div class="aurora a1"></div><div class="aurora a2"></div><div class="aurora a3"></div><div class="aurora a4"></div><div class="comets"><i></i><i></i><i></i></div><div class="stars" id="stars"></div><div class="scanline"></div><div class="noise"></div></div>
 <svg width="0" height="0" style="position:absolute"><defs><linearGradient id="lgGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#d3d6e2"/><stop offset="1" stop-color="#9a9da8"/></linearGradient></defs></svg>
 
 <!-- ===================== LANDING ===================== -->
@@ -150,9 +150,11 @@
 <div class="modal" id="modal"><div class="box"><button class="close" onclick="closeModal()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button><h3 id="mdTitle">Заголовок</h3><p id="mdText">Текст</p><div id="mdBody"></div><button class="btn-grad" style="width:100%;margin-top:6px" id="mdBtn" onclick="closeModal()">Ок</button></div></div>
 <div class="toast" id="toast"></div>
 
+<div id="cursorGlow"></div><div id="cursorRing"></div><div id="cursorDot"></div>
 <script src="js/core.js"></script>
 <script src="js/api.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/main.js"></script>
+<script src="js/fx.js"></script>
 </body>
 </html>
