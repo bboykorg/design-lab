@@ -8823,49 +8823,44 @@ document.addEventListener('keydown',function(e){
 	var S = { schema: null, sel: null, hist: [], fut: [], tab: 'blocks' };
 	var esc = SF.esc;
 
-	/* ---------- стартовый шоукейс ---------- */
-	function showcase() {
+	/* ---------- чистый холст «Создать с нуля»: пустая доска + пара блоков по центру ---------- */
+	/* ширина холста превью (для расчёта центра). Читаем страницу в iframe, иначе — сцену превью. */
+	function sfCanvasW() {
+		var f = document.getElementById('pvFrame');
+		try { var d = f && f.contentDocument; if (d) { var pg = d.querySelector('.sf-page.on') || d.querySelector('.sf-page') || d.body; var w = pg && pg.clientWidth; if (w > 40) return w; } } catch (e) { }
+		var st = document.getElementById('pvStage'); return (st && st.clientWidth) || 1000;
+	}
+	/* координаты «в середине видимой части холста» + лёгкий каскад, чтобы блоки не ложились друг на друга */
+	function sfCenterXY(bw, bh) {
+		bw = bw || 280; bh = bh || 60;
+		var w = sfCanvasW(), vh = 700, sy = 0;
+		var f = document.getElementById('pvFrame');
+		try { var win = f && f.contentWindow; if (win) { vh = win.innerHeight || vh; sy = win.scrollY || win.pageYOffset || 0; } } catch (e) { }
+		var n = (S.spawn = (S.spawn || 0) + 1); var off = ((n - 1) % 6) * 26;
+		return { x: Math.max(8, Math.round(w / 2 - bw / 2 + off)), y: Math.max(8, Math.round(sy + vh / 2 - bh / 2 + off)) };
+	}
+	/* ширина свободного блока на холсте: число — задаём явно (точный центр), null — натуральная ширина по контенту */
+	var SF_FREE_W = { paragraph: 360, button: null, image: 340, frame: 360, header: null, footer: null, hscroll: 520, nav: null, burger: null, search: 260, animation: 340, htmlraw: 340 };
+	/* оценка ширины для типов с натуральной шириной — только чтобы прикинуть центр по горизонтали */
+	var SF_EST_W = { button: 190, nav: 240, burger: 60, header: 640, footer: 640 };
+	function sfFreeExtra(type) {
+		var w = SF_FREE_W[type];
+		var bw = (w != null) ? w : (SF_EST_W[type] || 280);
+		var c = sfCenterXY(bw, 60);
+		var extra = { freePosition: true, x: c.x, y: c.y };
+		if (w != null) extra.width = w;
+		return extra;
+	}
+	function blankBoard() {
 		var pr = SF.makeProject('Новый сайт', 'graphite');
-		var rootId = pr.pages[0].root.id;
-		function band(props, children) { return SF.makeNode('frame', Object.assign({ padding: '0 24px', alignItems: 'center', gap: 0 }, props), [SF.makeNode('frame', { maxWidth: '1100px', width: '100%', padding: '72px 0', gap: 24 }, children)]); }
-		SF.addTo(pr, rootId, SF.makeNode('header', { padding: '16px 32px', sticky: true }, [
-			SF.makeNode('paragraph', { text: 'VarCorp', fontSize: 20, fontWeight: 700, fontFamily: 'тема' }),
-			SF.makeNode('nav', { links: [{ label: 'Главная', href: '/' }, { label: 'О студии', href: '/about' }], gap: 24 })
-		]));
-		SF.addTo(pr, rootId, band({}, [
-			SF.makeNode('animation', { variant: 'slide-up', trigger: 'onLoad', duration: 500 }, [
-				SF.makeNode('paragraph', { text: 'Визуальный конструктор сайтов', fontSize: 58, fontWeight: 600, lineHeight: 1.1, maxWidth: '760px' })
-			]),
-			SF.makeNode('animation', { variant: 'fade-in', trigger: 'onLoad', duration: 500, delay: 150 }, [
-				SF.makeNode('paragraph', { text: 'Это конструктор: выбери блок слева, кликни по элементу на странице или просто попроси ИИ в чате — он меняет схему, а не переписывает HTML.', fontSize: 19, color: 'rgba(242,243,245,.62)', maxWidth: '640px' })
-			]),
-			SF.makeNode('frame', { direction: 'row', gap: 12, padding: 0 }, [
-				SF.makeNode('button', { label: 'Попробовать', href: '/about' }),
-				SF.makeNode('button', { label: 'Как это работает', variant: 'outline' })
-			])
-		]));
-		var cards = SF.makeNode('hscroll', { cardWidth: 300, gap: 16 });
-		[['Блоки', 'Шапка, текст, кнопки, ленты карточек, поиск и бургер-меню.'], ['Схема', 'Весь сайт — JSON, совместимый с VarCorp SiteForge. Экспорт и импорт в один клик.'], ['ИИ-правки', 'ИИ присылает точечные операции: добавить секцию, сменить тему, переписать текст.'], ['Экспорт', 'На выходе — один автономный HTML с анимациями и роутингом.']].forEach(function (c) {
-			SF.addTo({ pages: [{ id: 'x', path: '/', root: cards }] }, cards.id, SF.makeNode('frame', { backgroundColor: 'var(--sf-surface)', borderRadius: 14, padding: 24, gap: 12 }, [
-				SF.makeNode('paragraph', { text: c[0], fontSize: 22, fontWeight: 600 }),
-				SF.makeNode('paragraph', { text: c[1], fontSize: 16, color: 'rgba(242,243,245,.62)' })
-			]));
-		});
-		SF.addTo(pr, rootId, band({}, [
-			SF.makeNode('paragraph', { text: 'Что внутри', fontSize: 36, fontWeight: 600 }),
-			SF.makeNode('animation', { variant: 'slide-up', trigger: 'onScroll', duration: 450 }, [cards])
-		]));
-		SF.addTo(pr, rootId, SF.makeNode('footer', { padding: '28px 32px' }, [
-			SF.makeNode('paragraph', { text: '© 2026 VarCorp', fontSize: 14, color: 'rgba(242,243,245,.62)' }),
-			SF.makeNode('nav', { links: [{ label: 'Наверх', href: '/' }], gap: 16 })
-		]));
-		var p2 = SF.makePage('О студии', '/about');
-		pr.pages.push(p2);
-		SF.addTo(pr, p2.root.id, band({}, [
-			SF.makeNode('paragraph', { text: 'О студии', fontSize: 48, fontWeight: 600 }),
-			SF.makeNode('paragraph', { text: 'Это вторая страница — роутинг работает прямо в одном HTML-файле через #/about.', fontSize: 18, color: 'rgba(242,243,245,.62)', maxWidth: '640px' }),
-			SF.makeNode('button', { label: 'На главную', href: '/' })
-		]));
+		var root = pr.pages[0].root;
+		/* корневой фрейм — холст на всю высоту, чтобы абсолютным блокам было где стоять */
+		root.props.minHeight = '100vh'; root.props.padding = 0; root.props.gap = 0;
+		var cx = Math.round(sfCanvasW() / 2);
+		/* стартовые блоки уже стоят по центру — их сразу видно и можно двигать */
+		SF.addTo(pr, root.id, SF.makeNode('paragraph', { text: 'Заголовок сайта', fontSize: 54, fontWeight: 700, align: 'center', lineHeight: 1.1, width: 560, maxWidth: '92%', freePosition: true, x: Math.max(8, cx - 280), y: 150 }));
+		SF.addTo(pr, root.id, SF.makeNode('paragraph', { text: 'Коротко опиши, о чём проект. Блоки можно двигать мышкой, а новые — добавлять на панели «Блоки» справа.', fontSize: 18, align: 'center', color: 'rgba(242,243,245,.62)', width: 520, maxWidth: '92%', freePosition: true, x: Math.max(8, cx - 260), y: 244 }));
+		SF.addTo(pr, root.id, SF.makeNode('button', { label: 'Главная кнопка', freePosition: true, x: Math.max(8, cx - 84), y: 344 }));
 		return pr;
 	}
 
@@ -9104,15 +9099,18 @@ document.addEventListener('keydown',function(e){
 	function renderPalette(body) {
 		var groups = {};
 		Object.keys(SF.REGISTRY).forEach(function (t) { var g = SF.REGISTRY[t].group; (groups[g] = groups[g] || []).push(t); });
-		body.innerHTML = '<div class="sf-note">Клик — добавить в выбранный контейнер (или в конец страницы). В превью блоки можно тащить мышью куда угодно — блок просто смещается, остальные остаются на своих местах. С зажатым <b>Alt</b> — вставка в структуру (до/после блока, внутрь контейнера).</div>' + Object.keys(groups).map(function (g) {
+		body.innerHTML = '<div class="sf-note">Клик — новый блок появляется <b>в середине холста</b>, его сразу можно тащить мышью куда угодно. Если выбран контейнер (фрейм/шапка) — блок добавится внутрь него. С зажатым <b>Alt</b> при перетаскивании — вставка в структуру (до/после блока, внутрь контейнера).</div>' + Object.keys(groups).map(function (g) {
 			return '<h4>' + esc(g) + '</h4><div class="sf-pal">' + groups[g].map(function (t) { return '<button data-add="' + t + '"><span style="margin-right:7px">' + (SF_ICONS[t] || '▫️') + '</span>' + esc(SF.REGISTRY[t].label) + '</button>'; }).join('') + '</div>';
 		}).join('');
 		body.querySelectorAll('[data-add]').forEach(function (b) {
 			b.onclick = function () {
 				var type = b.dataset.add, made;
+				var extraFree = sfFreeExtra(type);
 				mutate(function (next) {
 					var pid = (function () { var saved = S.sel; var sc = S.schema; S.schema = next; var r = containerForAdd(); S.schema = sc; S.sel = saved; return r; })();
-					made = SF.addTo(next, pid, SF.makeNode(type, {}));
+					/* блок верхнего уровня ставим по центру холста и делаем свободно перетаскиваемым */
+					var topLevel = (pid === SF.activePage(next).root.id);
+					made = SF.addTo(next, pid, SF.makeNode(type, topLevel ? extraFree : {}));
 				});
 				S.sel = made.id; S.tab = 'props'; renderPanelBody();
 				var f = document.getElementById('pvFrame'); if (f && f.contentWindow) setTimeout(function () { try { f.contentWindow.postMessage({ sf: 'mark', id: S.sel }, '*'); } catch (e) { } }, 120);
@@ -9225,7 +9223,7 @@ document.addEventListener('keydown',function(e){
 			rd.onload = function () { try { commit(SF.normalize(JSON.parse(rd.result))); S.sel = null; toast('Схема импортирована'); } catch (err) { toast('Ошибка импорта: ' + err.message); } };
 			rd.readAsText(file);
 		};
-		document.getElementById('sfReset').onclick = function () { if (confirm('Сбросить проект и начать заново?')) { S.sel = null; commit(showcase()); } };
+		document.getElementById('sfReset').onclick = function () { if (confirm('Сбросить проект и начать заново?')) { S.sel = null; S.spawn = 0; commit(blankBoard()); } };
 		document.getElementById('sfExit').onclick = function () {
 			current.sfMode = false; hidePanel();
 			if (typeof renderHtml === 'function') renderHtml(current.html);
@@ -9353,13 +9351,14 @@ document.addEventListener('keydown',function(e){
 		current.sfMode = true;
 		var saved = null;
 		if (!fresh) { try { saved = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) { } }
-		S.schema = saved ? SF.normalize(saved) : showcase();
+		S.spawn = 0;
+		S.schema = saved ? SF.normalize(saved) : blankBoard();
 		S.sel = null; S.hist = []; S.fut = []; S.tab = 'blocks';
 		showPanel(); sfRender();
 		try {
 			var msgs = document.getElementById('msgs');
 			if (msgs && !msgs.querySelector('.sf-hello')) {
-				var d = addAI('Включён <b>конструктор</b>: справа — блоки, слои и свойства, клик по элементу выделяет его. В чате проси меня о правках — я меняю схему сайта точечными операциями, без перезаписи всего HTML. Кнопка «Скачать» отдаёт готовый автономный сайт, а во вкладке «Сайт» есть экспорт схемы для VarCorp SiteForge.');
+				var d = addAI('Включён <b>конструктор</b>: холст пустой, блоки стоят по центру — их можно тащить мышкой куда угодно. Слева нажимай на блоки в панели, чтобы добавить новые (они появятся в середине холста). В чате проси меня о правках — я меняю схему точечно, а кнопка «Скачать» отдаёт готовый автономный сайт.');
 				if (d) d.classList.add('sf-hello');
 			}
 		} catch (e) { }
