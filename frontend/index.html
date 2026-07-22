@@ -478,7 +478,7 @@ body.cursor-down #cursorDot{width:12px;height:12px}
       <button onclick="scrollTo2('pricing')">Тарифы</button>
     </div>
     <div class="nav-cta">
-      <button class="btn-ghost" onclick="openModal('Вход в Design Lab','Войди, чтобы сохранять проекты и историю правок.','Войти',true)">Войти</button>
+      <button class="btn-ghost" id="authBtn" onclick="openAuth()">Войти</button>
       <button class="btn-solid" onclick="scrollTo2('gallery')">Начать бесплатно</button>
     </div>
   </nav>
@@ -875,7 +875,7 @@ function demoTransform(req,html){
 
 /* ===== MODAL / MISC ===== */
 var modalNeedsForm=false;
-function openModal(title,text,btn,form){document.getElementById('mdTitle').textContent=title;document.getElementById('mdText').textContent=text;document.getElementById('mdBtn').textContent=btn||'Ок';document.getElementById('mdForm').style.display=form?'block':'none';modalNeedsForm=!!form;document.getElementById('modal').classList.add('on');}
+function openModal(title,text,btn,form){document.getElementById('mdTitle').textContent=title;document.getElementById('mdText').textContent=text;var _mb=document.getElementById('mdBtn');_mb.textContent=btn||'Ок';_mb.style.display='';_mb.onclick=modalOk;document.getElementById('mdForm').style.display=form?'block':'none';modalNeedsForm=!!form;document.getElementById('modal').classList.add('on');}
 function closeModal(){document.getElementById('modal').classList.remove('on');}
 function modalOk(){closeModal();toast('Готово — заработает после запуска на сервере');}
 function startFromHero(){var p=document.getElementById('heroPrompt').value.trim();scrollTo2('gallery');if(p)toast('Выбери шаблон — твой запрос уже сохранён');window._pending=p;}
@@ -1411,6 +1411,49 @@ function mountProject(files,name){
     if(dt.files&&dt.files.length){var f=dt.files[0];if(isZip(f))loadZip(f);}
   });});
 })();
+</script>
+<script>
+/* ===== ВХОД / РЕГИСТРАЦИЯ (бэкенд /api/auth) ===== */
+function authToken(){return localStorage.getItem('dl_token')||'';}
+function openAuth(){
+  document.getElementById('mdTitle').textContent='Вход в Design Lab';
+  document.getElementById('mdText').textContent='Войди или зарегистрируйся, чтобы сохранять проекты и историю правок.';
+  var f=document.getElementById('mdForm');
+  f.style.display='block';
+  f.innerHTML='<input class="fld" id="authUser" placeholder="Логин (3–40 символов)" autocomplete="username"><input class="fld" id="authPass" type="password" placeholder="Пароль (мин. 6)" autocomplete="current-password"><div style="display:flex;gap:8px;margin-top:2px"><button class="btn-line" style="flex:1" onclick="doAuth(false)">Войти</button><button class="btn-grad" style="flex:1" onclick="doAuth(true)">Регистрация</button></div>';
+  var b=document.getElementById('mdBtn');b.style.display='none';
+  document.getElementById('modal').classList.add('on');
+  setTimeout(function(){var u=document.getElementById('authUser');if(u)u.focus();},60);
+}
+async function doAuth(reg){
+  var u=(document.getElementById('authUser').value||'').trim();
+  var p=document.getElementById('authPass').value||'';
+  if(!u||!p){toast('Введи логин и пароль');return;}
+  try{
+    var r=await fetch('/api/auth/'+(reg?'register':'login'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    if(!r.ok){var d='';try{d=(await r.json()).detail||'';}catch(e){}throw new Error(d||('HTTP '+r.status));}
+    var j=await r.json();
+    localStorage.setItem('dl_token',j.token);
+    closeModal();refreshAuthUI();toast('Привет, '+j.username+'!');
+  }catch(e){toast(''+(e&&e.message||'Не удалось войти'));}
+}
+async function authLogout(){
+  var tok=authToken();
+  if(tok){try{await fetch('/api/auth/logout',{method:'POST',headers:{'Authorization':'Bearer '+tok}});}catch(e){}}
+  localStorage.removeItem('dl_token');refreshAuthUI();toast('Вышел из аккаунта');
+}
+async function refreshAuthUI(){
+  var btn=document.getElementById('authBtn');if(!btn)return;
+  var tok=authToken();
+  if(tok){
+    try{
+      var r=await fetch('/api/auth/me',{headers:{'Authorization':'Bearer '+tok}});
+      if(r.ok){var me=await r.json();btn.textContent=me.username;btn.title='Выйти';btn.onclick=authLogout;return;}
+    }catch(e){}
+  }
+  btn.textContent='Войти';btn.title='Войти / регистрация';btn.onclick=openAuth;
+}
+refreshAuthUI();
 </script>
 </body>
 </html>
