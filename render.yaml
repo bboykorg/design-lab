@@ -1,6 +1,6 @@
 # Render.com Blueprint — one-click deploy.
-# The AI provider keys below are secrets (sync: false) — Render will prompt for
-# them on deploy. They power the /api/proxy relay used by the frontend.
+# The AI key below is a secret (sync: false) — Render will prompt for it on
+# deploy. It powers the /api/proxy relay used by the frontend.
 services:
   - type: web
     name: design-lab
@@ -15,16 +15,8 @@ services:
         value: json
       - key: CORS_ORIGINS
         value: "*"
-      # AI provider keys for /api/proxy (comma-separated to use several per provider).
-      - key: CEREBRAS_API_KEYS
-        sync: false
-      - key: OPENROUTER_API_KEYS
-        sync: false
-      - key: GEMINI_API_KEYS
-        sync: false
-      - key: GLM_API_KEYS
-        sync: false
-      - key: MISTRAL_API_KEYS
+      # Single AI key for /api/proxy (comma-separated to rotate several).
+      - key: AI_API_KEY
         sync: false
       - key: PUBLIC_URL
         sync: false
