@@ -1,5 +1,6 @@
 # Render.com Blueprint — one-click deploy.
-# Set AI_API_KEY in the Render dashboard (secret, not committed).
+# The AI provider keys below are secrets (sync: false) — Render will prompt for
+# them on deploy. They power the /api/proxy relay used by the frontend.
 services:
   - type: web
     name: design-lab
@@ -10,13 +11,20 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: AI_BASE_URL
-        value: https://openrouter.ai/api/v1
-      - key: AI_MODEL
-        value: qwen/qwen3-coder:free
-      - key: AI_API_KEY
-        sync: false
       - key: STORE
         value: json
       - key: CORS_ORIGINS
         value: "*"
+      # AI provider keys for /api/proxy (comma-separated to use several per provider).
+      - key: CEREBRAS_API_KEYS
+        sync: false
+      - key: OPENROUTER_API_KEYS
+        sync: false
+      - key: GEMINI_API_KEYS
+        sync: false
+      - key: GLM_API_KEYS
+        sync: false
+      - key: MISTRAL_API_KEYS
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
