@@ -20,32 +20,30 @@ from . import config
 
 router = APIRouter(prefix="/api", tags=["proxy"])
 
-# host -> (comma-separated list of env var names to read keys from, auth style)
+# host -> auth style. Every host is authenticated with the single AI_API_KEY.
 _HOSTS = {
-    "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
-    "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
-    "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
-    "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
-    "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
+    "api.cerebras.ai": "bearer",
+    "openrouter.ai": "bearer",
+    "generativelanguage.googleapis.com": "goog",
+    "open.bigmodel.cn": "bearer",
+    "api.mistral.ai": "bearer",
 }
-_counters = {}
+_counter = [0]
 _lock = threading.Lock()
 
 
-def _keys(env_names: str):
-    out = []
-    for name in env_names.split(","):
-        out += [k.strip() for k in os.getenv(name.strip(), "").split(",") if k.strip()]
-    return out
+def _keys():
+    """All keys come from the single AI_API_KEY env var (comma-separated allowed)."""
+    return [k.strip() for k in os.getenv("AI_API_KEY", "").split(",") if k.strip()]
 
 
-def _next_key(host: str, keys):
-    """Round-robin the available keys for a host so load spreads across them."""
+def _next_key(keys):
+    """Round-robin the available keys so load spreads across them."""
     if not keys:
         return None
     with _lock:
-        i = _counters.get(host, 0) % len(keys)
-        _counters[host] = (i + 1) % len(keys)
+        i = _counter[0] % len(keys)
+        _counter[0] = (i + 1) % len(keys)
     return keys[i]
 
 
@@ -59,11 +57,10 @@ async def proxy(request: Request):
     if host not in _HOSTS:
         raise HTTPException(status_code=403, detail=f"host not allowed: {host}")
 
-    env_names, auth = _HOSTS[host]
-    key = _next_key(host, _keys(env_names))
+    auth = _HOSTS[host]
+    key = _next_key(_keys())
     if not key:
-        first = env_names.split(",")[0]
-        raise HTTPException(status_code=503, detail=f"нет ключа для {host} — задай {first} в .env")
+        raise HTTPException(status_code=503, detail="нет ключа — задай AI_API_KEY в .env")
 
     headers = {"Content-Type": "application/json"}
     if auth == "goog":
