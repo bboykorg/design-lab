@@ -1,0 +1,17 @@
+# secrets
+.env
+.env.*
+!.env.example
+# python / runtime
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/
+*.db
+# os / editor / tooling
+.DS_Store
+.idea/
+.vscode/
+.claude/
+skills-lock.json

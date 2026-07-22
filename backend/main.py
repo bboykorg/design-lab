@@ -8,6 +8,7 @@ from .ai import router as ai_router
 from .audit import router as audit_router
 from .projects import router as projects_router
 from .auth import router as auth_router
+from .proxy import router as proxy_router
 
 app = FastAPI(title="Design&Lab API", version="1.0.0")
 
@@ -31,6 +32,7 @@ app.include_router(ai_router)
 app.include_router(audit_router)
 app.include_router(projects_router)
 app.include_router(auth_router)
+app.include_router(proxy_router)
 
 # Static frontend at "/" (index.html served automatically).
 if config.FRONTEND_DIR.exists():
