@@ -490,6 +490,8 @@ body.cursor-down #cursorDot{width:12px;height:12px}
       <textarea class="pi" id="heroPrompt" placeholder="Например: сделай лендинг для кофейни, тёплые тона, крупный заголовок «Кофе, который будит»…"></textarea>
       <div class="prompt-row">
         <div class="prompt-actions">
+          <button class="btn-line" onclick="startScratchFromHero()">Создать с нуля →</button>
+          <button class="btn-line" onclick="pickProjectZip()">Загрузить ZIP</button>
           <button class="btn-grad" onclick="startFromHero()">Выбрать шаблон →</button>
         </div>
       </div>
@@ -572,6 +574,8 @@ body.cursor-down #cursorDot{width:12px;height:12px}
 </div>
 <div class="modal" id="modal"><div class="box"><button class="close" onclick="closeModal()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button><h3 id="mdTitle">Заголовок</h3><p id="mdText">Текст</p><div id="mdForm" style="display:none"><input class="fld" id="mdEmail" placeholder="Твой email" /></div><button class="btn-grad" style="width:100%" id="mdBtn" onclick="modalOk()">Ок</button></div></div>
 <div class="toast" id="toast"></div>
+<input type="file" id="projZipInput" accept=".zip,application/zip,application/x-zip-compressed" style="display:none" onchange="onProjectZip(this)">
+<input type="file" id="projFolderInput" webkitdirectory directory multiple style="display:none" onchange="onProjectFolder(this)">
 <script>
 const TEMPLATE_COUNT=98;
 const PAGES_BASE='https://badvino-ctrl.github.io/IIOL/design/';
@@ -652,6 +656,7 @@ function landingIcon(i){
 
 function buildGallery(){
   var html='<div class="card scratch in" onclick="openScratch()"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="st">Создать с нуля</div><div class="ss">Чистый холст — ИИ напишет сайт по твоему описанию</div></div>';
+  html+='<div class="card scratch in"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div><div class="st">Загрузить ZIP / папку</div><div class="ss">Свой архив или папка проекта — развернём в предпросмотре</div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn-line" onclick="event.stopPropagation();pickProjectZip()">ZIP</button><button class="btn-line" onclick="event.stopPropagation();pickProjectFolder()">Папка</button></div></div>';
   for(var n=1;n<=TEMPLATE_COUNT;n++){
     var tag=TAGS[n%TAGS.length];
     html+='<div class="card" data-n="'+n+'" data-search="v'+n+' '+tplTitle(n).toLowerCase()+' '+tplDesc(n).toLowerCase()+' '+tag+'" onclick="openEditor('+n+')">'
@@ -739,7 +744,7 @@ function loadPreviewLive(n){var f=document.getElementById('pvFrame');showLoading
 function fetchSource(n){fetch(tplRawUrl(n)).then(function(r){return r.ok?r.text():Promise.reject(r.status);}).then(function(t){current.html=t;}).catch(function(){current.html=null;});}
 function showLoading(t){document.getElementById('pvLoadingLbl').textContent=t||'Загружаю…';document.getElementById('pvLoading').classList.add('on');}
 function hideLoading(){document.getElementById('pvLoading').classList.remove('on');}
-function renderHtml(html){var f=document.getElementById('pvFrame');f.removeAttribute('src');f.srcdoc=html;document.getElementById('pvUrl').textContent=current.scratch?'новый сайт (черновик)':tplTitle(current.id)+' (изменён)';}
+function renderHtml(html){var f=document.getElementById('pvFrame');f.removeAttribute('src');f.srcdoc=html;document.getElementById('pvUrl').textContent=current.project?current.project:(current.scratch?'новый сайт (черновик)':tplTitle(current.id)+' (изменён)');}
 function reloadPreview(){if(current.html){renderHtml(current.html);}else if(current.id){loadPreviewLive(current.id);}}
 function setMode(m){var pv=document.querySelector('.preview');document.getElementById('modePreviewBtn').classList.toggle('on',m!=='code');document.getElementById('modeCodeBtn').classList.toggle('on',m==='code');if(m==='code'){var w=window.open('','_blank');if(w&&current.html){w.document.open();w.document.write('<pre style="white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:12px;background:#0d0d0f;color:#f1f2f4;padding:20px;margin:0">'+escapeHtml(current.html)+'</pre>');w.document.close();}document.getElementById('modeCodeBtn').classList.remove('on');document.getElementById('modePreviewBtn').classList.add('on');}}
 function setDevice(d){var st=document.getElementById('pvStage');st.classList.toggle('mobile',d==='mobile');st.classList.toggle('tablet',d==='tablet');document.getElementById('segDesk').classList.toggle('on',d==='desktop');var tb=document.getElementById('segTab');if(tb)tb.classList.toggle('on',d==='tablet');document.getElementById('segMob').classList.toggle('on',d==='mobile');}
@@ -1271,6 +1276,141 @@ sendMessage=async function(){
     addAI('⚠️ '+note+'<br><br>Показал демо-изменение локально. Чтобы работал настоящий ИИ — укажи backend-прокси в меню модели.',true);
   }finally{busy=false;document.getElementById('sendBtn').disabled=false;}
 };
+</script>
+<script>
+/* ===== ЗАГРУЗКА ПРОЕКТА: ZIP / папка → предпросмотр ===== */
+var JSZIP_CDN='https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+var _jszip=null;
+function ensureJSZip(){
+  if(window.JSZip)return Promise.resolve(window.JSZip);
+  if(_jszip)return _jszip;
+  _jszip=new Promise(function(res,rej){var s=document.createElement('script');s.src=JSZIP_CDN;s.onload=function(){res(window.JSZip);};s.onerror=function(){rej(new Error('JSZip не загрузился'));};document.head.appendChild(s);});
+  return _jszip;
+}
+function pickProjectZip(){document.getElementById('projZipInput').click();}
+function pickProjectFolder(){document.getElementById('projFolderInput').click();}
+function onProjectZip(inp){if(inp.files&&inp.files[0])loadZip(inp.files[0]);inp.value='';}
+function onProjectFolder(inp){handleProjectFiles(Array.prototype.slice.call(inp.files));inp.value='';}
+function openEditorForProject(){
+  document.getElementById('landing').style.display='none';
+  document.getElementById('editor').classList.add('on');
+  document.getElementById('suggests').style.display='none';
+  document.getElementById('msgs').innerHTML='';
+  document.getElementById('chatInput').placeholder='Опиши, что изменить в проекте…';
+  setDevice('desktop');
+}
+function readFileAs(f,bin){return new Promise(function(res){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=function(){res('');};if(bin)r.readAsDataURL(f);else r.readAsText(f);});}
+function mimeOf(p){var e=(p.split('.').pop()||'').toLowerCase();return {png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',ico:'image/x-icon',woff:'font/woff',woff2:'font/woff2',ttf:'font/ttf',otf:'font/otf',mp4:'video/mp4',webm:'video/webm',mp3:'audio/mpeg',wav:'audio/wav',pdf:'application/pdf'}[e]||'application/octet-stream';}
+async function loadZip(file){
+  openEditorForProject();showLoading('Распаковываю архив…');
+  try{
+    var JSZip=await ensureJSZip();
+    var zip=await JSZip.loadAsync(file);
+    var files={};
+    var entries=Object.keys(zip.files).filter(function(p){return !zip.files[p].dir;});
+    for(var i=0;i<entries.length;i++){
+      var p=entries[i];
+      var isBin=/\.(png|jpe?g|gif|webp|svg|ico|woff2?|ttf|otf|mp4|webm|mp3|wav|pdf)$/i.test(p);
+      files[p]=isBin?('data:'+mimeOf(p)+';base64,'+(await zip.files[p].async('base64'))):(await zip.files[p].async('string'));
+    }
+    mountProject(files,file.name.replace(/\.zip$/i,''));
+  }catch(e){hideLoading();toast('Не удалось открыть ZIP: '+e.message);addAI('⚠️ Не смог распаковать архив: '+escapeHtml(e.message),true);}
+}
+async function handleProjectFiles(fileArr){
+  if(!fileArr.length)return;openEditorForProject();showLoading('Читаю папку проекта…');
+  var files={},root='';
+  var rel=fileArr[0].webkitRelativePath||fileArr[0].name;root=rel.split('/')[0];
+  for(var i=0;i<fileArr.length;i++){
+    var f=fileArr[i];
+    var path=(f.webkitRelativePath||f.name).replace(root+'/','');
+    var isBin=/\.(png|jpe?g|gif|webp|svg|ico|woff2?|ttf|otf|mp4|webm|mp3|wav|pdf)$/i.test(f.name);
+    files[path]=await readFileAs(f,isBin);
+  }
+  mountProject(files,root||'project');
+}
+function detectEntry(files){
+  var paths=Object.keys(files);
+  var htmls=paths.filter(function(p){return /\.html?$/i.test(p);});
+  if(!htmls.length)return null;
+  function score(p){var s=p.split('/').length*10;var base=p.split('/').pop().toLowerCase();if(base==='index.html')s-=100;if(/^(public|dist|build|out)\//i.test(p))s-=30;if(/^src\//i.test(p))s-=5;return s;}
+  return htmls.slice().sort(function(a,b){return score(a)-score(b);})[0];
+}
+function detectFramework(files){
+  var pkgPath=Object.keys(files).find(function(p){return /(^|\/)package\.json$/i.test(p);});
+  if(!pkgPath)return null;
+  var pkg={};try{pkg=JSON.parse(files[pkgPath]);}catch(e){}
+  var deps=Object.assign({},pkg.dependencies,pkg.devDependencies);
+  function has(n){return Object.keys(deps).some(function(d){return d===n||d.indexOf(n)===0;});}
+  if(has('next'))return'Next.js';if(has('nuxt'))return'Nuxt';if(has('@angular/core'))return'Angular';
+  if(has('vite'))return'Vite';if(has('react-scripts'))return'Create React App';
+  if(has('svelte')||has('@sveltejs/kit'))return'Svelte';if(has('vue'))return'Vue';if(has('astro'))return'Astro';
+  return Object.keys(deps).length?'Node-проект':null;
+}
+function resolvePath(base,rel){
+  if(/^(https?:)?\/\//i.test(rel)||/^data:/i.test(rel)||rel.charAt(0)==='#'||rel.indexOf('mailto:')===0)return null;
+  var baseDir=base.indexOf('/')>-1?base.slice(0,base.lastIndexOf('/')+1):'';
+  var path=rel.split('#')[0].split('?')[0];
+  if(path.charAt(0)==='/')path=path.slice(1);else path=baseDir+path;
+  var parts=[];path.split('/').forEach(function(seg){if(seg==='..')parts.pop();else if(seg!=='.'&&seg!=='')parts.push(seg);});
+  return parts.join('/');
+}
+function findFile(files,path){
+  if(files[path]!=null)return path;
+  var lower=path.toLowerCase();
+  var hit=Object.keys(files).find(function(p){return p.toLowerCase()===lower;});
+  if(hit)return hit;
+  var tail=Object.keys(files).find(function(p){return p.toLowerCase().endsWith('/'+lower);});
+  return tail||null;
+}
+function inlineCss(files,cssPath){
+  var css=String(files[cssPath]||'');
+  css=css.replace(/url\(\s*["']?([^"')]+)["']?\s*\)/gi,function(full,val){var rp=resolvePath(cssPath,val);if(!rp)return full;var fp=findFile(files,rp);if(!fp)return full;var data=files[fp];if(typeof data==='string'&&data.indexOf('data:')===0)return 'url("'+data+'")';return full;});
+  return css;
+}
+function inlineProject(files,entry){
+  var html=files[entry]||'';
+  html=html.replace(/<link\b[^>]*>/gi,function(tag){if(!/stylesheet/i.test(tag))return tag;var m=tag.match(/href\s*=\s*["']([^"']+)["']/i);if(!m)return tag;var rp=resolvePath(entry,m[1]);if(!rp)return tag;var fp=findFile(files,rp);if(!fp)return tag;return '<style>\n'+inlineCss(files,fp)+'\n</style>';});
+  html=html.replace(/<script\b([^>]*)>\s*<\/script>/gi,function(tag,attrs){var m=attrs.match(/src\s*=\s*["']([^"']+)["']/i);if(!m)return tag;var rp=resolvePath(entry,m[1]);if(!rp)return tag;var fp=findFile(files,rp);if(!fp)return tag;return '<scr'+'ipt>\n'+String(files[fp]).replace(/<\/script>/gi,'<\\/script>')+'\n<\/scr'+'ipt>';});
+  html=html.replace(/(src|href|poster)\s*=\s*["']([^"']+)["']/gi,function(full,attr,val){var rp=resolvePath(entry,val);if(!rp)return full;var fp=findFile(files,rp);if(!fp)return full;var data=files[fp];if(typeof data==='string'&&data.indexOf('data:')===0)return attr+'="'+data+'"';return full;});
+  return html;
+}
+function projectInfoHtml(name,framework,files){
+  var tree=Object.keys(files).slice(0,40).map(function(p){return '• '+p;}).join('<br>');
+  return '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escapeHtml(name)+'</title><style>*{margin:0;box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0a0a0b;color:#f2f3f5;padding:40px;line-height:1.6}h1{font-size:28px;margin-bottom:8px}.m{color:#9497a2}.t{margin-top:20px;font-family:monospace;font-size:12px;color:#9497a2;background:#101012;border:1px solid #222;border-radius:10px;padding:16px}</style></head><body><h1>'+escapeHtml(name)+'</h1><p class="m">'+(framework?('Обнаружен фреймворк: <b>'+escapeHtml(framework)+'</b>. '):'')+'HTML-точки входа для предпросмотра нет.</p><p class="m" style="margin-top:12px">Для проектов со сборкой (React/Vite/Next) покажется собранная статика (dist/build/public), либо опиши в чате, что собрать.</p><div class="t">'+tree+'</div></body></html>';
+}
+function mountProject(files,name){
+  var entry=detectEntry(files);
+  var framework=detectFramework(files);
+  current={id:null,html:null,scratch:false,project:name};
+  document.getElementById('tplName').textContent=name;
+  var fileCount=Object.keys(files).length;
+  var prebuilt=Object.keys(files).find(function(p){return /(^|\/)(dist|build|out|public)\/index\.html$/i.test(p);});
+  var entryToUse=prebuilt||entry;
+  if(entryToUse){
+    var inlined=inlineProject(files,entryToUse);
+    current.html=inlined;renderHtml(inlined);hideLoading();
+    var msg='Загрузил проект <b>'+escapeHtml(name)+'</b> ('+fileCount+' файлов). Точка входа: <b>'+escapeHtml(entryToUse)+'</b>.';
+    if(framework)msg+=' Обнаружен: <b>'+escapeHtml(framework)+'</b>.';
+    msg+=' Собрал предпросмотр — правь его в чате словами или скачай.';
+    addAI(msg);
+  }else{
+    hideLoading();current.html=projectInfoHtml(name,framework,files);renderHtml(current.html);
+    addAI('Загрузил <b>'+escapeHtml(name)+'</b> ('+fileCount+' файлов) — готового HTML для предпросмотра не нашёл'+(framework?(', это проект <b>'+escapeHtml(framework)+'</b> со сборкой'):'')+'. Покажу список файлов; опиши в чате, что собрать.');
+  }
+  location.hash='editor/project';
+}
+/* drag&drop проекта на страницу */
+(function(){
+  function isZip(f){return /\.zip$/i.test(f.name)||(f.type||'').indexOf('zip')>-1;}
+  ['dragover','drop'].forEach(function(ev){window.addEventListener(ev,function(e){
+    if(ev==='dragover'){e.preventDefault();return;}
+    e.preventDefault();
+    var dt=e.dataTransfer;if(!dt)return;
+    var items=dt.items;
+    if(items&&items.length&&items[0].webkitGetAsEntry){var en=items[0].webkitGetAsEntry();if(en&&en.isDirectory){return;}}
+    if(dt.files&&dt.files.length){var f=dt.files[0];if(isZip(f))loadZip(f);}
+  });});
+})();
 </script>
 </body>
 </html>
