@@ -65,7 +65,9 @@ async def proxy(request: Request):
         first = env_names.split(",")[0]
         raise HTTPException(status_code=503, detail=f"нет ключа для {host} — задай {first} в .env")
 
-    headers = {"Content-Type": "application/json"}
+    # Ask for an uncompressed body: the response is re-streamed to the browser
+    # without a Content-Encoding header, so compressed bytes would be garbage.
+    headers = {"Content-Type": "application/json", "Accept-Encoding": "identity"}
     if auth == "goog":
         headers["x-goog-api-key"] = key
     else:
@@ -92,7 +94,9 @@ async def proxy(request: Request):
 
     async def gen():
         try:
-            async for chunk in r.aiter_raw():
+            # aiter_bytes (not aiter_raw) decodes gzip/deflate if the provider
+            # compresses the body anyway, so the client always gets plain bytes.
+            async for chunk in r.aiter_bytes():
                 yield chunk
         finally:
             await r.aclose()
