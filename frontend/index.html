@@ -7645,14 +7645,14 @@ renderHtml=function(h){_dlRenderHtml(h);if(DL_GEN.on&&DL_GEN.step<2)dlSetStage(2
 /* ---------- умные подсказки ---------- */
 var DL_SUGG={
 	'Ресторан':['Добавь секцию меню с ценами','Сделай тёплую уютную палитру','Добавь форму брони столика','Галерея блюд с фото','Добавь часы работы и карту'],
-	'Портфолио':['Добавь секцию кейсов с результатами','Сделай крупную выразительную типографику','Добавь блок «Обо мне» и контакты','Тёмная галерея работ с hover-эффектом','Добавь отзывы клиентов'],
-	'SaaS и ИИ':['Добавь блок тарифов с переключателем месяц/год','Секция интеграций с логотипами','Добавь отзывы клиентов с аватарами','Hero с продуктовым скриншотом','Добавь FAQ про безопасность данных'],
-	'Web3 и игры':['Усиль неоновые акценты и свечение','Добавь секцию roadmap по кварталам','Счётчики статистики с анимацией','Глитч-эффект в заголовке hero','Добавь блок команды проекта'],
+	'Портфолио':['Добавь секцию кейсов с результатами','Сделай крупную выразительную типографику','Добавь блок «Обо мне» и контакты','Тёмная галерея работ с эффектом при наведении','Добавь отзывы клиентов'],
+	'SaaS и ИИ':['Добавь блок тарифов с переключателем месяц/год','Секция интеграций с логотипами','Добавь отзывы клиентов с аватарами','Первый экран с продуктовым скриншотом','Добавь вопросы и ответы про безопасность данных'],
+	'Web3 и игры':['Усиль неоновые акценты и свечение','Добавь дорожную карту по кварталам','Счётчики статистики с анимацией','Глитч-эффект в главном заголовке','Добавь блок команды проекта'],
 	'Магазин':['Добавь карточки товаров с ценами','Секция преимуществ доставки','Добавь баннер скидки недели','Блок отзывов покупателей с рейтингом','Добавь таблицу размеров'],
-	'Креатив':['Смелее типографика в hero','Добавь параллакс при скролле','Чёрно-белая палитра с одним акцентом','Добавь горизонтальную галерею','Анимируй появление секций'],
+	'Креатив':['Смелее типографика на первом экране','Добавь параллакс при прокрутке','Чёрно-белая палитра с одним акцентом','Добавь горизонтальную галерею','Анимируй появление секций'],
 	'Бизнес':['Добавь блок услуг с иконками','Секция команды с фото','Форма заявки с телефоном','Добавь цифры и достижения','Блок партнёров и клиентов'],
-	scratch:['Лендинг кофейни с тёплыми тонами','Портфолио фотографа, тёмный минимализм','SaaS-лендинг с тарифами','Сайт барбершопа с прайсом'],
-	after:['Улучши мобильную версию','Добавь плавные анимации при скролле','Сделай контрастнее кнопки CTA','Добавь секцию FAQ','Добавь секцию отзывов','Подчисти отступы и выравнивание']
+	scratch:['Лендинг кофейни с тёплыми тонами','Портфолио фотографа, тёмный минимализм','Лендинг онлайн-сервиса с тарифами','Сайт барбершопа с прайсом'],
+	after:['Улучши мобильную версию','Добавь плавные анимации при прокрутке','Сделай главные кнопки контрастнее','Добавь секцию вопросов и ответов','Добавь секцию отзывов','Подчисти отступы и выравнивание']
 };
 function dlPickSuggests(key){
 	var base=DL_SUGG[key]||DL_SUGG['Бизнес'];
@@ -8181,7 +8181,7 @@ document.addEventListener('keydown',function(e){
 				{ key: 'color', label: 'Цвет', type: 'color' },
 				{ key: 'align', label: 'Выравнивание', type: 'select', options: ['left', 'center', 'right'] },
 				{ key: 'lineHeight', label: 'Интерлиньяж', type: 'number', step: 0.1 },
-				{ key: 'maxWidth', label: 'Max ширина', type: 'text' },
+				{ key: 'maxWidth', label: 'Макс. ширина', type: 'text' },
 				{ key: 'href', label: 'Ссылка', type: 'text' }
 			]
 		},
@@ -8222,8 +8222,8 @@ document.addEventListener('keydown',function(e){
 				{ key: 'justifyContent', label: 'Распределение', type: 'select', options: ['flex-start', 'center', 'flex-end', 'space-between'] },
 				{ key: 'backgroundColor', label: 'Фон', type: 'color' },
 				{ key: 'borderRadius', label: 'Скругление', type: 'number' },
-				{ key: 'maxWidth', label: 'Max ширина', type: 'text' },
-				{ key: 'minHeight', label: 'Min высота', type: 'text' },
+				{ key: 'maxWidth', label: 'Макс. ширина', type: 'text' },
+				{ key: 'minHeight', label: 'Мин. высота', type: 'text' },
 				{ key: 'anchor', label: 'Якорь (для ссылок #…)', type: 'text' },
 				{ key: 'wrap', label: 'Перенос в ряду', type: 'checkbox' }
 			]
@@ -8300,7 +8300,7 @@ document.addEventListener('keydown',function(e){
 			defaults: { html: '<div>HTML</div>' },
 			fields: [
 				{ key: 'html', label: 'HTML-код', type: 'textarea' },
-				{ key: 'maxWidth', label: 'Max ширина', type: 'text' }
+				{ key: 'maxWidth', label: 'Макс. ширина', type: 'text' }
 			]
 		}
 	};
@@ -9162,13 +9162,28 @@ document.addEventListener('keydown',function(e){
 		body.querySelectorAll('.sf-row').forEach(function (r) { r.onclick = function () { selectNode(r.dataset.id); S.tab = 'props'; renderPanelBody(); }; });
 	}
 
+	/* русские подписи для технических значений в выпадашках (в схеме остаются исходные значения) */
+	var SF_OPT_RU = {
+		/* вид кнопки */ 'solid': 'Заливка', 'outline': 'Контур', 'ghost': 'Прозрачная',
+		/* выравнивание текста */ 'left': 'Слева', 'center': 'По центру', 'right': 'Справа',
+		/* заполнение картинки */ 'cover': 'Заполнить', 'contain': 'Вписать', 'fill': 'Растянуть',
+		/* направление фрейма */ 'column': 'Колонкой', 'row': 'В ряд',
+		/* выравнивание/распределение */ 'stretch': 'Растянуть', 'flex-start': 'В начало', 'flex-end': 'В конец', 'space-between': 'По краям',
+		/* ориентация меню */ 'horizontal': 'Горизонтально', 'vertical': 'Вертикально',
+		/* анимации */ 'fade-in': 'Проявление', 'slide-up': 'Снизу вверх', 'slide-down': 'Сверху вниз', 'slide-left': 'Справа налево', 'slide-right': 'Слева направо', 'zoom-in': 'Приближение', 'pulse': 'Пульсация', 'float': 'Парение', 'glow': 'Свечение', 'typewriter': 'Печатная машинка',
+		/* триггеры анимаций */ 'onScroll': 'При прокрутке', 'onLoad': 'При загрузке', 'onHover': 'При наведении', 'loop': 'По кругу',
+		/* насыщенность шрифта */ '300': 'Тонкий · 300', '400': 'Обычный · 400', '500': 'Средний · 500', '600': 'Полужирный · 600', '700': 'Жирный · 700',
+		/* шрифты */ 'тема': 'Из темы', 'system-ui': 'Системный'
+	};
+	function optLabel(o) { var k = String(o); return SF_OPT_RU[k] || k; }
+
 	function fieldInput(f, val) {
 		var v = val == null ? '' : val;
 		if (f.type === 'textarea') return '<textarea data-k="' + f.key + '">' + esc(v) + '</textarea>';
 		if (f.type === 'number') return '<input type="number" step="' + (f.step || 1) + '" data-k="' + f.key + '" value="' + esc(v) + '">';
 		if (f.type === 'checkbox') return '<input type="checkbox" data-k="' + f.key + '"' + (val ? ' checked' : '') + '>';
 		if (f.type === 'color') return '<div style="display:flex;gap:6px"><input type="color" style="width:44px" data-kc="' + f.key + '" value="' + (/^#[0-9a-f]{6}$/i.test(String(v)) ? esc(v) : '#888888') + '"><input type="text" data-k="' + f.key + '" value="' + esc(v) + '" placeholder="из темы"></div>';
-		if (f.type === 'select') return '<select data-k="' + f.key + '"><option value="">—</option>' + (f.options || []).map(function (o) { return '<option' + (String(o) === String(v) ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+		if (f.type === 'select') return '<select data-k="' + f.key + '"><option value="">—</option>' + (f.options || []).map(function (o) { return '<option value="' + esc(o) + '"' + (String(o) === String(v) ? ' selected' : '') + '>' + esc(optLabel(o)) + '</option>'; }).join('') + '</select>';
 		if (f.type === 'links') return '<textarea data-klinks="' + f.key + '" placeholder="Название | /путь">' + esc((val || []).map(function (l) { return l.label + ' | ' + l.href; }).join('\n')) + '</textarea>';
 		return '<input type="text" data-k="' + f.key + '" value="' + esc(v) + '">';
 	}
