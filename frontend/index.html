@@ -912,7 +912,7 @@ document.getElementById('modal').addEventListener('click',function(e){if(e.targe
     if(dot.style.opacity==='0'){dot.style.opacity='';ring.style.opacity='';glow.style.opacity='';}
     dot.style.transform='translate('+mx+'px,'+my+'px)';
     var now=Date.now();
-    if(now-last>26){last=now;var t=document.createElement('div');t.className='cursor-trail';t.style.transform='translate('+mx+'px,'+my+'px)';document.body.appendChild(t);setTimeout(function(){t.remove()},650);}
+    if(now-last>26&&!window.busy){last=now;var t=document.createElement('div');t.className='cursor-trail';t.style.transform='translate('+mx+'px,'+my+'px)';document.body.appendChild(t);setTimeout(function(){t.remove()},650);}
   },{passive:true});
   function loop(){rx+=(mx-rx)*.18;ry+=(my-ry)*.18;gx+=(mx-gx)*.09;gy+=(my-gy)*.09;ring.style.transform='translate('+rx+'px,'+ry+'px)';glow.style.transform='translate('+gx+'px,'+gy+'px)';requestAnimationFrame(loop);}
   loop();
@@ -1253,6 +1253,13 @@ function addUserRich(t,atts){
 }
 
 /* ---- streaming AI call: OCR + автопереключение моделей ---- */
+/* Промежуточный рендер стрима — без <script>: иначе каждые сотни мс заново
+   парсится весь документ и перезапускаются WebGL/анимации, из-за чего главный
+   поток занят и JS-курсор сильно отстаёт. Скрипты запускаем только в финале. */
+function renderHtmlLive(html,final){
+  if(final)return renderHtml(html);
+  renderHtml(String(html).replace(/<script\b[\s\S]*?<\/script>/gi,'').replace(/<script\b[\s\S]*$/i,''));
+}
 async function callAIStream(userText,baseHtml,scratch,imgs,onDelta,onThink){
   var sys=scratch?DL_AI_SYS.scratch:DL_AI_SYS.edit;
   var textPart=scratch?('\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0441\u0430\u0439\u0442\u0430:\n'+userText):('\u0417\u0430\u043f\u0440\u043e\u0441: '+userText+'\n\nHTML \u0448\u0430\u0431\u043b\u043e\u043d\u0430:\n'+(baseHtml||'').slice(0,120000));
@@ -1381,7 +1388,7 @@ async function sendMessage(){
         if(!started){started=true;th.line('\u041d\u0430\u0447\u0438\u043d\u0430\u044e \u043f\u0438\u0441\u0430\u0442\u044c \u043a\u043e\u0434 \u2014 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0441\u0440\u0430\u0437\u0443 \u043d\u0430 \u0434\u043e\u0441\u043a\u0435','act','\u26a1');}
         milestones(html);
         var now=Date.now();
-        if(final||now-lastRender>350){lastRender=now;current.html=html;renderHtml(html);}
+        if(final||now-lastRender>900){lastRender=now;current.html=html;renderHtmlLive(html,final);}
       }
     },flushThink);
     var html=extractHtml(out);
@@ -1689,7 +1696,7 @@ async function sendMessage(){
         if(!started){started=true;th.line('Начинаю писать код — изменения сразу на доске','act','\u26a1');}
         milestones(html);
         var now=Date.now();
-        if(final||now-lastRender>350){lastRender=now;current.html=html;renderHtml(html);}
+        if(final||now-lastRender>900){lastRender=now;current.html=html;renderHtmlLive(html,final);}
       }
     },flushThink);
     var html=extractHtml(out);
