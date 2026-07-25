@@ -1278,10 +1278,9 @@ async function callAIStream(userText,baseHtml,scratch,imgs,onDelta,onThink){
   function mkText(limit){
     return scratch?('Описание сайта:\n'+userText+ocrPart):(tplNote+'Запрос: '+userText+'\n\nHTML шаблона:\n'+(baseHtml||'').slice(0,limit)+ocrPart);
   }
-  /* лестница размеров: 429/400 на больших шаблонах часто лечится сжатием кода в запросе */
-  var baseLen=(baseHtml||'').length;
+  /* НЕ сжимаем код шаблона: правка по обрезанному коду даёт «полный» документ из обрывка (белый фон).
+     Один честный лимит; при 429 переходим к следующей модели с большим контекстом. */
   var limits=[120000];
-  if(!scratch){if(baseLen>60000)limits.push(60000);if(baseLen>30000)limits.push(30000);}
   var chain=[currentModel];
   FALLBACK_ORDER.forEach(function(k){if(k!==currentModel&&MODELS[k])chain.push(k);});
   var lastErr='NETWORK';
@@ -1298,7 +1297,6 @@ async function callAIStream(userText,baseHtml,scratch,imgs,onDelta,onThink){
         }
         if(out){
           if(ci>0)toast('\u041e\u0442\u0432\u0435\u0442\u0438\u043b\u0430 \u0440\u0435\u0437\u0435\u0440\u0432\u043d\u0430\u044f \u043c\u043e\u0434\u0435\u043b\u044c: '+m.name);
-          if(li>0)toast('Код шаблона был сжат до '+Math.round(limits[li]/1000)+'К символов из-за лимитов модели');
           return out;
         }
         break;
@@ -1310,11 +1308,6 @@ async function callAIStream(userText,baseHtml,scratch,imgs,onDelta,onThink){
           m=Object.assign({},m,{model:'openrouter/free'});
           if(onThink)onThink('Модель '+MODELS[mk].name+' удалена с OpenRouter — пробую Авто-выбор.\n');
           li--;continue;
-        }
-        /* 429 (квота) и 400/413 (слишком большой запрос) — пробуем ту же модель с меньшим куском кода */
-        if((lastErr==='429'||lastErr==='400'||lastErr==='413')&&li<limits.length-1){
-          if(onThink)onThink('Запрос велик для '+m.name+' ('+lastErr+') — сжимаю код до '+Math.round(limits[li+1]/1000)+'К и пробую снова.\n');
-          continue;
         }
         break;
       }
@@ -1726,9 +1719,18 @@ async function sendMessage(){
       }
     },flushThink);
     var html=extractHtml(out);
-    if(html&&html.length>60){
+    /* защита активного пути: обрыв (нет </html>) или подозрительное усыхание документа → возвращаем прежнюю версию */
+    var closed=/<\/html>\s*$/i.test(html)||/<\/body>/i.test(html);
+    var shrunk=!scratchMode&&(baseHtml||'').length>20000&&html&&html.length<(baseHtml||'').length*0.3;
+    if(html&&html.length>60&&closed&&!shrunk){
       current.html=html;renderHtml(html);th.done();
       addAI('Готово \u2713 Я менял сайт в прямом эфире — всё уже применено на холсте. Если что-то не так, уточни — поправлю.');
+    }else if(html&&html.length>60){
+      current.html=baseHtml;renderHtml(baseHtml);
+      th.fail(closed?'Ответ подозрительно короткий':'Ответ оборвался');
+      addAI('\u26a0\ufe0f '+(closed
+        ?'ИИ вернул сильно укороченную версию сайта ('+Math.round(html.length/1000)+'К вместо '+Math.round((baseHtml||'').length/1000)+'К символов) — скорее всего, он потерял часть шаблона. Я откатил к прежней версии. Попробуй точечную правку («поменяй только цвета/секцию…») или другую модель.'
+        :'Ответ ИИ оборвался на середине (лимит длины у модели) — незакрытый документ оставил бы «пустоту», поэтому я вернул прежнюю версию сайта. Попробуй более точечную правку или модель с длинным ответом.'),true);
     }else{
       th.fail('Модель не вернула HTML');
       addAI(escapeHtml(out||'').slice(0,600)||'Модель вернула пустой ответ. Попробуй сформулировать точнее.');
