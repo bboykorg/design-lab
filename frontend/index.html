@@ -8224,6 +8224,7 @@ document.addEventListener('keydown',function(e){
 				{ key: 'borderRadius', label: 'Скругление', type: 'number' },
 				{ key: 'maxWidth', label: 'Max ширина', type: 'text' },
 				{ key: 'minHeight', label: 'Min высота', type: 'text' },
+				{ key: 'anchor', label: 'Якорь (для ссылок #…)', type: 'text' },
 				{ key: 'wrap', label: 'Перенос в ряду', type: 'checkbox' }
 			]
 		},
@@ -8441,7 +8442,7 @@ document.addEventListener('keydown',function(e){
 				return linked('<img id="' + n.id + '" src="' + esc(src) + '" alt="' + esc(p.alt) + '" loading="lazy" style="' + st(Object.assign(common(p), { objectFit: p.objectFit, width: p.width || '100%', display: 'block' })) + '">', p);
 			}
 			case 'frame':
-				return linked('<div id="' + n.id + '" style="' + st(Object.assign(common(p), { display: 'flex', flexDirection: p.direction || 'column', flexWrap: p.wrap ? 'wrap' : undefined, alignItems: p.alignItems, justifyContent: p.justifyContent, gap: p.gap, border: p.borderWidth ? p.borderWidth + 'px ' + (p.borderStyle || 'solid') + ' ' + (p.borderColor || 'var(--sf-border)') : undefined, overflow: p.overflow, marginLeft: p.maxWidth ? 'auto' : undefined, marginRight: p.maxWidth ? 'auto' : undefined })) + '">' + kids + '</div>', p, 'sf-card-link');
+				return linked('<div id="' + n.id + '"' + (p.anchor ? ' data-sf-anchor="' + esc(p.anchor) + '"' : '') + ' style="' + st(Object.assign(common(p), { display: 'flex', flexDirection: p.direction || 'column', flexWrap: p.wrap ? 'wrap' : undefined, alignItems: p.alignItems, justifyContent: p.justifyContent, gap: p.gap, border: p.borderWidth ? p.borderWidth + 'px ' + (p.borderStyle || 'solid') + ' ' + (p.borderColor || 'var(--sf-border)') : undefined, overflow: p.overflow, marginLeft: p.maxWidth ? 'auto' : undefined, marginRight: p.maxWidth ? 'auto' : undefined })) + '">' + kids + '</div>', p, 'sf-card-link');
 			case 'header': case 'footer':
 				return '<' + n.type + ' id="' + n.id + '" style="' + st(Object.assign(common(p), { display: 'flex', flexDirection: p.direction || 'row', alignItems: p.alignItems || 'center', justifyContent: p.justifyContent || 'space-between', gap: p.gap, position: (n.type === 'header' && p.sticky) ? 'sticky' : undefined, top: (n.type === 'header' && p.sticky) ? 0 : undefined, zIndex: (n.type === 'header' && p.sticky) ? 20 : undefined, background: p.backgroundColor || (n.type === 'header' && p.sticky ? 'var(--sf-bg-blur)' : undefined), backdropFilter: (n.type === 'header' && p.sticky && !p.backgroundColor) ? 'blur(14px)' : undefined, borderBottom: n.type === 'header' ? '1px solid var(--sf-border)' : undefined, borderTop: n.type === 'footer' ? '1px solid var(--sf-border)' : undefined })) + '">' + kids + '</' + n.type + '>';
 			case 'animation': {
@@ -8542,7 +8543,7 @@ document.addEventListener('keydown',function(e){
 	function runtimeJs() {
 		return [
 			'(function(){',
-			'function route(){var h=location.hash.replace(/^#/,"")||"/";var ps=document.querySelectorAll(".sf-page");var hit=null;ps.forEach(function(p){if(p.dataset.path===h)hit=p});if(!hit)hit=ps[0];ps.forEach(function(p){p.classList.toggle("on",p===hit)});if(hit)window.scrollTo(0,0);obs();setTimeout(updHs,60)}',
+			'function route(){var h=location.hash.replace(/^#/,"")||"/";var ps=document.querySelectorAll(".sf-page");var hit=null;ps.forEach(function(p){if(p.dataset.path===h)hit=p});if(!hit&&h!=="/"){var hs=h.replace(/["\\\\]/g,"");var t=document.querySelector(".sf-page.on [data-sf-anchor=\'"+hs.replace(/\'/g,"")+"\']")||document.getElementById(hs);if(t){t.scrollIntoView({behavior:"smooth",block:"start"});obs();setTimeout(updHs,60);return}}if(!hit)hit=ps[0];ps.forEach(function(p){p.classList.toggle("on",p===hit)});if(hit)window.scrollTo(0,0);obs();setTimeout(updHs,60)}',
 			'var io=null;',
 			'function obs(){if(io)io.disconnect();io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("sf-anim--active");io.unobserve(e.target)}})},{threshold:.18});document.querySelectorAll(".sf-page.on .sf-anim[data-trigger=onScroll]").forEach(function(el){io.observe(el)})}',
 			'window.sfSearch=function(input){var box=input.nextElementSibling;var q=input.value.toLowerCase();box.innerHTML=q?window.__sfIndex.filter(function(x){return x.text.toLowerCase().indexOf(q)>-1}).slice(0,8).map(function(x){return "<button type=button data-id="+x.id+" data-path="+x.path+">"+x.text.replace(/</g,"&lt;").slice(0,80)+"</button>"}).join(""):"";Array.prototype.forEach.call(box.querySelectorAll("button"),function(b){b.onclick=function(){if(location.hash.replace(/^#/,"")!==b.dataset.path&&b.dataset.path){location.hash=b.dataset.path;route()}box.innerHTML="";var e=document.getElementById(b.dataset.id);if(e){e.scrollIntoView({behavior:"smooth",block:"center"});e.classList.add("sf-hit");setTimeout(function(){e.classList.remove("sf-hit")},1600)}}})};',
@@ -8621,41 +8622,56 @@ document.addEventListener('keydown',function(e){
 		}).join('\n');
 	}
 
-	function systemPrompt(schema) {
+	function systemPrompt(schema, opts) {
+		opts = opts || {};
 		return [
-			'Ты — веб-дизайнер и редактор схемы сайта в визуальном конструкторе.',
-			'Сайт описан JSON-схемой: проект → pages[] → root(дерево узлов {id,type,props,children}).',
+			'Ты — старший арт-директор и веб-дизайнер уровня студий Vercel / Linear / Stripe, редактор сайта в визуальном конструкторе.',
+			'Сайт описан JSON-схемой: проект → pages[] → root (дерево узлов {id,type,props,children}). Ты меняешь сайт ТОЛЬКО списком операций ops — точечно, не трогая то, что менять не просили.',
 			'',
 			'ДОСТУПНЫЕ ТИПЫ БЛОКОВ:',
 			componentSpec(),
 			'Анимации (variant у "animation"): ' + SF.ANIM_VARIANTS.join(', ') + '; триггеры: onScroll, onLoad, onHover, loop.',
-			'Темы (preset): ' + Object.keys(SF.THEMES).join(', ') + '. Можно переопределить bg, surface, text, muted, accent, onAccent, border, displayFont, bodyFont, radius.',
+			'Темы (preset): graphite — тёмный техно/продукт; editorial — светлый журнальный с serif; studio — светлый продуктовый, чистый; noir — тёмный премиум. Можно переопределить bg, surface, text, muted, accent, onAccent, border, displayFont, bodyFont, radius.',
 			'',
-			'ОТВЕЧАЙ СТРОГО ОДНИМ JSON-ОБЪЕКТОМ без пояснений вокруг:',
-			'{"say":"короткий ответ пользователю по-русски","ops":[…]}',
+			'ФОРМАТ ОТВЕТА — СТРОГО один JSON-объект, без markdown-ограждений и текста вокруг:',
+			'{"say":"1–2 предложения по-русски о том, что сделал","ops":[…]}',
 			'',
-			'ДОСТУПНЫЕ ОПЕРАЦИИ (массив ops, выполняются по порядку):',
-			'- {"op":"addNode","parentId":"…","type":"…","props":{…},"children":[{type,props,children}…],"index":0?} — добавить блок (children без id — сгенерируются)',
+			'ОПЕРАЦИИ (массив ops, выполняются по порядку):',
+			'- {"op":"replacePage","path":"/…","name":"…","children":[{type,props,children}…]} — ПОЛНОСТЬЮ заменить содержимое страницы',
+			'- {"op":"addNode","parentId":"…","type":"…","props":{…},"children":[…],"index":0?} — добавить блок (parentId "root" = корень активной страницы; children без id — сгенерируются)',
 			'- {"op":"updateProps","id":"…","props":{…}} — изменить свойства (null удаляет свойство)',
-			'- {"op":"removeNode","id":"…"}',
-			'- {"op":"moveNode","id":"…","parentId":"…","index":0}',
-			'- {"op":"duplicateNode","id":"…"}',
-			'- {"op":"addPage","name":"…","path":"/…"}',
-			'- {"op":"removePage","path":"/…"}',
-			'- {"op":"setTheme","theme":{"preset":"…",…переопределения}}',
-			'- {"op":"renameProject","name":"…"}',
+			'- {"op":"removeNode","id":"…"} · {"op":"moveNode","id":"…","parentId":"…","index":0} · {"op":"duplicateNode","id":"…"}',
+			'- {"op":"addPage","name":"…","path":"/…"} · {"op":"removePage","path":"/…"} · {"op":"setActivePage","path":"/…"}',
+			'- {"op":"setTheme","theme":{"preset":"…",…переопределения}} · {"op":"renameProject","name":"…"}',
 			'',
-			'ПРАВИЛА ДИЗАЙНА (обязательны):',
-			'- Один акцентный цвет из темы. Не зашивай цвета в props без необходимости — пустые значения берутся из темы.',
-			'- ЗАПРЕЩЕНО: фиолетовые градиенты, чистый чёрный #000, серый текст на цветном фоне, карточка в карточке, эмодзи вместо иконок, шрифт Inter для заголовков.',
-			'- Отступы только из шкалы: 4, 8, 12, 16, 24, 32, 48, 64, 96.',
-			'- Заголовки крупные (48–72px, fontWeight 600), подзаголовки через muted-цвет, контраст размеров выраженный.',
-			'- Анимации: только при появлении (onScroll, slide-up/fade-in, 300–500ms), без bounce и бесконечных миганий.',
-			'- Пиши настоящие тексты по теме сайта, никаких «lorem ipsum» и «Ваш текст здесь».',
-			'- НЕ переводи и не переписывай существующие тексты блоков без явного запроса — если пользователь не просил поменять текст, оставь его как есть.',
-			'- Отвечай по-русски (поле say), но никогда не переводи тексты сайта на другой язык — сохраняй язык оригинала.',
-			'- Секции строй так: frame(padding 64–96, maxWidth 1100, центр) внутри frame-полосы на всю ширину.',
+			'КОГДА ЧТО ИСПОЛЬЗОВАТЬ:',
+			'- «Создай сайт/лендинг/страницу про…» → renameProject + setTheme + ОДИН replacePage с полной страницей. Старое содержимое страницы при этом исчезает — это правильно.',
+			'- Точечная просьба («поменяй текст», «добавь секцию», «другая тема») → updateProps/addNode/setTheme по id из схемы, остальное не трогай.',
 			'',
+			'КАРКАС ПОЛНОЦЕННОЙ СТРАНИЦЫ (обязателен при replacePage):',
+			'1) header {sticky:true, padding:"16px 32px"}: paragraph-логотип (fontSize 20, fontWeight 700) + nav со ссылками на якоря секций.',
+			'2) hero: заголовок 56–72px (3–7 конкретных слов, fontWeight 600, lineHeight 1.1), подзаголовок 18–20px цветом var(--sf-muted) с maxWidth "640px", ряд (frame direction row, gap 12) из 2 кнопок — главная solid + вторичная outline. Обёрнуто в animation slide-up onLoad.',
+			'3) 2–4 содержательные секции по теме: преимущества (frame direction row wrap или hscroll из карточек-frame с backgroundColor "var(--sf-surface)", borderRadius 14, padding 24, gap 12), «как это работает», цифры/цены, отзывы — что уместно.',
+			'4) финальный CTA-блок: крупный призыв + кнопка.',
+			'5) footer: paragraph-копирайт (fontSize 14, muted) + nav.',
+			'Каждая секция — frame-полоса {padding:"0 24px", alignItems:"center", anchor:"…"} с вложенным frame {maxWidth:"1100px", width:"100%", padding:"96px 0", gap:24}.',
+			'',
+			'КНОПКИ И ССЫЛКИ — ВСЕГДА РАБОЧИЕ (пользователь проверяет их в превью):',
+			'- Каждой секции-полосе задавай props.anchor латиницей: "features", "how", "pricing", "cta"…',
+			'- У КАЖДОЙ кнопки обязателен href: "#якорь" (плавная прокрутка к секции), "/путь" (другая страница схемы) или "https://…" (внешняя, тогда openInNewTab:true). Кнопок-пустышек без href не оставляй.',
+			'- Ссылки nav ведут на якоря секций этой страницы ("#features") и/или на страницы ("/about").',
+			'- Главная CTA-кнопка hero ведёт на "#cta" или самую важную секцию.',
+			'',
+			'ДИЗАЙН — ЖЁСТКИЕ ПРАВИЛА (анти-«ИИ-слоп», нарушать нельзя):',
+			'- Сначала выбери тему под настроение запроса (setTheme), при необходимости переопредели accent.',
+			'- Один акцентный цвет. Не зашивай цвета без необходимости: пустое значение = цвет из темы; вторичный текст — var(--sf-muted); фон карточек — var(--sf-surface).',
+			'- ЗАПРЕЩЕНО: фиолетово-синие градиенты, чистые #000/#fff, «hero + 3 одинаковые карточки» без вариаций, маркетинговая вода («раскройте потенциал», «инновационные решения»), lorem ipsum и «Ваш текст здесь», эмодзи вместо иконок, шрифт Inter для заголовков.',
+			'- Тексты пиши настоящие и конкретные по теме пользователя: названия, цифры, факты, цены. Заголовки секций — 2–5 слов.',
+			'- Отступы только из шкалы 4/8/12/16/24/32/48/64/96. Контраст размеров выраженный (например 64/20/17).',
+			'- Секции различай: чередуй фон (по умолчанию / var(--sf-surface)), выравнивание и число колонок — не делай все секции одинаковыми.',
+			'- Анимации: только появление (onScroll или onLoad, slide-up или fade-in, 300–500ms, delay каскадом 0/120/240). Без loop/pulse/glow, если не просили.',
+			'- НЕ переводи и не переписывай существующие тексты сайта без явного запроса; поле say — по-русски, язык контента сайта сохраняй.',
+			opts.starter ? '\nВАЖНО: сейчас на холсте — стартовая демо-заглушка конструктора (сайт «VarCorp» про сам конструктор). К запросу пользователя она отношения не имеет. При первой же просьбе что-то создать полностью замени её через replacePage — не оставляй текстов про VarCorp и конструктор.\n' : '',
 			'ТЕКУЩАЯ СХЕМА САЙТА:',
 			JSON.stringify(schema)
 		].join('\n');
@@ -8729,6 +8745,16 @@ document.addEventListener('keydown',function(e){
 						next.pages = next.pages.filter(function (p) { return p.path !== o.path && p.id !== o.id; });
 						if (next.pages.length === before) throw new Error('страница не найдена');
 						if (!next.pages.some(function (p) { return p.id === next.activePageId; })) next.activePageId = next.pages[0].id;
+						break;
+					}
+					case 'replacePage': {
+						/* полная пересборка страницы — для «создай сайт/лендинг целиком» */
+						var pgR = o.path ? next.pages.find(function (p) { return p.path === o.path || p.id === o.path; }) : SF.activePage(next);
+						if (!pgR) throw new Error('страница ' + o.path + ' не найдена');
+						if (!Array.isArray(o.children) || !o.children.length) throw new Error('replacePage требует непустой children');
+						pgR.root.children = o.children.map(buildMapped);
+						if (o.name) pgR.name = String(o.name);
+						next.activePageId = pgR.id;
 						break;
 					}
 					case 'setTheme': {
@@ -9007,7 +9033,8 @@ document.addEventListener('keydown',function(e){
 		if (f) {
 			f.removeAttribute('src');
 			f.onload = function () { try { f.contentWindow.postMessage({ sf: 'mark', id: S.sel }, '*'); } catch (e) { } };
-			f.srcdoc = SF.renderSite(S.schema, { extraScript: editorScript() });
+			/* в режиме «Превью» отдаём чистый сайт — кнопки, ссылки и анимации кликабельны */
+			f.srcdoc = S.preview ? current.html : SF.renderSite(S.schema, { extraScript: editorScript() });
 		}
 		var u = document.getElementById('pvUrl'); if (u) u.textContent = 'конструктор · ' + S.schema.name;
 		renderPanelBody();
@@ -9307,7 +9334,7 @@ document.addEventListener('keydown',function(e){
 		var th = null; try { th = startThink('Меняю схему сайта'); } catch (e) { }
 		function thline(s) { try { if (th && th.line) th.line(s); } catch (e) { } }
 		try {
-			var sys = SFAI.systemPrompt(S.schema);
+			var sys = SFAI.systemPrompt(S.schema, { starter: !!S.starter });
 			var keys = [currentModel].concat(FALLBACK_ORDER).filter(function (k, i, a) { return a.indexOf(k) === i && MODELS[k]; });
 			var parsed = null, demo = false, lastErr = null;
 			for (var i = 0; i < keys.length && !parsed; i++) {
@@ -9320,6 +9347,7 @@ document.addEventListener('keydown',function(e){
 			if (!parsed) { demo = true; thline('ИИ недоступен — демо-режим'); parsed = SFAI.demoOps(text, S.schema); }
 			var res = SFAI.applyOps(S.schema, parsed.ops);
 			if (parsed.ops.length) { S.sel = null; commit(res.schema); }
+			if (res.applied.indexOf('replacePage') > -1) S.starter = false;
 			var warns = SF.lint(S.schema);
 			try { if (th && th.done) th.done(parsed.ops.length ? 'Применено операций: ' + res.applied.length : 'Без изменений'); } catch (e) { }
 			addAI(esc(parsed.say || 'Готово.') +
@@ -9349,17 +9377,34 @@ document.addEventListener('keydown',function(e){
 	var _closeEditor = window.closeEditor;
 	if (typeof _closeEditor === 'function') window.closeEditor = function () { if (current) current.sfMode = false; hidePanel(); return _closeEditor.apply(this, arguments); };
 
+	/* в конструкторе сегмент «Превью/Дизайн» переключает интерактивное превью и редактирование */
+	var _setMode = window.setMode;
+	if (typeof _setMode === 'function') window.setMode = function (m) {
+		if (current && current.sfMode && (m === 'preview' || m === 'design')) {
+			boardMode = m;
+			try { syncModeBtns(); closeTbMenus(); toggleCode(false); } catch (e) { }
+			var want = (m === 'preview');
+			if (S.preview !== want) { S.preview = want; sfRender(); }
+			if (want) { try { toast('Превью: кнопки, ссылки и анимации работают. «Дизайн» — чтобы снова редактировать.'); } catch (e) { } }
+			return;
+		}
+		return _setMode.apply(this, arguments);
+	};
+
 	function sfActivate(fresh) {
 		current.sfMode = true;
 		var saved = null;
 		if (!fresh) { try { saved = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) { } }
 		S.schema = saved ? SF.normalize(saved) : showcase();
+		S.starter = !saved; /* на холсте стартовая заглушка — ИИ заменит её целиком при первом «создай…» */
+		S.preview = false;
+		try { boardMode = 'design'; syncModeBtns(); } catch (e) { }
 		S.sel = null; S.hist = []; S.fut = []; S.tab = 'blocks';
 		showPanel(); sfRender();
 		try {
 			var msgs = document.getElementById('msgs');
 			if (msgs && !msgs.querySelector('.sf-hello')) {
-				var d = addAI('Включён <b>конструктор</b>: справа — блоки, слои и свойства, клик по элементу выделяет его. В чате проси меня о правках — я меняю схему сайта точечными операциями, без перезаписи всего HTML. Кнопка «Скачать» отдаёт готовый автономный сайт, а во вкладке «Сайт» есть экспорт схемы для VarCorp SiteForge.');
+				var d = addAI('Включён <b>конструктор</b>: справа — блоки, слои и свойства, клик по элементу выделяет его. Опиши в чате сайт, который нужен, — я соберу его целиком, а точечные правки применяю операциями без перезаписи всего HTML. Кнопка <b>«Превью»</b> сверху включает живой сайт — там работают кнопки, ссылки и анимации. «Скачать» отдаёт готовый автономный файл.');
 				if (d) d.classList.add('sf-hello');
 			}
 		} catch (e) { }
