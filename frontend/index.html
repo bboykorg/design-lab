@@ -756,6 +756,7 @@ var DL_AI_SYS_BASE=[
 '• Живые конкретные тексты по теме пользователя: названия, цифры, цены, время. Кнопки = глагол + выгода («Забронировать стол», не «Отправить»).',
 '• РАБОЧИЕ ссылки: у секций id, кнопки и меню ведут на #id (плюс html{scroll-behavior:smooth}) или на реальные внешние URL — кнопок-пустышек не бывает.',
 '• Микро-детали: hover, :focus-visible, переходы 150–250ms; появление секций через IntersectionObserver (fade/slide 300–500ms).',
+'• Контент никогда не исчезает: НЕ задавай элементам opacity:0 в CSS по умолчанию — скрывай только классом, который добавляет JS перед анимацией (без JS всё должно быть видно).',
 '• Семантика и доступность: header/nav/main/section/footer, один h1, alt у картинок, <meta name=viewport>, lang="ru", контраст ≥ AA, @media (prefers-reduced-motion: reduce) отключает анимации, адаптив под мобильные.',
 '',
 'ФОРМАТ: верни ТОЛЬКО один цельный HTML-документ (<!DOCTYPE html> … </html>) со встроенными <style> и <script>. Без markdown, без ```, без пояснений.'
@@ -791,11 +792,11 @@ function buildRequest(m,prov,key,sys,userMsg){
   if(prov.type==='gemini'){
     return {url:'https://generativelanguage.googleapis.com/v1beta/models/'+m.model+':generateContent',
       headers:{'Content-Type':'application/json','X-goog-api-key':key},
-      body:{systemInstruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text:userMsg}]}],generationConfig:{temperature:0.4,maxOutputTokens:8000}}};
+      body:{systemInstruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text:userMsg}]}],generationConfig:{temperature:0.4,maxOutputTokens:16000}}};
   }
   return {url:prov.endpoint,
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-    body:{model:m.model,messages:[{role:'system',content:sys},{role:'user',content:userMsg}],temperature:0.4,max_tokens:8000}};
+    body:{model:m.model,messages:[{role:'system',content:sys},{role:'user',content:userMsg}],temperature:0.4,max_tokens:16000}};
 }
 
 function parseAnswer(prov,data){
@@ -1292,7 +1293,7 @@ async function callAIStream(userText,baseHtml,scratch,imgs,onDelta,onThink){
 
 async function streamOnce(m,prov,sys,textPart,onDelta,onThink){
   var proxy=getProxy();
-  var body={model:m.model,messages:[{role:'system',content:sys},{role:'user',content:textPart}],temperature:0.4,max_tokens:8000,stream:true};
+  var body={model:m.model,messages:[{role:'system',content:sys},{role:'user',content:textPart}],temperature:0.4,max_tokens:16000,stream:true};
   var start=nextKeyStart(m.provider,prov.keys.length);
   var lastErr='NETWORK';
   for(var i=0;i<prov.keys.length;i++){
@@ -1384,9 +1385,15 @@ async function sendMessage(){
       }
     },flushThink);
     var html=extractHtml(out);
-    if(html&&html.length>60){
+    /* обрыв ответа (лимит длины модели) оставляет полдокумента — не подменяем им целый шаблон */
+    var closed=/<\/html>\s*$/i.test(html)||/<\/body>/i.test(html);
+    if(html&&html.length>60&&closed){
       current.html=html;renderHtml(html);th.done();
       addAI('\u0413\u043e\u0442\u043e\u0432\u043e \u2713 \u042f \u043c\u0435\u043d\u044f\u043b \u0441\u0430\u0439\u0442 \u0432 \u043f\u0440\u044f\u043c\u043e\u043c \u044d\u0444\u0438\u0440\u0435 \u2014 \u0432\u0441\u0451 \u0443\u0436\u0435 \u043f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u043e \u043d\u0430 \u0445\u043e\u043b\u0441\u0442\u0435. \u0415\u0441\u043b\u0438 \u0447\u0442\u043e-\u0442\u043e \u043d\u0435 \u0442\u0430\u043a, \u0443\u0442\u043e\u0447\u043d\u0438 \u2014 \u043f\u043e\u043f\u0440\u0430\u0432\u043b\u044e.');
+    }else if(html&&html.length>60){
+      current.html=baseHtml;renderHtml(baseHtml);
+      th.fail('Ответ оборвался');
+      addAI('\u26a0\ufe0f Ответ ИИ оборвался на середине (лимит длины у модели) — незакрытый документ оставил бы «пустоту», поэтому я вернул прежнюю версию сайта. Что помогает: попроси более точечную правку (одну секцию за раз) или переключись на модель с длинным ответом (например GLM 4.7).',true);
     }else{
       th.fail('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u0432\u0435\u0440\u043d\u0443\u043b\u0430 HTML');
       addAI(escapeHtml(out||'').slice(0,600)||'\u041c\u043e\u0434\u0435\u043b\u044c \u0432\u0435\u0440\u043d\u0443\u043b\u0430 \u043f\u0443\u0441\u0442\u043e\u0439 \u043e\u0442\u0432\u0435\u0442. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u0441\u0444\u043e\u0440\u043c\u0443\u043b\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0442\u043e\u0447\u043d\u0435\u0435.');
