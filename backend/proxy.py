@@ -24,10 +24,9 @@ router = APIRouter(prefix="/api", tags=["proxy"])
 _HOSTS = {
     "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
     "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
-    "api.anthropic.com": (
-        "ANTHROPIC_API_KEYS,ANTHROPIC_API_KEY,CLAUDE_API_KEYS,CLAUDE_API_KEY",
-        "anthropic",
-    ),
+    # Vyce AI — OpenAI-compatible /v1/chat/completions (claude-sonnet-5,
+    # deepseek-v4-flash, gemini-3.6-flash), Bearer auth.
+    "api.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
     "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
@@ -75,15 +74,6 @@ async def proxy(request: Request):
     headers = {"Content-Type": "application/json", "Accept-Encoding": "identity"}
     if auth == "goog":
         headers["x-goog-api-key"] = key
-    elif auth == "anthropic":
-        # Anthropic's native Messages API wants x-api-key + a version header;
-        # its OpenAI-compatible /v1/chat/completions endpoint takes a Bearer
-        # token, which is what the frontend speaks.
-        if "/v1/messages" in (parsed.path or ""):
-            headers["x-api-key"] = key
-            headers["anthropic-version"] = os.getenv("ANTHROPIC_VERSION", "2023-06-01")
-        else:
-            headers["Authorization"] = "Bearer " + key
     else:
         headers["Authorization"] = "Bearer " + key
         if host == "openrouter.ai":

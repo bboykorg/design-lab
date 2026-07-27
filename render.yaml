@@ -16,11 +16,11 @@ services:
       - key: CORS_ORIGINS
         value: "*"
       # AI provider keys for /api/proxy (comma-separated to use several per provider).
+      - key: VYCE_API_KEYS
+        sync: false
       - key: CEREBRAS_API_KEYS
         sync: false
       - key: OPENROUTER_API_KEYS
-        sync: false
-      - key: ANTHROPIC_API_KEYS
         sync: false
       - key: GEMINI_API_KEYS
         sync: false
