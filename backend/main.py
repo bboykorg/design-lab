@@ -37,16 +37,16 @@ app.include_router(proxy_router)
 
 # --- Frontend ---------------------------------------------------------------
 # index.html is one ~700 KB file, so small model-list fixes ship as a companion
-# script: frontend/models-cerebras.js puts the Cerebras models back into the
-# model lists. It is injected right before the closing </body> when the page is
+# script: frontend/models-patch.js restores the Cerebras models and adds Claude
+# Sonnet 5. It is injected right before the closing </body> when the page is
 # served, so the static file itself stays untouched.
-_PATCH_TAG = '<script src="/models-cerebras.js"></script>'
+_PATCH_TAG = '<script src="/models-patch.js"></script>'
 _index_cache = None
 
 
 def _build_index() -> str:
     raw = (config.FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
-    if "models-cerebras.js" in raw:
+    if "models-patch.js" in raw:
         return raw
     i = raw.rfind("</body>")  # last one = the document's real closing tag
     if i < 0:

@@ -20,6 +20,8 @@ services:
         sync: false
       - key: OPENROUTER_API_KEYS
         sync: false
+      - key: ANTHROPIC_API_KEYS
+        sync: false
       - key: GEMINI_API_KEYS
         sync: false
       - key: GLM_API_KEYS
