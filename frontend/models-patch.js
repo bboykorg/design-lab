@@ -4,17 +4,30 @@
  * подставляет <script src="/models-patch.js"> перед </body>.
  *
  * Что делает:
- *  1) добавляет модели Vyce AI — первыми в меню и в авто-переборе;
- *  2) возвращает модели Cerebras;
- *  3) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
- *     распознанный текст в запрос — так картинку "видит" любая модель.
+ *  1) возвращает модели Cerebras;
+ *  2) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
+ *     распознанный текст в запрос — так картинку "видит" любая модель;
+ *  3) готов добавить модели Vyce AI — сейчас отключены, см. VYCE_ENABLED.
  *
- * Адрес провайдера для Vyce-моделей подменяет сам бэкенд (по полю model
- * в теле запроса), поэтому любой путь отправки (чат, конструктор, XHR)
- * попадает куда надо без правок index.html.
+ * ПОЧЕМУ VYCE ОТКЛЮЧЁН: vyceai.com закрыт Cloudflare Managed Challenge —
+ * все запросы к /v1/* с серверного IP получают 403 и HTML-страницу проверки
+ * браузера вместо ответа API (см. GET /api/vyce/check). Ключи и адреса при
+ * этом верные, поэтому код оставлен целиком: модели просто скрыты из
+ * интерфейса, чтобы пользователи не выбирали нерабочее.
+ *
+ * КАК ВКЛЮЧИТЬ ОБРАТНО (когда поддержка Vyce снимет защиту):
+ *  • насовсем — поставить VYCE_ENABLED = true ниже и задеплоить;
+ *  • проверить без деплоя — в консоли браузера:
+ *      window.DL_VYCE_ENABLED = true; location.reload();
  */
 (function () {
   'use strict';
+
+  /* Главный выключатель моделей Vyce в интерфейсе. Сейчас false:
+     провайдер режет серверные запросы через Cloudflare. */
+  var VYCE_ENABLED = (typeof window.DL_VYCE_ENABLED === 'boolean')
+    ? window.DL_VYCE_ENABLED
+    : false;
 
   var VYCE_URL = 'https://vyceai.com/v1/chat/completions';
   var VYCE_HOST = 'vyceai.com';
@@ -25,7 +38,7 @@
 
   /* provider: 'cerebras' у Vyce-моделей не опечатка: берётся готовый
      OpenAI-совместимый путь запроса из index.html, а куда идти на самом деле
-     — решает бэкенд по имени модели. */
+     — решает бэкенд по имени модели (backend/proxy.py, _VYCE_MODELS). */
   var EXTRA = {
     'vy-sonnet5':   { name: 'Claude Sonnet 5',     desc: 'Anthropic \u00b7 лучший для кода',     provider: 'cerebras', model: 'claude-sonnet-5',      brand: 'anthropic', group: VY_GROUP },
     'vy-sonnet46':  { name: 'Claude Sonnet 4.6',   desc: 'Anthropic \u00b7 надёжная рабочая',  provider: 'cerebras', model: 'claude-sonnet-4-6',    brand: 'anthropic', group: VY_GROUP },
@@ -40,12 +53,12 @@
     'cb-gpt-oss':   { name: 'GPT-OSS 120B',        desc: 'OpenAI \u00b7 рассуждающая',        provider: 'cerebras', model: 'gpt-oss-120b',         brand: 'openai',    group: CB_GROUP },
     'cb-gemma4':    { name: 'Gemma 4 31B',         desc: 'Google \u00b7 самая быстрая',       provider: 'cerebras', model: 'gemma-4-31b',          brand: 'google',    group: CB_GROUP }
   };
-  /* Порядок авто-перебора: Sonnet 5 у провайдера помечен degraded, поэтому
-     сразу за ним идёт Sonnet 4.6, а дальше — стабильные healthy-модели. */
   var VY_KEYS = ['vy-sonnet5', 'vy-sonnet46', 'vy-deepseek', 'vy-gemini', 'vy-minimax', 'vy-glm52', 'vy-mimo', 'vy-gem-lite', 'vy-haiku45'];
   var CB_KEYS = ['cb-glm47', 'cb-gpt-oss', 'cb-gemma4'];
-  var ORDER = VY_KEYS.concat(CB_KEYS);
-  var DEFAULT_MODEL = 'vy-sonnet5';
+  // Пока Vyce отключён, в интерфейс попадают только модели Cerebras.
+  var ORDER = (VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS);
+  var DEFAULT_MODEL = VYCE_ENABLED ? 'vy-sonnet5' : null;
+  var LEGACY_DEFAULT = 'or-gemma4';   // исходный дефолт сайта
   var VYCE_MODEL_NAMES = VY_KEYS.map(function (k) { return EXTRA[k].model; }).concat(['auto']);
 
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
@@ -185,7 +198,7 @@
         }
         var effective = newBody || body;
         var nextUrl = url;
-        if (isVyceBody(effective) && url.indexOf(VYCE_HOST) < 0) nextUrl = retarget(url);
+        if (VYCE_ENABLED && isVyceBody(effective) && url.indexOf(VYCE_HOST) < 0) nextUrl = retarget(url);
         if (nextUrl === url && nextInit === init) return origFetch(input, init);
         if (typeof input === 'string') return origFetch(nextUrl, nextInit);
         return origFetch(new Request(nextUrl, input), nextInit);
@@ -216,19 +229,29 @@
 
   function patchModels() {
     if (typeof MODELS === 'undefined' || !MODELS) return false;
-    if (MODELS['vy-sonnet46'] && MODELS['cb-glm47']) return true;
+
+    // Вычищаем Vyce, если он выключен (и если успел добавиться раньше).
+    if (!VYCE_ENABLED) VY_KEYS.forEach(function (k) { delete MODELS[k]; });
+    if (window.__dlModelsPatched) return true;
 
     var old = {}, keys = Object.keys(MODELS);
     keys.forEach(function (k) { old[k] = MODELS[k]; delete MODELS[k]; });
     ORDER.forEach(function (k) { MODELS[k] = EXTRA[k]; });
     keys.forEach(function (k) { if (ORDER.indexOf(k) < 0) MODELS[k] = old[k]; });
+    window.__dlModelsPatched = true;
     return true;
   }
 
-  // Авто-перебор: Vyce первыми, затем Cerebras, дальше как было.
+  // Авто-перебор: сначала наши модели, дальше как было.
   function patchFallback() {
     try {
       if (typeof FALLBACK_ORDER === 'undefined' || !FALLBACK_ORDER || !FALLBACK_ORDER.splice) return;
+      if (!VYCE_ENABLED) {
+        // убираем Vyce из цепочки, иначе каждый запрос тратит время впустую
+        for (var i = FALLBACK_ORDER.length - 1; i >= 0; i--) {
+          if (VY_KEYS.indexOf(FALLBACK_ORDER[i]) >= 0) FALLBACK_ORDER.splice(i, 1);
+        }
+      }
       var add = ORDER.filter(function (k) { return FALLBACK_ORDER.indexOf(k) < 0; });
       if (add.length) FALLBACK_ORDER.unshift.apply(FALLBACK_ORDER, add);
     } catch (e) {}
@@ -241,15 +264,28 @@
       if (typeof window[fns[i]] === 'function') { try { window[fns[i]](id); return; } catch (e) {} }
     }
     var lbl = document.getElementById('mpLabel');
-    if (lbl && EXTRA[id]) lbl.textContent = EXTRA[id].name;
+    if (lbl && (EXTRA[id] || (typeof MODELS !== 'undefined' && MODELS[id]))) {
+      lbl.textContent = (EXTRA[id] || MODELS[id]).name;
+    }
   }
 
-  /* Модель по умолчанию — Claude Sonnet 5 через Vyce. Собственный выбор
-     пользователя не перебиваем — кроме старого дефолта or-gemma4. */
+  /* Выбор модели. Когда Vyce включён — дефолт Claude Sonnet 5.
+     Пока выключен: чужой выбор не трогаем, но если у кого-то успела
+     сохраниться модель Vyce — сбрасываем на рабочую. */
   function applyDefault() {
     try {
       var saved = localStorage.getItem('dl_model');
-      if (saved && saved !== 'or-gemma4' && typeof MODELS !== 'undefined' && MODELS[saved]) {
+
+      if (!VYCE_ENABLED) {
+        if (saved && VY_KEYS.indexOf(saved) >= 0) {
+          var next = (typeof MODELS !== 'undefined' && MODELS[LEGACY_DEFAULT]) ? LEGACY_DEFAULT : CB_KEYS[0];
+          localStorage.setItem('dl_model', next);
+          selectModel(next);
+        }
+        return;
+      }
+
+      if (saved && saved !== LEGACY_DEFAULT && typeof MODELS !== 'undefined' && MODELS[saved]) {
         if (EXTRA[saved]) selectModel(saved);
         return;
       }
