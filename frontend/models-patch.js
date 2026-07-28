@@ -4,17 +4,16 @@
  * подставляет <script src="/models-patch.js"> перед </body>.
  *
  * Что делает:
- *  1) возвращает модели Cerebras в списки моделей;
+ *  1) добавляет модели AgentRouter и возвращает модели Cerebras;
  *  2) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
  *     распознанный текст в запрос — так картинку «видит» любая модель;
- *  3) хранит готовые модели двух шлюзов — оба сейчас отключены, см. ниже.
+ *  3) хранит готовые модели Vyce AI — сейчас отключены, см. VYCE_ENABLED.
  *
- * ПОЧЕМУ AGENTROUTER ОТКЛЮЧЁН: POST на agentrouter.org/v1/chat/completions
- * возвращает 405 и HTML — по этому адресу отвечает сайт, а не API (в доках
- * этот хост указан для Anthropic-режима Claude Code: ANTHROPIC_BASE_URL +
- * /v1/messages). Пока верный OpenAI-совместимый base URL не подтверждён,
- * модели скрыты. Включить: AR_ENABLED = true ниже (или без деплоя —
- * window.DL_AGENTROUTER_ENABLED = true; location.reload();).
+ * АДРЕС AGENTROUTER: запросы идут на co.agentrouter.org — на корневом домене
+ * agentrouter.org отвечает сайт (POST на /v1/chat/completions давал 405 и HTML),
+ * а в доках корневой домен указан только для Anthropic-режима Claude Code.
+ * Скрыть модели, если шлюз снова сломается: AR_ENABLED = false ниже (или
+ * без деплоя — window.DL_AGENTROUTER_ENABLED = false; location.reload();).
  *
  * ПОЧЕМУ VYCE ОТКЛЮЧЁН: vyceai.com закрыт Cloudflare Managed Challenge —
  * все запросы к /v1/* с серверного IP получают 403 и HTML-страницу проверки
@@ -30,7 +29,7 @@
   function flag(name, def) {
     return (typeof window[name] === 'boolean') ? window[name] : def;
   }
-  var AR_ENABLED = flag('DL_AGENTROUTER_ENABLED', false);
+  var AR_ENABLED = flag('DL_AGENTROUTER_ENABLED', true);
   var VYCE_ENABLED = flag('DL_VYCE_ENABLED', false);
 
   var AR_GROUP = 'AgentRouter \u00b7 топ';
@@ -43,8 +42,8 @@
      повторена на бэкенде (backend/proxy.py) — для путей, где запрос уходит
      мимо fetch. */
   var GATEWAYS = {
-    ar:   { url: 'https://agentrouter.org/v1/chat/completions', host: 'agentrouter.org' },
-    vyce: { url: 'https://vyceai.com/v1/chat/completions',      host: 'vyceai.com' }
+    ar:   { url: 'https://co.agentrouter.org/v1/chat/completions', host: 'co.agentrouter.org' },
+    vyce: { url: 'https://vyceai.com/v1/chat/completions',         host: 'vyceai.com' }
   };
 
   /* provider: 'cerebras' у шлюзовых моделей не опечатка: берётся готовый
@@ -301,9 +300,9 @@
     }
   }
 
-  /* Выбор модели: по умолчанию первая из включённых (сейчас это GLM 4.7
-     от Cerebras). Осознанный выбор пользователя сохраняем, но если
-     сохранённая модель выключена или исчезла — переключаем на рабочую. */
+  /* Выбор модели: по умолчанию первая из включённых (сейчас Claude
+     Opus 4.6). Осознанный выбор пользователя сохраняем, но если сохранённая
+     модель выключена или исчезла — переключаем на рабочую. */
   function applyDefault() {
     try {
       var saved = localStorage.getItem('dl_model');

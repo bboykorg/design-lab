@@ -28,9 +28,9 @@ _HOSTS = {
     # Vyce AI — OpenAI-compatible, base https://vyceai.com/v1
     "vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
     "www.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
-    # AgentRouter — OpenAI-compatible gateway, base https://agentrouter.org
-    "agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
+    # AgentRouter — OpenAI-compatible gateway, base https://co.agentrouter.org/v1
     "co.agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
+    "agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
     "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
@@ -40,8 +40,12 @@ _VYCE_ENV = "VYCE_API_KEYS,VYCE_API_KEY"
 _VYCE_BASE = os.getenv("VYCE_BASE_URL", "https://vyceai.com/v1").rstrip("/")
 _VYCE_ENDPOINT = _VYCE_BASE + "/chat/completions"
 
+# The console lives on agentrouter.org, but that host serves the website: a POST
+# to /v1/chat/completions there answers 405 with an HTML page, and the docs list
+# the root domain only for Claude Code's Anthropic mode (/v1/messages). The
+# OpenAI-compatible API is on the co. subdomain.
 _AR_ENV = "AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY"
-_AR_BASE = os.getenv("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1").rstrip("/")
+_AR_BASE = os.getenv("AGENTROUTER_BASE_URL", "https://co.agentrouter.org/v1").rstrip("/")
 _AR_ENDPOINT = _AR_BASE + "/chat/completions"
 
 # Models served by each gateway. The frontend is one huge file with several
@@ -191,9 +195,9 @@ async def proxy(request: Request):
 
     ctype = r.headers.get("content-type", "application/json")
 
-    # An HTML body always means "this is not an API answer" — usually a bot
-    # check in front of the provider. Return a short, readable error instead of
-    # dumping the challenge page into the chat.
+    # An HTML body always means "this is not an API answer" — either a bot check
+    # or the provider's website. Return a short, readable error instead of
+    # dumping a whole web page into the chat.
     if "html" in ctype.lower():
         data = await r.aread()
         await r.aclose()
@@ -202,6 +206,11 @@ async def proxy(request: Request):
             msg = (
                 f"{host}: запрос заблокирован защитой Cloudflare (проверка браузера). "
                 "Провайдер должен разрешить серверные запросы к API или дать отдельный адрес API."
+            )
+        elif r.status_code in (404, 405, 501):
+            msg = (
+                f"{host}: по этому адресу отвечает сайт, а не API (код {r.status_code}). "
+                "Нужен верный base URL — задай его в AGENTROUTER_BASE_URL."
             )
         else:
             msg = f"{host}: вместо ответа API вернулась HTML-страница (код {r.status_code})."
@@ -268,6 +277,12 @@ async def _probe(base: str, env_names: str, paths=("models", "me")):
                 entry.update(
                     reason="cloudflare_challenge",
                     message="Провайдер вернул проверку браузера вместо ответа API.",
+                )
+            elif r.status_code in (404, 405, 501):
+                entry.update(
+                    reason="wrong_address",
+                    message="По этому адресу отвечает сайт, а не API.",
+                    body=r.text[:300],
                 )
             elif r.status_code in (401, 403):
                 entry.update(
