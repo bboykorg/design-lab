@@ -54,6 +54,13 @@ _VYCE_MODELS = {
     "gpt-5.6-sol",
 }
 
+# vyceai.com sits behind Cloudflare, which challenges requests that do not look
+# like they came from a normal client (httpx sends no User-Agent by default).
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+
 _counters = {}
 _lock = threading.Lock()
 
@@ -82,6 +89,14 @@ def _model_of(body: bytes) -> str:
         return ""
     model = data.get("model") if isinstance(data, dict) else None
     return model.strip() if isinstance(model, str) else ""
+
+
+def _is_challenge(ctype: str, data: bytes) -> bool:
+    """True when the provider replied with a Cloudflare interstitial, not JSON."""
+    if "html" not in ctype.lower():
+        return False
+    head = data[:4096].decode("utf-8", "ignore").lower()
+    return "just a moment" in head or "cf_chl_opt" in head or "cf-browser-verification" in head
 
 
 @router.api_route("/proxy", methods=["POST"])
@@ -119,7 +134,14 @@ async def proxy(request: Request):
             headers["HTTP-Referer"] = os.getenv("PUBLIC_URL", "https://design-lab.onrender.com")
             headers["X-Title"] = "Design Lab"
 
-    client = httpx.AsyncClient(timeout=config.AI_TIMEOUT)
+    if host.endswith("vyceai.com"):
+        headers["User-Agent"] = os.getenv("VYCE_USER_AGENT", _BROWSER_UA)
+        headers["Accept"] = "application/json, text/event-stream"
+        headers["Accept-Language"] = "en-US,en;q=0.9"
+        headers["Origin"] = "https://vyceai.com"
+        headers["Referer"] = "https://vyceai.com/"
+
+    client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=True)
     try:
         req = client.build_request("POST", target, content=body, headers=headers)
         r = await client.send(req, stream=True)
@@ -128,6 +150,27 @@ async def proxy(request: Request):
         raise HTTPException(status_code=502, detail=f"upstream error: {e}")
 
     ctype = r.headers.get("content-type", "application/json")
+
+    # An HTML body always means "this is not an API answer" — usually a
+    # Cloudflare bot check in front of the provider. Return a short, readable
+    # error instead of dumping the challenge page into the chat.
+    if "html" in ctype.lower():
+        data = await r.aread()
+        await r.aclose()
+        await client.aclose()
+        if _is_challenge(ctype, data):
+            msg = (
+                f"{host}: запрос заблокирован защитой Cloudflare (проверка браузера). "
+                "Провайдер должен разрешить серверные запросы к API или дать отдельный адрес API."
+            )
+        else:
+            msg = f"{host}: вместо ответа API вернулась HTML-страница (код {r.status_code})."
+        return Response(
+            content=json.dumps({"error": {"message": msg}}, ensure_ascii=False),
+            status_code=502,
+            media_type="application/json",
+        )
+
     if r.status_code >= 400:
         data = await r.aread()
         await r.aclose()
