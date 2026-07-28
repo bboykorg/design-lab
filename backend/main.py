@@ -10,6 +10,7 @@ from .audit import router as audit_router
 from .projects import router as projects_router
 from .auth import router as auth_router
 from .proxy import router as proxy_router
+from .ocr import router as ocr_router
 
 app = FastAPI(title="Design&Lab API", version="1.0.0")
 
@@ -34,12 +35,13 @@ app.include_router(audit_router)
 app.include_router(projects_router)
 app.include_router(auth_router)
 app.include_router(proxy_router)
+app.include_router(ocr_router)
 
 # --- Frontend ---------------------------------------------------------------
 # index.html is one ~700 KB file, so small model-list fixes ship as a companion
-# script: frontend/models-patch.js restores the Cerebras models and adds Claude
-# Sonnet 5. It is injected right before the closing </body> when the page is
-# served, so the static file itself stays untouched.
+# script: frontend/models-patch.js restores the Cerebras models, adds the Vyce
+# ones and routes screenshots through OCR. It is injected right before the
+# closing </body> when the page is served, so the static file stays untouched.
 _PATCH_TAG = '<script src="/models-patch.js"></script>'
 _index_cache = None
 

@@ -1,17 +1,16 @@
-/* Патч списков моделей Design Lab.
+/* Патч Design Lab: списки моделей + OCR скриншотов.
  *
- * index.html — единый файл на ~700 КБ, поэтому правки списка моделей живут
- * здесь; backend подставляет <script src="/models-patch.js"> перед </body>.
+ * index.html — единый файл на ~700 КБ, поэтому правки живут здесь; backend
+ * подставляет <script src="/models-patch.js"> перед </body>.
  *
  * Что делает:
  *  1) добавляет модели Vyce AI (claude-sonnet-5, deepseek-v4-flash,
- *     gemini-3.6-flash) — первыми в меню, первыми в авто-переборе,
- *     claude-sonnet-5 — модель по умолчанию;
- *  2) возвращает модели Cerebras.
- *
- * Vyce говорит на OpenAI-совместимом /v1/chat/completions, поэтому его модели
- * используют тот же код запроса, а обёртка fetch подменяет адрес провайдера
- * в /api/proxy?url=... на api.vyceai.com. Ключ (VYCE_API_KEYS) живёт на сервере.
+ *     gemini-3.6-flash) — первыми в меню и в авто-переборе, claude-sonnet-5
+ *     — модель по умолчанию;
+ *  2) возвращает модели Cerebras;
+ *  3) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
+ *     распознанный текст в запрос — так картинку "видит" любая модель,
+ *     даже без vision.
  */
 (function () {
   'use strict';
@@ -19,6 +18,8 @@
   var VYCE_URL = 'https://api.vyceai.com/v1/chat/completions';
   var VY_GROUP = 'Vyce AI \u00b7 основные';
   var CB_GROUP = 'Сверхбыстрые \u00b7 Cerebras';
+  var OCR_ENDPOINT = '/api/ocr';
+  var OCR_HEAD = '\u0422\u0435\u043a\u0441\u0442 \u0441\u043e \u0441\u043a\u0440\u0438\u043d\u0448\u043e\u0442\u0430 (OCR)';
 
   /* provider: 'cerebras' у Vyce-моделей не опечатка: так берётся готовый
      OpenAI-совместимый путь запроса из index.html, а адрес провайдера
@@ -37,6 +38,163 @@
   var DEFAULT_MODEL = 'vy-sonnet5';
   var VYCE_MODEL_NAMES = VY_KEYS.map(function (k) { return EXTRA[k].model; });
 
+  var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+
+  // ---------------------------------------------------------------- OCR ----
+
+  var ocrCache = {};
+
+  function cacheKey(s) { return s.length + ':' + s.slice(0, 96) + ':' + s.slice(-48); }
+
+  /** Картинка (data URL или base64) -> текст. Ключ OCR живёт на сервере. */
+  function ocrImage(dataUrl) {
+    if (!origFetch || typeof dataUrl !== 'string' || !dataUrl) return Promise.resolve('');
+    var k = cacheKey(dataUrl);
+    if (ocrCache[k] !== undefined) return Promise.resolve(ocrCache[k]);
+    return origFetch(OCR_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    }).then(function (j) {
+      var t = (j && typeof j.text === 'string') ? j.text.trim() : '';
+      ocrCache[k] = t;
+      return t;
+    }).catch(function () { return ''; });
+  }
+  window.dlOcr = ocrImage;   // можно дёрнуть вручную из консоли/кода сайта
+
+  function ocrBlock(text) {
+    return text ? ('[' + OCR_HEAD + ']\n' + text)
+                : '[\u0421\u043a\u0440\u0438\u043d\u0448\u043e\u0442 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d, \u043d\u043e \u0442\u0435\u043a\u0441\u0442 \u043d\u0435 \u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430\u043d]';
+  }
+
+  /** OpenAI-формат: messages[].content[] с частями image_url. */
+  function ocrifyOpenAI(data) {
+    if (!Array.isArray(data.messages)) return Promise.resolve(false);
+    var jobs = [];
+    data.messages.forEach(function (msg) {
+      if (!msg || !Array.isArray(msg.content)) return;
+      var texts = [], shots = [], hasImage = false;
+      var parts = msg.content.map(function (part) {
+        if (part && part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
+          hasImage = true;
+          var slot = { text: '' };
+          shots.push(slot);
+          jobs.push(ocrImage(part.image_url.url).then(function (t) { slot.text = t; }));
+          return null;
+        }
+        if (part && part.type === 'text' && typeof part.text === 'string') texts.push(part.text);
+        else if (typeof part === 'string') texts.push(part);
+        return part;
+      });
+      if (!hasImage) return;
+      jobs.push(Promise.resolve().then(function () {
+        msg.__dlPending = { texts: texts, shots: shots, parts: parts };
+      }));
+    });
+    if (!jobs.length) return Promise.resolve(false);
+    return Promise.all(jobs).then(function () {
+      var changed = false;
+      data.messages.forEach(function (msg) {
+        var p = msg && msg.__dlPending;
+        if (!p) return;
+        delete msg.__dlPending;
+        var blocks = p.shots.map(function (s) { return ocrBlock(s.text); });
+        // В модель уходит: текст со скрина + сам запрос пользователя.
+        msg.content = blocks.concat(p.texts).join('\n\n');
+        changed = true;
+      });
+      return changed;
+    });
+  }
+
+  /** Родной формат Gemini: contents[].parts[] с inline_data / inlineData. */
+  function ocrifyGemini(data) {
+    if (!Array.isArray(data.contents)) return Promise.resolve(false);
+    var jobs = [], changed = false;
+    data.contents.forEach(function (c) {
+      if (!c || !Array.isArray(c.parts)) return;
+      c.parts.forEach(function (part, i) {
+        var inline = part && (part.inline_data || part.inlineData);
+        if (!inline || typeof inline.data !== 'string') return;
+        var mime = inline.mime_type || inline.mimeType || 'image/png';
+        changed = true;
+        jobs.push(ocrImage('data:' + mime + ';base64,' + inline.data).then(function (t) {
+          c.parts[i] = { text: ocrBlock(t) };
+        }));
+      });
+    });
+    if (!jobs.length) return Promise.resolve(false);
+    return Promise.all(jobs).then(function () { return changed; });
+  }
+
+  /** Тело запроса -> то же тело, но со скринами, заменёнными на текст. */
+  function ocrifyBody(bodyStr) {
+    if (typeof bodyStr !== 'string' || bodyStr.indexOf('base64,') < 0) return Promise.resolve(null);
+    var data;
+    try { data = JSON.parse(bodyStr); } catch (e) { return Promise.resolve(null); }
+    return ocrifyOpenAI(data).then(function (a) {
+      return ocrifyGemini(data).then(function (b) {
+        if (!a && !b) return null;
+        try { return JSON.stringify(data); } catch (e) { return null; }
+      });
+    }).catch(function () { return null; });
+  }
+
+  // ------------------------------------------------------------- fetch ----
+
+  function isVyceBody(body) {
+    if (typeof body !== 'string' || !body) return false;
+    for (var i = 0; i < VYCE_MODEL_NAMES.length; i++) {
+      if (body.indexOf('"' + VYCE_MODEL_NAMES[i] + '"') >= 0) return true;
+    }
+    return false;
+  }
+
+  function retarget(url) {
+    // /api/proxy?url=... -> тот же релей, но с адресом Vyce
+    var i = url.indexOf('?');
+    var base = i < 0 ? url : url.slice(0, i);
+    return base + '?url=' + encodeURIComponent(VYCE_URL);
+  }
+
+  /* Запросы к моделям идут через /api/proxy?url=<адрес провайдера>.
+     Перед отправкой: скрины -> OCR-текст; для Vyce-моделей подменяется
+     адрес провайдера. Само тело и разбор SSE остаются штатными. */
+  function patchFetch() {
+    if (window.__dlFetchPatched || !origFetch) return;
+
+    window.fetch = function (input, init) {
+      var url, body;
+      try {
+        url = typeof input === 'string' ? input : (input && input.url) || '';
+        body = init && typeof init.body === 'string' ? init.body : null;
+      } catch (e) { return origFetch(input, init); }
+
+      if (!url || url.indexOf('/api/proxy') < 0 || !body) return origFetch(input, init);
+
+      return ocrifyBody(body).then(function (newBody) {
+        var nextInit = init;
+        if (newBody) {
+          nextInit = {};
+          for (var k in init) { if (Object.prototype.hasOwnProperty.call(init, k)) nextInit[k] = init[k]; }
+          nextInit.body = newBody;
+        }
+        var effective = newBody || body;
+        var nextUrl = url;
+        if (isVyceBody(effective) && url.indexOf('api.vyceai.com') < 0) nextUrl = retarget(url);
+        if (nextUrl === url && nextInit === init) return origFetch(input, init);
+        if (typeof input === 'string') return origFetch(nextUrl, nextInit);
+        return origFetch(new Request(nextUrl, input), nextInit);
+      }).catch(function () { return origFetch(input, init); });
+    };
+    window.__dlFetchPatched = true;
+  }
+
+  // ------------------------------------------------------------ модели ----
+
   // Аватары брендов, которых может не быть в AV-карте.
   function patchAvatars() {
     try {
@@ -54,45 +212,6 @@
         };
       }
     } catch (e) {}
-  }
-
-  /* Запросы идут через /api/proxy?url=<адрес провайдера>. Если в теле стоит
-     одна из Vyce-моделей — подменяем адрес на api.vyceai.com. Тело и разбор
-     SSE остаются теми же — API OpenAI-совместимое. */
-  function patchFetch() {
-    if (window.__dlVycePatched || typeof window.fetch !== 'function') return;
-    var orig = window.fetch.bind(window);
-
-    function isVyceBody(body) {
-      if (typeof body !== 'string' || !body) return false;
-      for (var i = 0; i < VYCE_MODEL_NAMES.length; i++) {
-        if (body.indexOf('"' + VYCE_MODEL_NAMES[i] + '"') >= 0) return true;
-      }
-      return false;
-    }
-
-    function retarget(url) {
-      // /api/proxy?url=... -> тот же релей, но с адресом Vyce
-      var i = url.indexOf('?');
-      var base = i < 0 ? url : url.slice(0, i);
-      return base + '?url=' + encodeURIComponent(VYCE_URL);
-    }
-
-    window.fetch = function (input, init) {
-      try {
-        var url = typeof input === 'string' ? input : (input && input.url) || '';
-        if (url.indexOf('/api/proxy') >= 0) {
-          var body = init && typeof init.body === 'string' ? init.body : null;
-          if (isVyceBody(body) && url.indexOf('api.vyceai.com') < 0) {
-            var next = retarget(url);
-            if (typeof input === 'string') return orig(next, init);
-            return orig(new Request(next, input), init);
-          }
-        }
-      } catch (e) {}
-      return orig(input, init);
-    };
-    window.__dlVycePatched = true;
   }
 
   function patchModels() {
