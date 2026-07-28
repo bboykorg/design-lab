@@ -25,24 +25,30 @@ router = APIRouter(prefix="/api", tags=["proxy"])
 _HOSTS = {
     "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
     "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
-    # Vyce AI — OpenAI-compatible, base_url https://vyceai.com/v1
-    # Endpoints: /v1/chat/completions, /v1/messages, /v1/models, /v1/me
+    # Vyce AI — OpenAI-compatible, base https://vyceai.com/v1
     "vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
     "www.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
+    # AgentRouter — OpenAI-compatible gateway, base https://agentrouter.org
+    "agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
+    "co.agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
     "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
 }
 
 _VYCE_ENV = "VYCE_API_KEYS,VYCE_API_KEY"
-_VYCE_BASE = "https://vyceai.com/v1"
+_VYCE_BASE = os.getenv("VYCE_BASE_URL", "https://vyceai.com/v1").rstrip("/")
 _VYCE_ENDPOINT = _VYCE_BASE + "/chat/completions"
 
-# Models served by Vyce. The frontend is one huge file with several request
-# paths (chat, constructor, streaming edits); instead of patching each of them,
-# the relay looks at the "model" field and routes these to Vyce itself. Without
-# this, a Vyce model could be sent to another provider's endpoint with the wrong
-# key — which is exactly what produced 403s.
+_AR_ENV = "AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY"
+_AR_BASE = os.getenv("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1").rstrip("/")
+_AR_ENDPOINT = _AR_BASE + "/chat/completions"
+
+# Models served by each gateway. The frontend is one huge file with several
+# request paths (chat, constructor, streaming edits); instead of patching each
+# of them, the relay looks at the "model" field and routes the request itself.
+# Without this, a model could be sent to another provider's endpoint with the
+# wrong key — which is exactly what produced 403s earlier.
 _VYCE_MODELS = {
     "auto",
     "claude-sonnet-5",
@@ -58,12 +64,26 @@ _VYCE_MODELS = {
     "gpt-5.6-sol",
 }
 
-# vyceai.com sits behind Cloudflare, which challenges requests that do not look
-# like they came from a normal client (httpx sends no User-Agent by default).
+_AR_MODELS = {
+    "claude-opus-4-6",
+    "gpt-5.5",
+    "kimi-k3",
+}
+
+# model name -> (endpoint, host). Built once at import time.
+_MODEL_ROUTES = {}
+for _m in _VYCE_MODELS:
+    _MODEL_ROUTES[_m] = (_VYCE_ENDPOINT, (urlparse(_VYCE_ENDPOINT).hostname or "").lower())
+for _m in _AR_MODELS:
+    _MODEL_ROUTES[_m] = (_AR_ENDPOINT, (urlparse(_AR_ENDPOINT).hostname or "").lower())
+
+# Some gateways sit behind Cloudflare, which challenges requests that do not
+# look like they came from a normal client (httpx sends no User-Agent at all).
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
+_UA_HOSTS = ("vyceai.com", "agentrouter.org")
 
 _counters = {}
 _lock = threading.Lock()
@@ -95,25 +115,44 @@ def _model_of(body: bytes) -> str:
     return model.strip() if isinstance(model, str) else ""
 
 
-def _vyce_headers(key: str) -> dict:
-    return {
-        "Authorization": "Bearer " + key,
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-        "Accept-Encoding": "identity",
-        "Accept-Language": "en-US,en;q=0.9",
-        "User-Agent": os.getenv("VYCE_USER_AGENT", _BROWSER_UA),
-        "Origin": "https://vyceai.com",
-        "Referer": "https://vyceai.com/",
-    }
+def _headers_for(host: str, key: str, auth: str) -> dict:
+    """Build upstream headers: auth plus, for guarded gateways, a browser look."""
+    if host.endswith(_UA_HOSTS):
+        origin = "https://" + host
+        return {
+            "Authorization": "Bearer " + key,
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "Accept-Encoding": "identity",
+            "Accept-Language": "en-US,en;q=0.9",
+            "User-Agent": os.getenv("VYCE_USER_AGENT", _BROWSER_UA),
+            "Origin": origin,
+            "Referer": origin + "/",
+        }
+    # Ask for an uncompressed body: the response is re-streamed to the browser
+    # without a Content-Encoding header, so compressed bytes would be garbage.
+    h = {"Content-Type": "application/json", "Accept-Encoding": "identity"}
+    if auth == "goog":
+        h["x-goog-api-key"] = key
+    else:
+        h["Authorization"] = "Bearer " + key
+        if host == "openrouter.ai":
+            h["HTTP-Referer"] = os.getenv("PUBLIC_URL", "https://design-lab.onrender.com")
+            h["X-Title"] = "Design Lab"
+    return h
 
 
 def _is_challenge(ctype: str, data: bytes) -> bool:
-    """True when the provider replied with a Cloudflare interstitial, not JSON."""
+    """True when the provider replied with a bot check page, not with JSON."""
     if "html" not in ctype.lower():
         return False
     head = data[:4096].decode("utf-8", "ignore").lower()
-    return "just a moment" in head or "cf_chl_opt" in head or "cf-browser-verification" in head
+    return (
+        "just a moment" in head
+        or "cf_chl_opt" in head
+        or "cf-browser-verification" in head
+        or "cf_app_waf" in head
+    )
 
 
 @router.api_route("/proxy", methods=["POST"])
@@ -125,11 +164,11 @@ async def proxy(request: Request):
     body = await request.body()
 
     host = (urlparse(target).hostname or "").lower()
-    # Route by model first: a Vyce model always goes to Vyce, whatever endpoint
-    # the frontend guessed.
-    if _model_of(body) in _VYCE_MODELS and not host.endswith("vyceai.com"):
-        target = _VYCE_ENDPOINT
-        host = "vyceai.com"
+    # Route by model first: a known model always goes to its own gateway,
+    # whatever endpoint the frontend guessed.
+    route = _MODEL_ROUTES.get(_model_of(body))
+    if route and host != route[1]:
+        target, host = route[0], route[1]
 
     if host not in _HOSTS:
         raise HTTPException(status_code=403, detail=f"host not allowed: {host}")
@@ -140,20 +179,7 @@ async def proxy(request: Request):
         first = env_names.split(",")[0]
         raise HTTPException(status_code=503, detail=f"нет ключа для {host} — задай {first} в .env")
 
-    if host.endswith("vyceai.com"):
-        headers = _vyce_headers(key)
-    else:
-        # Ask for an uncompressed body: the response is re-streamed to the
-        # browser without a Content-Encoding header, so compressed bytes would
-        # be garbage.
-        headers = {"Content-Type": "application/json", "Accept-Encoding": "identity"}
-        if auth == "goog":
-            headers["x-goog-api-key"] = key
-        else:
-            headers["Authorization"] = "Bearer " + key
-            if host == "openrouter.ai":
-                headers["HTTP-Referer"] = os.getenv("PUBLIC_URL", "https://design-lab.onrender.com")
-                headers["X-Title"] = "Design Lab"
+    headers = _headers_for(host, key, auth)
 
     client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=True)
     try:
@@ -165,9 +191,9 @@ async def proxy(request: Request):
 
     ctype = r.headers.get("content-type", "application/json")
 
-    # An HTML body always means "this is not an API answer" — usually a
-    # Cloudflare bot check in front of the provider. Return a short, readable
-    # error instead of dumping the challenge page into the chat.
+    # An HTML body always means "this is not an API answer" — usually a bot
+    # check in front of the provider. Return a short, readable error instead of
+    # dumping the challenge page into the chat.
     if "html" in ctype.lower():
         data = await r.aread()
         await r.aclose()
@@ -204,27 +230,29 @@ async def proxy(request: Request):
     return StreamingResponse(gen(), status_code=r.status_code, media_type=ctype)
 
 
-@router.get("/vyce/check")
-async def vyce_check():
-    """Diagnose Vyce access from the server: key present? Cloudflare in the way?
+async def _probe(base: str, env_names: str, paths=("models", "me")):
+    """Diagnose a gateway from the server: is a key set, is a bot check in the way?
 
-    Calls the provider's own GET endpoints (/v1/me and /v1/models) and reports
-    what came back. The key itself is never echoed — only how many are set.
+    Calls the provider's own GET endpoints and reports what came back. The key
+    itself is never echoed — only how many are configured.
     """
-    keys = _keys(_VYCE_ENV)
+    keys = _keys(env_names)
     if not keys:
+        first = env_names.split(",")[0]
         return {
             "ok": False,
+            "base": base,
             "keys": 0,
             "reason": "no_key",
-            "message": "Не задан VYCE_API_KEYS в переменных окружения.",
+            "message": f"Не задан {first} в переменных окружения.",
         }
 
-    headers = _vyce_headers(keys[0])
+    host = (urlparse(base).hostname or "").lower()
+    headers = _headers_for(host, keys[0], "bearer")
     checks = {}
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
-        for name in ("me", "models"):
-            entry = {"url": f"{_VYCE_BASE}/{name}"}
+        for name in paths:
+            entry = {"url": f"{base}/{name}"}
             try:
                 r = await client.get(entry["url"], headers=headers)
             except httpx.HTTPError as e:
@@ -239,7 +267,7 @@ async def vyce_check():
             if _is_challenge(ctype, r.content):
                 entry.update(
                     reason="cloudflare_challenge",
-                    message="Cloudflare вернул проверку браузера вместо ответа API.",
+                    message="Провайдер вернул проверку браузера вместо ответа API.",
                 )
             elif r.status_code in (401, 403):
                 entry.update(
@@ -253,5 +281,15 @@ async def vyce_check():
                 entry.update(reason="ok", body=r.text[:300])
             checks[name] = entry
 
-    ok = all(c.get("reason") == "ok" for c in checks.values())
-    return {"ok": ok, "keys": len(keys), "checks": checks}
+    ok = any(c.get("reason") == "ok" for c in checks.values())
+    return {"ok": ok, "base": base, "keys": len(keys), "checks": checks}
+
+
+@router.get("/vyce/check")
+async def vyce_check():
+    return await _probe(_VYCE_BASE, _VYCE_ENV)
+
+
+@router.get("/agentrouter/check")
+async def agentrouter_check():
+    return await _probe(_AR_BASE, _AR_ENV)

@@ -4,62 +4,84 @@
  * подставляет <script src="/models-patch.js"> перед </body>.
  *
  * Что делает:
- *  1) возвращает модели Cerebras;
+ *  1) добавляет модели AgentRouter и возвращает модели Cerebras;
  *  2) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
- *     распознанный текст в запрос — так картинку "видит" любая модель;
- *  3) готов добавить модели Vyce AI — сейчас отключены, см. VYCE_ENABLED.
+ *     распознанный текст в запрос — так картинку «видит» любая модель;
+ *  3) хранит готовые модели Vyce AI — сейчас отключены, см. VYCE_ENABLED.
  *
  * ПОЧЕМУ VYCE ОТКЛЮЧЁН: vyceai.com закрыт Cloudflare Managed Challenge —
  * все запросы к /v1/* с серверного IP получают 403 и HTML-страницу проверки
  * браузера вместо ответа API (см. GET /api/vyce/check). Ключи и адреса при
  * этом верные, поэтому код оставлен целиком: модели просто скрыты из
- * интерфейса, чтобы пользователи не выбирали нерабочее.
- *
- * КАК ВКЛЮЧИТЬ ОБРАТНО (когда поддержка Vyce снимет защиту):
- *  • насовсем — поставить VYCE_ENABLED = true ниже и задеплоить;
- *  • проверить без деплоя — в консоли браузера:
- *      window.DL_VYCE_ENABLED = true; location.reload();
+ * интерфейса. Включить обратно: VYCE_ENABLED = true ниже (или без деплоя —
+ * window.DL_VYCE_ENABLED = true; location.reload();).
  */
 (function () {
   'use strict';
 
-  /* Главный выключатель моделей Vyce в интерфейсе. Сейчас false:
-     провайдер режет серверные запросы через Cloudflare. */
-  var VYCE_ENABLED = (typeof window.DL_VYCE_ENABLED === 'boolean')
-    ? window.DL_VYCE_ENABLED
-    : false;
+  /* Выключатели провайдеров в интерфейсе. */
+  function flag(name, def) {
+    return (typeof window[name] === 'boolean') ? window[name] : def;
+  }
+  var AR_ENABLED = flag('DL_AGENTROUTER_ENABLED', true);
+  var VYCE_ENABLED = flag('DL_VYCE_ENABLED', false);
 
-  var VYCE_URL = 'https://vyceai.com/v1/chat/completions';
-  var VYCE_HOST = 'vyceai.com';
+  var AR_GROUP = 'AgentRouter \u00b7 топ';
   var VY_GROUP = 'Vyce AI \u00b7 основные';
   var CB_GROUP = 'Сверхбыстрые \u00b7 Cerebras';
   var OCR_ENDPOINT = '/api/ocr';
   var OCR_HEAD = '\u0422\u0435\u043a\u0441\u0442 \u0441\u043e \u0441\u043a\u0440\u0438\u043d\u0448\u043e\u0442\u0430 (OCR)';
 
-  /* provider: 'cerebras' у Vyce-моделей не опечатка: берётся готовый
-     OpenAI-совместимый путь запроса из index.html, а куда идти на самом деле
-     — решает бэкенд по имени модели (backend/proxy.py, _VYCE_MODELS). */
-  var EXTRA = {
-    'vy-sonnet5':   { name: 'Claude Sonnet 5',     desc: 'Anthropic \u00b7 лучший для кода',     provider: 'cerebras', model: 'claude-sonnet-5',      brand: 'anthropic', group: VY_GROUP },
-    'vy-sonnet46':  { name: 'Claude Sonnet 4.6',   desc: 'Anthropic \u00b7 надёжная рабочая',  provider: 'cerebras', model: 'claude-sonnet-4-6',    brand: 'anthropic', group: VY_GROUP },
-    'vy-haiku45':   { name: 'Claude Haiku 4.5',    desc: 'Anthropic \u00b7 быстрая и дешёвая', provider: 'cerebras', model: 'claude-haiku-4-5',     brand: 'anthropic', group: VY_GROUP },
-    'vy-deepseek':  { name: 'DeepSeek V4 Flash',   desc: 'DeepSeek \u00b7 код и математика',  provider: 'cerebras', model: 'deepseek-v4-flash',    brand: 'deepseek',  group: VY_GROUP },
-    'vy-gemini':    { name: 'Gemini 3.6 Flash',    desc: 'Google \u00b7 с рассуждениями',    provider: 'cerebras', model: 'gemini-3.6-flash',     brand: 'gemini',    group: VY_GROUP },
-    'vy-minimax':   { name: 'MiniMax M3',          desc: 'MiniMax \u00b7 с vision',            provider: 'cerebras', model: 'minimax-m3',           brand: 'minimax',   group: VY_GROUP },
-    'vy-glm52':     { name: 'GLM 5.2',             desc: 'Z.ai \u00b7 бюджетная',             provider: 'cerebras', model: 'glm-5.2',              brand: 'glm',       group: VY_GROUP },
-    'vy-mimo':      { name: 'MiMo v2.5 Pro',       desc: 'Xiaomi \u00b7 1M контекст',        provider: 'cerebras', model: 'mimo-v2.5-pro',        brand: 'mimo',      group: VY_GROUP },
-    'vy-gem-lite':  { name: 'Gemini 3.1 Flash Lite', desc: 'Google \u00b7 самая дешёвая',   provider: 'cerebras', model: 'gemini-3.1-flash-lite', brand: 'gemini',   group: VY_GROUP },
-    'cb-glm47':     { name: 'GLM 4.7',             desc: '355B \u00b7 лучший для кода',      provider: 'cerebras', model: 'zai-glm-4.7',          brand: 'glm',       group: CB_GROUP },
-    'cb-gpt-oss':   { name: 'GPT-OSS 120B',        desc: 'OpenAI \u00b7 рассуждающая',        provider: 'cerebras', model: 'gpt-oss-120b',         brand: 'openai',    group: CB_GROUP },
-    'cb-gemma4':    { name: 'Gemma 4 31B',         desc: 'Google \u00b7 самая быстрая',       provider: 'cerebras', model: 'gemma-4-31b',          brand: 'google',    group: CB_GROUP }
+  /* Куда на самом деле идут запросы. Та же маршрутизация по имени модели
+     повторена на бэкенде (backend/proxy.py) — для путей, где запрос уходит
+     мимо fetch. */
+  var GATEWAYS = {
+    ar:   { url: 'https://agentrouter.org/v1/chat/completions', host: 'agentrouter.org' },
+    vyce: { url: 'https://vyceai.com/v1/chat/completions',      host: 'vyceai.com' }
   };
+
+  /* provider: 'cerebras' у шлюзовых моделей не опечатка: берётся готовый
+     OpenAI-совместимый путь запроса из index.html, а настоящий адрес и ключ
+     подставляет бэкенд по имени модели. */
+  var EXTRA = {
+    'ar-opus46':    { name: 'Claude Opus 4.6',       desc: 'AgentRouter \u00b7 самая сильная',   provider: 'cerebras', model: 'claude-opus-4-6',       brand: 'anthropic', group: AR_GROUP, gw: 'ar' },
+    'ar-gpt55':     { name: 'GPT-5.5',               desc: 'AgentRouter \u00b7 OpenAI',           provider: 'cerebras', model: 'gpt-5.5',               brand: 'openai',    group: AR_GROUP, gw: 'ar' },
+    'ar-kimi':      { name: 'Kimi K3',               desc: 'AgentRouter \u00b7 длинный контекст', provider: 'cerebras', model: 'kimi-k3',               brand: 'kimi',      group: AR_GROUP, gw: 'ar' },
+    'vy-sonnet5':   { name: 'Claude Sonnet 5',       desc: 'Anthropic \u00b7 лучший для кода',  provider: 'cerebras', model: 'claude-sonnet-5',       brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
+    'vy-sonnet46':  { name: 'Claude Sonnet 4.6',     desc: 'Anthropic \u00b7 надёжная рабочая', provider: 'cerebras', model: 'claude-sonnet-4-6',     brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
+    'vy-haiku45':   { name: 'Claude Haiku 4.5',      desc: 'Anthropic \u00b7 быстрая и дешёвая', provider: 'cerebras', model: 'claude-haiku-4-5',      brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
+    'vy-deepseek':  { name: 'DeepSeek V4 Flash',     desc: 'DeepSeek \u00b7 код и математика',  provider: 'cerebras', model: 'deepseek-v4-flash',     brand: 'deepseek',  group: VY_GROUP, gw: 'vyce' },
+    'vy-gemini':    { name: 'Gemini 3.6 Flash',      desc: 'Google \u00b7 с рассуждениями',    provider: 'cerebras', model: 'gemini-3.6-flash',      brand: 'gemini',    group: VY_GROUP, gw: 'vyce' },
+    'vy-minimax':   { name: 'MiniMax M3',            desc: 'MiniMax \u00b7 с vision',            provider: 'cerebras', model: 'minimax-m3',            brand: 'minimax',   group: VY_GROUP, gw: 'vyce' },
+    'vy-glm52':     { name: 'GLM 5.2',               desc: 'Z.ai \u00b7 бюджетная',             provider: 'cerebras', model: 'glm-5.2',               brand: 'glm',       group: VY_GROUP, gw: 'vyce' },
+    'vy-mimo':      { name: 'MiMo v2.5 Pro',         desc: 'Xiaomi \u00b7 1M контекст',        provider: 'cerebras', model: 'mimo-v2.5-pro',         brand: 'mimo',      group: VY_GROUP, gw: 'vyce' },
+    'vy-gem-lite':  { name: 'Gemini 3.1 Flash Lite', desc: 'Google \u00b7 самая дешёвая',     provider: 'cerebras', model: 'gemini-3.1-flash-lite', brand: 'gemini',    group: VY_GROUP, gw: 'vyce' },
+    'cb-glm47':     { name: 'GLM 4.7',               desc: '355B \u00b7 лучший для кода',      provider: 'cerebras', model: 'zai-glm-4.7',           brand: 'glm',       group: CB_GROUP },
+    'cb-gpt-oss':   { name: 'GPT-OSS 120B',          desc: 'OpenAI \u00b7 рассуждающая',        provider: 'cerebras', model: 'gpt-oss-120b',          brand: 'openai',    group: CB_GROUP },
+    'cb-gemma4':    { name: 'Gemma 4 31B',           desc: 'Google \u00b7 самая быстрая',       provider: 'cerebras', model: 'gemma-4-31b',           brand: 'google',    group: CB_GROUP }
+  };
+
+  var AR_KEYS = ['ar-opus46', 'ar-gpt55', 'ar-kimi'];
   var VY_KEYS = ['vy-sonnet5', 'vy-sonnet46', 'vy-deepseek', 'vy-gemini', 'vy-minimax', 'vy-glm52', 'vy-mimo', 'vy-gem-lite', 'vy-haiku45'];
   var CB_KEYS = ['cb-glm47', 'cb-gpt-oss', 'cb-gemma4'];
-  // Пока Vyce отключён, в интерфейс попадают только модели Cerebras.
-  var ORDER = (VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS);
-  var DEFAULT_MODEL = VYCE_ENABLED ? 'vy-sonnet5' : null;
-  var LEGACY_DEFAULT = 'or-gemma4';   // исходный дефолт сайта
-  var VYCE_MODEL_NAMES = VY_KEYS.map(function (k) { return EXTRA[k].model; }).concat(['auto']);
+
+  var OFF = [];                                    // что убрать из интерфейса
+  if (!AR_ENABLED) OFF = OFF.concat(AR_KEYS);
+  if (!VYCE_ENABLED) OFF = OFF.concat(VY_KEYS);
+
+  var ORDER = (AR_ENABLED ? AR_KEYS : [])
+    .concat(VYCE_ENABLED ? VY_KEYS : [])
+    .concat(CB_KEYS);
+
+  var LEGACY_DEFAULT = 'or-gemma4';                // исходный дефолт сайта
+  var DEFAULT_MODEL = ORDER.length ? ORDER[0] : LEGACY_DEFAULT;
+
+  // Имя модели -> шлюз, для подмены адреса в fetch.
+  var MODEL_GW = {};
+  Object.keys(EXTRA).forEach(function (k) {
+    if (EXTRA[k].gw) MODEL_GW[EXTRA[k].model] = EXTRA[k].gw;
+  });
+  MODEL_GW['auto'] = 'vyce';
 
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
 
@@ -160,23 +182,24 @@
 
   // ------------------------------------------------------------- fetch ----
 
-  function isVyceBody(body) {
-    if (typeof body !== 'string' || !body) return false;
-    for (var i = 0; i < VYCE_MODEL_NAMES.length; i++) {
-      if (body.indexOf('"' + VYCE_MODEL_NAMES[i] + '"') >= 0) return true;
+  /** По телу запроса понять, какому шлюзу принадлежит модель. */
+  function gatewayOf(body) {
+    if (typeof body !== 'string' || !body) return null;
+    var names = Object.keys(MODEL_GW);
+    for (var i = 0; i < names.length; i++) {
+      if (body.indexOf('"' + names[i] + '"') >= 0) return MODEL_GW[names[i]];
     }
-    return false;
+    return null;
   }
 
-  function retarget(url) {
+  function retarget(url, gwUrl) {
     var i = url.indexOf('?');
     var base = i < 0 ? url : url.slice(0, i);
-    return base + '?url=' + encodeURIComponent(VYCE_URL);
+    return base + '?url=' + encodeURIComponent(gwUrl);
   }
 
   /* Запросы к моделям идут через /api/proxy?url=<адрес провайдера>.
-     Здесь: скрины -> OCR-текст и (как страховка) подмена адреса для Vyce;
-     основная маршрутизация всё равно дублируется на бэкенде. */
+     Здесь: скрины -> OCR-текст и подмена адреса на нужный шлюз. */
   function patchFetch() {
     if (window.__dlFetchPatched || !origFetch) return;
 
@@ -196,9 +219,8 @@
           for (var k in init) { if (Object.prototype.hasOwnProperty.call(init, k)) nextInit[k] = init[k]; }
           nextInit.body = newBody;
         }
-        var effective = newBody || body;
-        var nextUrl = url;
-        if (VYCE_ENABLED && isVyceBody(effective) && url.indexOf(VYCE_HOST) < 0) nextUrl = retarget(url);
+        var gw = GATEWAYS[gatewayOf(newBody || body)];
+        var nextUrl = (gw && url.indexOf(gw.host) < 0) ? retarget(url, gw.url) : url;
         if (nextUrl === url && nextInit === init) return origFetch(input, init);
         if (typeof input === 'string') return origFetch(nextUrl, nextInit);
         return origFetch(new Request(nextUrl, input), nextInit);
@@ -224,14 +246,15 @@
       if (!AV.deepseek) AV.deepseek = avatar('#4d6bfe', 'D');
       if (!AV.minimax) AV.minimax = avatar('#e8484a', 'M');
       if (!AV.mimo) AV.mimo = avatar('#ff6900', 'M');
+      if (!AV.kimi) AV.kimi = avatar('#1f1f1f', 'K');
     } catch (e) {}
   }
 
   function patchModels() {
     if (typeof MODELS === 'undefined' || !MODELS) return false;
 
-    // Вычищаем Vyce, если он выключен (и если успел добавиться раньше).
-    if (!VYCE_ENABLED) VY_KEYS.forEach(function (k) { delete MODELS[k]; });
+    // Вычищаем выключенные провайдеры (если успели добавиться раньше).
+    OFF.forEach(function (k) { delete MODELS[k]; });
     if (window.__dlModelsPatched) return true;
 
     var old = {}, keys = Object.keys(MODELS);
@@ -246,11 +269,10 @@
   function patchFallback() {
     try {
       if (typeof FALLBACK_ORDER === 'undefined' || !FALLBACK_ORDER || !FALLBACK_ORDER.splice) return;
-      if (!VYCE_ENABLED) {
-        // убираем Vyce из цепочки, иначе каждый запрос тратит время впустую
-        for (var i = FALLBACK_ORDER.length - 1; i >= 0; i--) {
-          if (VY_KEYS.indexOf(FALLBACK_ORDER[i]) >= 0) FALLBACK_ORDER.splice(i, 1);
-        }
+      // Выключенные модели из цепочки убираем: иначе каждый запрос
+      // будет тратить время на заведомо нерабочий провайдер.
+      for (var i = FALLBACK_ORDER.length - 1; i >= 0; i--) {
+        if (OFF.indexOf(FALLBACK_ORDER[i]) >= 0) FALLBACK_ORDER.splice(i, 1);
       }
       var add = ORDER.filter(function (k) { return FALLBACK_ORDER.indexOf(k) < 0; });
       if (add.length) FALLBACK_ORDER.unshift.apply(FALLBACK_ORDER, add);
@@ -269,23 +291,15 @@
     }
   }
 
-  /* Выбор модели. Когда Vyce включён — дефолт Claude Sonnet 5.
-     Пока выключен: чужой выбор не трогаем, но если у кого-то успела
-     сохраниться модель Vyce — сбрасываем на рабочую. */
+  /* Выбор модели: по умолчанию первая из включённых (сейчас Claude
+     Opus 4.6). Осознанный выбор пользователя сохраняем, но если сохранённая
+     модель выключена или исчезла — переключаем на рабочую. */
   function applyDefault() {
     try {
       var saved = localStorage.getItem('dl_model');
+      var stale = saved && (OFF.indexOf(saved) >= 0 || (typeof MODELS !== 'undefined' && !MODELS[saved]));
 
-      if (!VYCE_ENABLED) {
-        if (saved && VY_KEYS.indexOf(saved) >= 0) {
-          var next = (typeof MODELS !== 'undefined' && MODELS[LEGACY_DEFAULT]) ? LEGACY_DEFAULT : CB_KEYS[0];
-          localStorage.setItem('dl_model', next);
-          selectModel(next);
-        }
-        return;
-      }
-
-      if (saved && saved !== LEGACY_DEFAULT && typeof MODELS !== 'undefined' && MODELS[saved]) {
+      if (saved && !stale && saved !== LEGACY_DEFAULT) {
         if (EXTRA[saved]) selectModel(saved);
         return;
       }
