@@ -8,6 +8,7 @@ through with their original status and content-type.
 
 Only a fixed allow-list of AI hosts is proxied — it is NOT an open proxy.
 """
+import json
 import os
 import threading
 from urllib.parse import urlparse, unquote
@@ -25,13 +26,34 @@ _HOSTS = {
     "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
     "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
     # Vyce AI — OpenAI-compatible, base_url https://vyceai.com/v1
-    # (claude-sonnet-5, deepseek-v4-flash, gemini-3.6-flash), Bearer auth.
     "vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
     "www.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
     "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
 }
+
+# Models served by Vyce. The frontend is one huge file with several request
+# paths (chat, constructor, streaming edits); instead of patching each of them,
+# the relay looks at the "model" field and routes these to Vyce itself. Without
+# this, a Vyce model could be sent to another provider's endpoint with the wrong
+# key — which is exactly what produced 403s.
+_VYCE_ENDPOINT = "https://vyceai.com/v1/chat/completions"
+_VYCE_MODELS = {
+    "auto",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+    "claude-fable-5",
+    "deepseek-v4-flash",
+    "gemini-3.6-flash",
+    "gemini-3.1-flash-lite",
+    "glm-5.2",
+    "minimax-m3",
+    "mimo-v2.5-pro",
+    "gpt-5.6-sol",
+}
+
 _counters = {}
 _lock = threading.Lock()
 
@@ -53,14 +75,30 @@ def _next_key(host: str, keys):
     return keys[i]
 
 
+def _model_of(body: bytes) -> str:
+    try:
+        data = json.loads(body.decode("utf-8", "ignore"))
+    except (ValueError, AttributeError):
+        return ""
+    model = data.get("model") if isinstance(data, dict) else None
+    return model.strip() if isinstance(model, str) else ""
+
+
 @router.api_route("/proxy", methods=["POST"])
 async def proxy(request: Request):
     target = request.query_params.get("url")
     if not target:
         raise HTTPException(status_code=400, detail="missing url")
     target = unquote(target)
-    parsed = urlparse(target)
-    host = (parsed.hostname or "").lower()
+    body = await request.body()
+
+    host = (urlparse(target).hostname or "").lower()
+    # Route by model first: a Vyce model always goes to Vyce, whatever endpoint
+    # the frontend guessed.
+    if _model_of(body) in _VYCE_MODELS and not host.endswith("vyceai.com"):
+        target = _VYCE_ENDPOINT
+        host = "vyceai.com"
+
     if host not in _HOSTS:
         raise HTTPException(status_code=403, detail=f"host not allowed: {host}")
 
@@ -81,7 +119,6 @@ async def proxy(request: Request):
             headers["HTTP-Referer"] = os.getenv("PUBLIC_URL", "https://design-lab.onrender.com")
             headers["X-Title"] = "Design Lab"
 
-    body = await request.body()
     client = httpx.AsyncClient(timeout=config.AI_TIMEOUT)
     try:
         req = client.build_request("POST", target, content=body, headers=headers)

@@ -4,18 +4,18 @@
  * подставляет <script src="/models-patch.js"> перед </body>.
  *
  * Что делает:
- *  1) добавляет модели Vyce AI (claude-sonnet-5, deepseek-v4-flash,
- *     gemini-3.6-flash) — первыми в меню и в авто-переборе, claude-sonnet-5
- *     — модель по умолчанию;
+ *  1) добавляет модели Vyce AI — первыми в меню и в авто-переборе;
  *  2) возвращает модели Cerebras;
  *  3) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
- *     распознанный текст в запрос — так картинку "видит" любая модель,
- *     даже без vision.
+ *     распознанный текст в запрос — так картинку "видит" любая модель.
+ *
+ * Адрес провайдера для Vyce-моделей подменяет сам бэкенд (по полю model
+ * в теле запроса), поэтому любой путь отправки (чат, конструктор, XHR)
+ * попадает куда надо без правок index.html.
  */
 (function () {
   'use strict';
 
-  // base_url провайдера: https://vyceai.com/v1 (без поддомена api.)
   var VYCE_URL = 'https://vyceai.com/v1/chat/completions';
   var VYCE_HOST = 'vyceai.com';
   var VY_GROUP = 'Vyce AI \u00b7 основные';
@@ -23,22 +23,30 @@
   var OCR_ENDPOINT = '/api/ocr';
   var OCR_HEAD = '\u0422\u0435\u043a\u0441\u0442 \u0441\u043e \u0441\u043a\u0440\u0438\u043d\u0448\u043e\u0442\u0430 (OCR)';
 
-  /* provider: 'cerebras' у Vyce-моделей не опечатка: так берётся готовый
-     OpenAI-совместимый путь запроса из index.html, а адрес провайдера
-     подменяется ниже в patchFetch(). */
+  /* provider: 'cerebras' у Vyce-моделей не опечатка: берётся готовый
+     OpenAI-совместимый путь запроса из index.html, а куда идти на самом деле
+     — решает бэкенд по имени модели. */
   var EXTRA = {
-    'vy-sonnet5':  { name: 'Claude Sonnet 5',   desc: 'Anthropic \u00b7 лучший для кода (Vyce)', provider: 'cerebras', model: 'claude-sonnet-5',   brand: 'anthropic', group: VY_GROUP },
-    'vy-deepseek': { name: 'DeepSeek V4 Flash', desc: 'DeepSeek \u00b7 быстрая (Vyce)',        provider: 'cerebras', model: 'deepseek-v4-flash', brand: 'deepseek',  group: VY_GROUP },
-    'vy-gemini':   { name: 'Gemini 3.6 Flash',  desc: 'Google \u00b7 быстрая (Vyce)',          provider: 'cerebras', model: 'gemini-3.6-flash',  brand: 'gemini',    group: VY_GROUP },
-    'cb-glm47':    { name: 'GLM 4.7',           desc: '355B \u00b7 лучший для кода',           provider: 'cerebras', model: 'zai-glm-4.7',      brand: 'glm',       group: CB_GROUP },
-    'cb-gpt-oss':  { name: 'GPT-OSS 120B',      desc: 'OpenAI \u00b7 рассуждающая',             provider: 'cerebras', model: 'gpt-oss-120b',     brand: 'openai',    group: CB_GROUP },
-    'cb-gemma4':   { name: 'Gemma 4 31B',       desc: 'Google \u00b7 самая быстрая (Cerebras)', provider: 'cerebras', model: 'gemma-4-31b',      brand: 'google',    group: CB_GROUP }
+    'vy-sonnet5':   { name: 'Claude Sonnet 5',     desc: 'Anthropic \u00b7 лучший для кода',     provider: 'cerebras', model: 'claude-sonnet-5',      brand: 'anthropic', group: VY_GROUP },
+    'vy-sonnet46':  { name: 'Claude Sonnet 4.6',   desc: 'Anthropic \u00b7 надёжная рабочая',  provider: 'cerebras', model: 'claude-sonnet-4-6',    brand: 'anthropic', group: VY_GROUP },
+    'vy-haiku45':   { name: 'Claude Haiku 4.5',    desc: 'Anthropic \u00b7 быстрая и дешёвая', provider: 'cerebras', model: 'claude-haiku-4-5',     brand: 'anthropic', group: VY_GROUP },
+    'vy-deepseek':  { name: 'DeepSeek V4 Flash',   desc: 'DeepSeek \u00b7 код и математика',  provider: 'cerebras', model: 'deepseek-v4-flash',    brand: 'deepseek',  group: VY_GROUP },
+    'vy-gemini':    { name: 'Gemini 3.6 Flash',    desc: 'Google \u00b7 с рассуждениями',    provider: 'cerebras', model: 'gemini-3.6-flash',     brand: 'gemini',    group: VY_GROUP },
+    'vy-minimax':   { name: 'MiniMax M3',          desc: 'MiniMax \u00b7 с vision',            provider: 'cerebras', model: 'minimax-m3',           brand: 'minimax',   group: VY_GROUP },
+    'vy-glm52':     { name: 'GLM 5.2',             desc: 'Z.ai \u00b7 бюджетная',             provider: 'cerebras', model: 'glm-5.2',              brand: 'glm',       group: VY_GROUP },
+    'vy-mimo':      { name: 'MiMo v2.5 Pro',       desc: 'Xiaomi \u00b7 1M контекст',        provider: 'cerebras', model: 'mimo-v2.5-pro',        brand: 'mimo',      group: VY_GROUP },
+    'vy-gem-lite':  { name: 'Gemini 3.1 Flash Lite', desc: 'Google \u00b7 самая дешёвая',   provider: 'cerebras', model: 'gemini-3.1-flash-lite', brand: 'gemini',   group: VY_GROUP },
+    'cb-glm47':     { name: 'GLM 4.7',             desc: '355B \u00b7 лучший для кода',      provider: 'cerebras', model: 'zai-glm-4.7',          brand: 'glm',       group: CB_GROUP },
+    'cb-gpt-oss':   { name: 'GPT-OSS 120B',        desc: 'OpenAI \u00b7 рассуждающая',        provider: 'cerebras', model: 'gpt-oss-120b',         brand: 'openai',    group: CB_GROUP },
+    'cb-gemma4':    { name: 'Gemma 4 31B',         desc: 'Google \u00b7 самая быстрая',       provider: 'cerebras', model: 'gemma-4-31b',          brand: 'google',    group: CB_GROUP }
   };
-  var VY_KEYS = ['vy-sonnet5', 'vy-deepseek', 'vy-gemini'];
+  /* Порядок авто-перебора: Sonnet 5 у провайдера помечен degraded, поэтому
+     сразу за ним идёт Sonnet 4.6, а дальше — стабильные healthy-модели. */
+  var VY_KEYS = ['vy-sonnet5', 'vy-sonnet46', 'vy-deepseek', 'vy-gemini', 'vy-minimax', 'vy-glm52', 'vy-mimo', 'vy-gem-lite', 'vy-haiku45'];
   var CB_KEYS = ['cb-glm47', 'cb-gpt-oss', 'cb-gemma4'];
-  var ORDER = VY_KEYS.concat(CB_KEYS);   // порядок в меню: Vyce выше всего
+  var ORDER = VY_KEYS.concat(CB_KEYS);
   var DEFAULT_MODEL = 'vy-sonnet5';
-  var VYCE_MODEL_NAMES = VY_KEYS.map(function (k) { return EXTRA[k].model; });
+  var VYCE_MODEL_NAMES = VY_KEYS.map(function (k) { return EXTRA[k].model; }).concat(['auto']);
 
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
 
@@ -75,40 +83,32 @@
   /** OpenAI-формат: messages[].content[] с частями image_url. */
   function ocrifyOpenAI(data) {
     if (!Array.isArray(data.messages)) return Promise.resolve(false);
-    var jobs = [];
+    var jobs = [], touched = [];
     data.messages.forEach(function (msg) {
       if (!msg || !Array.isArray(msg.content)) return;
       var texts = [], shots = [], hasImage = false;
-      var parts = msg.content.map(function (part) {
+      msg.content.forEach(function (part) {
         if (part && part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
           hasImage = true;
           var slot = { text: '' };
           shots.push(slot);
           jobs.push(ocrImage(part.image_url.url).then(function (t) { slot.text = t; }));
-          return null;
+        } else if (part && part.type === 'text' && typeof part.text === 'string') {
+          texts.push(part.text);
+        } else if (typeof part === 'string') {
+          texts.push(part);
         }
-        if (part && part.type === 'text' && typeof part.text === 'string') texts.push(part.text);
-        else if (typeof part === 'string') texts.push(part);
-        return part;
       });
-      if (!hasImage) return;
-      jobs.push(Promise.resolve().then(function () {
-        msg.__dlPending = { texts: texts, shots: shots, parts: parts };
-      }));
+      if (hasImage) touched.push({ msg: msg, texts: texts, shots: shots });
     });
-    if (!jobs.length) return Promise.resolve(false);
+    if (!touched.length) return Promise.resolve(false);
     return Promise.all(jobs).then(function () {
-      var changed = false;
-      data.messages.forEach(function (msg) {
-        var p = msg && msg.__dlPending;
-        if (!p) return;
-        delete msg.__dlPending;
-        var blocks = p.shots.map(function (s) { return ocrBlock(s.text); });
+      touched.forEach(function (t) {
+        var blocks = t.shots.map(function (s) { return ocrBlock(s.text); });
         // В модель уходит: текст со скрина + сам запрос пользователя.
-        msg.content = blocks.concat(p.texts).join('\n\n');
-        changed = true;
+        t.msg.content = blocks.concat(t.texts).join('\n\n');
       });
-      return changed;
+      return true;
     });
   }
 
@@ -156,15 +156,14 @@
   }
 
   function retarget(url) {
-    // /api/proxy?url=... -> тот же релей, но с адресом Vyce
     var i = url.indexOf('?');
     var base = i < 0 ? url : url.slice(0, i);
     return base + '?url=' + encodeURIComponent(VYCE_URL);
   }
 
   /* Запросы к моделям идут через /api/proxy?url=<адрес провайдера>.
-     Перед отправкой: скрины -> OCR-текст; для Vyce-моделей подменяется
-     адрес провайдера. Само тело и разбор SSE остаются штатными. */
+     Здесь: скрины -> OCR-текст и (как страховка) подмена адреса для Vyce;
+     основная маршрутизация всё равно дублируется на бэкенде. */
   function patchFetch() {
     if (window.__dlFetchPatched || !origFetch) return;
 
@@ -197,28 +196,27 @@
 
   // ------------------------------------------------------------ модели ----
 
+  function avatar(bg, letter) {
+    return {
+      bg: bg,
+      svg: '<svg viewBox="0 0 24 24"><text x="12" y="16.5" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" font-family="Arial,sans-serif">' + letter + '</text></svg>'
+    };
+  }
+
   // Аватары брендов, которых может не быть в AV-карте.
   function patchAvatars() {
     try {
       if (typeof AV === 'undefined' || !AV) return;
-      if (!AV.anthropic) {
-        AV.anthropic = {
-          bg: '#d97757',
-          svg: '<svg viewBox="0 0 24 24"><text x="12" y="16.5" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" font-family="Arial,sans-serif">C</text></svg>'
-        };
-      }
-      if (!AV.deepseek) {
-        AV.deepseek = {
-          bg: '#4d6bfe',
-          svg: '<svg viewBox="0 0 24 24"><text x="12" y="16.5" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" font-family="Arial,sans-serif">D</text></svg>'
-        };
-      }
+      if (!AV.anthropic) AV.anthropic = avatar('#d97757', 'C');
+      if (!AV.deepseek) AV.deepseek = avatar('#4d6bfe', 'D');
+      if (!AV.minimax) AV.minimax = avatar('#e8484a', 'M');
+      if (!AV.mimo) AV.mimo = avatar('#ff6900', 'M');
     } catch (e) {}
   }
 
   function patchModels() {
     if (typeof MODELS === 'undefined' || !MODELS) return false;
-    if (MODELS['vy-sonnet5'] && MODELS['cb-glm47']) return true;
+    if (MODELS['vy-sonnet46'] && MODELS['cb-glm47']) return true;
 
     var old = {}, keys = Object.keys(MODELS);
     keys.forEach(function (k) { old[k] = MODELS[k]; delete MODELS[k]; });
@@ -227,7 +225,7 @@
     return true;
   }
 
-  // Авто-перебор: Vyce первым, затем Cerebras, дальше как было.
+  // Авто-перебор: Vyce первыми, затем Cerebras, дальше как было.
   function patchFallback() {
     try {
       if (typeof FALLBACK_ORDER === 'undefined' || !FALLBACK_ORDER || !FALLBACK_ORDER.splice) return;
