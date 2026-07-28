@@ -4,10 +4,17 @@
  * подставляет <script src="/models-patch.js"> перед </body>.
  *
  * Что делает:
- *  1) добавляет модели AgentRouter и возвращает модели Cerebras;
+ *  1) возвращает модели Cerebras в списки моделей;
  *  2) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
  *     распознанный текст в запрос — так картинку «видит» любая модель;
- *  3) хранит готовые модели Vyce AI — сейчас отключены, см. VYCE_ENABLED.
+ *  3) хранит готовые модели двух шлюзов — оба сейчас отключены, см. ниже.
+ *
+ * ПОЧЕМУ AGENTROUTER ОТКЛЮЧЁН: POST на agentrouter.org/v1/chat/completions
+ * возвращает 405 и HTML — по этому адресу отвечает сайт, а не API (в доках
+ * этот хост указан для Anthropic-режима Claude Code: ANTHROPIC_BASE_URL +
+ * /v1/messages). Пока верный OpenAI-совместимый base URL не подтверждён,
+ * модели скрыты. Включить: AR_ENABLED = true ниже (или без деплоя —
+ * window.DL_AGENTROUTER_ENABLED = true; location.reload();).
  *
  * ПОЧЕМУ VYCE ОТКЛЮЧЁН: vyceai.com закрыт Cloudflare Managed Challenge —
  * все запросы к /v1/* с серверного IP получают 403 и HTML-страницу проверки
@@ -23,7 +30,7 @@
   function flag(name, def) {
     return (typeof window[name] === 'boolean') ? window[name] : def;
   }
-  var AR_ENABLED = flag('DL_AGENTROUTER_ENABLED', true);
+  var AR_ENABLED = flag('DL_AGENTROUTER_ENABLED', false);
   var VYCE_ENABLED = flag('DL_VYCE_ENABLED', false);
 
   var AR_GROUP = 'AgentRouter \u00b7 топ';
@@ -76,12 +83,15 @@
   var LEGACY_DEFAULT = 'or-gemma4';                // исходный дефолт сайта
   var DEFAULT_MODEL = ORDER.length ? ORDER[0] : LEGACY_DEFAULT;
 
-  // Имя модели -> шлюз, для подмены адреса в fetch.
+  /* Имя модели -> шлюз, для подмены адреса в fetch. Выключенные провайдеры
+     сюда не попадают: если такая модель всё же встретится, запрос пойдёт
+     без подмены, как было до патча. */
   var MODEL_GW = {};
   Object.keys(EXTRA).forEach(function (k) {
-    if (EXTRA[k].gw) MODEL_GW[EXTRA[k].model] = EXTRA[k].gw;
+    var m = EXTRA[k];
+    if (m.gw && OFF.indexOf(k) < 0) MODEL_GW[m.model] = m.gw;
   });
-  MODEL_GW['auto'] = 'vyce';
+  if (VYCE_ENABLED) MODEL_GW['auto'] = 'vyce';
 
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
 
@@ -291,9 +301,9 @@
     }
   }
 
-  /* Выбор модели: по умолчанию первая из включённых (сейчас Claude
-     Opus 4.6). Осознанный выбор пользователя сохраняем, но если сохранённая
-     модель выключена или исчезла — переключаем на рабочую. */
+  /* Выбор модели: по умолчанию первая из включённых (сейчас это GLM 4.7
+     от Cerebras). Осознанный выбор пользователя сохраняем, но если
+     сохранённая модель выключена или исчезла — переключаем на рабочую. */
   function applyDefault() {
     try {
       var saved = localStorage.getItem('dl_model');
