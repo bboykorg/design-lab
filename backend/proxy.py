@@ -26,8 +26,6 @@ _HOSTS = {
     "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
     "vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
     "www.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
-    "co.agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
-    "agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
     "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
@@ -36,34 +34,21 @@ _HOSTS = {
 _VYCE_ENV = "VYCE_API_KEYS,VYCE_API_KEY"
 _VYCE_BASE = os.getenv("VYCE_BASE_URL", "https://vyceai.com/v1").rstrip("/")
 _VYCE_ENDPOINT = _VYCE_BASE + "/chat/completions"
-
-# The token console and the official Codex config both use the root domain.
-# AgentRouter must receive ordinary SDK-style headers: adding browser Origin /
-# Referer can route a server request to the website/WAF and produce HTML 405.
-_AR_ENV = "AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY"
-_AR_BASE = os.getenv("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1").rstrip("/")
-_AR_ENDPOINT = _AR_BASE + "/chat/completions"
-
 _VYCE_MODELS = {
     "auto", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5",
     "claude-fable-5", "deepseek-v4-flash", "gemini-3.6-flash",
     "gemini-3.1-flash-lite", "glm-5.2", "minimax-m3", "mimo-v2.5-pro",
     "gpt-5.6-sol",
 }
-_AR_MODELS = {"claude-opus-4-6", "gpt-5.5", "kimi-k3"}
 
 _MODEL_ROUTES = {}
 for _m in _VYCE_MODELS:
     _MODEL_ROUTES[_m] = (_VYCE_ENDPOINT, (urlparse(_VYCE_ENDPOINT).hostname or "").lower())
-for _m in _AR_MODELS:
-    _MODEL_ROUTES[_m] = (_AR_ENDPOINT, (urlparse(_AR_ENDPOINT).hostname or "").lower())
 
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
-# Only Vyce needs the browser-looking request. AgentRouter behaves like an
-# OpenAI API and must not receive browser Origin/Referer headers.
 _UA_HOSTS = ("vyceai.com",)
 
 _counters = {}
@@ -174,8 +159,6 @@ async def proxy(request: Request):
                 f"{host}: запрос заблокирован защитой Cloudflare (проверка браузера). "
                 "Провайдер должен разрешить серверные запросы к API или дать отдельный адрес API."
             )
-        elif r.status_code in (404, 405, 501):
-            msg = f"{host}: API вернул HTML вместо JSON (код {r.status_code})."
         else:
             msg = f"{host}: вместо ответа API вернулась HTML-страница (код {r.status_code})."
         return Response(
@@ -239,56 +222,6 @@ async def _probe(base: str, env_names: str, paths=("models", "me")):
     return {"ok": ok, "base": base, "keys": len(keys), "checks": checks}
 
 
-async def _probe_agentrouter():
-    """Test the exact authenticated POST used by the app, not optional GET APIs."""
-    keys = _keys(_AR_ENV)
-    if not keys:
-        return {"ok": False, "base": _AR_BASE, "keys": 0, "reason": "no_key"}
-    host = (urlparse(_AR_BASE).hostname or "").lower()
-    headers = _headers_for(host, keys[0], "bearer")
-    payload = {
-        "model": "gpt-5",
-        "messages": [{"role": "user", "content": "Reply with OK"}],
-        "max_tokens": 1,
-        "stream": False,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            r = await client.post(_AR_ENDPOINT, headers=headers, json=payload)
-    except httpx.HTTPError as e:
-        return {"ok": False, "base": _AR_BASE, "keys": len(keys), "reason": "network_error", "message": str(e)}
-
-    ctype = r.headers.get("content-type", "")
-    body = r.text[:500]
-    result = {
-        "ok": 200 <= r.status_code < 300,
-        "base": _AR_BASE,
-        "url": _AR_ENDPOINT,
-        "keys": len(keys),
-        "status": r.status_code,
-        "contentType": ctype,
-        "body": body,
-    }
-    if _is_challenge(ctype, r.content):
-        result.update(ok=False, reason="challenge")
-    elif "html" in ctype.lower():
-        result.update(ok=False, reason="html_response")
-    elif r.status_code in (401, 403):
-        result.update(ok=False, reason="auth_error")
-    elif r.status_code >= 400:
-        # A JSON model/quota error still proves that URL and authentication
-        # reached the API; return it verbatim so the remaining issue is clear.
-        result.update(reason="api_error")
-    else:
-        result.update(reason="ok")
-    return result
-
-
 @router.get("/vyce/check")
 async def vyce_check():
     return await _probe(_VYCE_BASE, _VYCE_ENV)
-
-
-@router.get("/agentrouter/check")
-async def agentrouter_check():
-    return await _probe_agentrouter()

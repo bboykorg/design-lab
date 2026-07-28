@@ -4,16 +4,10 @@
  * подставляет <script src="/models-patch.js"> перед </body>.
  *
  * Что делает:
- *  1) добавляет модели AgentRouter и возвращает модели Cerebras;
+ *  1) возвращает модели Cerebras;
  *  2) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
  *     распознанный текст в запрос — так картинку «видит» любая модель;
  *  3) хранит готовые модели Vyce AI — сейчас отключены, см. VYCE_ENABLED.
- *
- * АДРЕС AGENTROUTER: запросы идут на co.agentrouter.org — на корневом домене
- * agentrouter.org отвечает сайт (POST на /v1/chat/completions давал 405 и HTML),
- * а в доках корневой домен указан только для Anthropic-режима Claude Code.
- * Скрыть модели, если шлюз снова сломается: AR_ENABLED = false ниже (или
- * без деплоя — window.DL_AGENTROUTER_ENABLED = false; location.reload();).
  *
  * ПОЧЕМУ VYCE ОТКЛЮЧЁН: vyceai.com закрыт Cloudflare Managed Challenge —
  * все запросы к /v1/* с серверного IP получают 403 и HTML-страницу проверки
@@ -25,34 +19,21 @@
 (function () {
   'use strict';
 
-  /* Выключатели провайдеров в интерфейсе. */
   function flag(name, def) {
     return (typeof window[name] === 'boolean') ? window[name] : def;
   }
-  var AR_ENABLED = flag('DL_AGENTROUTER_ENABLED', true);
   var VYCE_ENABLED = flag('DL_VYCE_ENABLED', false);
 
-  var AR_GROUP = 'AgentRouter \u00b7 топ';
   var VY_GROUP = 'Vyce AI \u00b7 основные';
   var CB_GROUP = 'Сверхбыстрые \u00b7 Cerebras';
   var OCR_ENDPOINT = '/api/ocr';
   var OCR_HEAD = '\u0422\u0435\u043a\u0441\u0442 \u0441\u043e \u0441\u043a\u0440\u0438\u043d\u0448\u043e\u0442\u0430 (OCR)';
 
-  /* Куда на самом деле идут запросы. Та же маршрутизация по имени модели
-     повторена на бэкенде (backend/proxy.py) — для путей, где запрос уходит
-     мимо fetch. */
   var GATEWAYS = {
-    ar:   { url: 'https://co.agentrouter.org/v1/chat/completions', host: 'co.agentrouter.org' },
-    vyce: { url: 'https://vyceai.com/v1/chat/completions',         host: 'vyceai.com' }
+    vyce: { url: 'https://vyceai.com/v1/chat/completions', host: 'vyceai.com' }
   };
 
-  /* provider: 'cerebras' у шлюзовых моделей не опечатка: берётся готовый
-     OpenAI-совместимый путь запроса из index.html, а настоящий адрес и ключ
-     подставляет бэкенд по имени модели. */
   var EXTRA = {
-    'ar-opus46':    { name: 'Claude Opus 4.6',       desc: 'AgentRouter \u00b7 самая сильная',   provider: 'cerebras', model: 'claude-opus-4-6',       brand: 'anthropic', group: AR_GROUP, gw: 'ar' },
-    'ar-gpt55':     { name: 'GPT-5.5',               desc: 'AgentRouter \u00b7 OpenAI',           provider: 'cerebras', model: 'gpt-5.5',               brand: 'openai',    group: AR_GROUP, gw: 'ar' },
-    'ar-kimi':      { name: 'Kimi K3',               desc: 'AgentRouter \u00b7 длинный контекст', provider: 'cerebras', model: 'kimi-k3',               brand: 'kimi',      group: AR_GROUP, gw: 'ar' },
     'vy-sonnet5':   { name: 'Claude Sonnet 5',       desc: 'Anthropic \u00b7 лучший для кода',  provider: 'cerebras', model: 'claude-sonnet-5',       brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
     'vy-sonnet46':  { name: 'Claude Sonnet 4.6',     desc: 'Anthropic \u00b7 надёжная рабочая', provider: 'cerebras', model: 'claude-sonnet-4-6',     brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
     'vy-haiku45':   { name: 'Claude Haiku 4.5',      desc: 'Anthropic \u00b7 быстрая и дешёвая', provider: 'cerebras', model: 'claude-haiku-4-5',      brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
@@ -67,40 +48,25 @@
     'cb-gemma4':    { name: 'Gemma 4 31B',           desc: 'Google \u00b7 самая быстрая',       provider: 'cerebras', model: 'gemma-4-31b',           brand: 'google',    group: CB_GROUP }
   };
 
-  var AR_KEYS = ['ar-opus46', 'ar-gpt55', 'ar-kimi'];
   var VY_KEYS = ['vy-sonnet5', 'vy-sonnet46', 'vy-deepseek', 'vy-gemini', 'vy-minimax', 'vy-glm52', 'vy-mimo', 'vy-gem-lite', 'vy-haiku45'];
   var CB_KEYS = ['cb-glm47', 'cb-gpt-oss', 'cb-gemma4'];
-
-  var OFF = [];                                    // что убрать из интерфейса
-  if (!AR_ENABLED) OFF = OFF.concat(AR_KEYS);
-  if (!VYCE_ENABLED) OFF = OFF.concat(VY_KEYS);
-
-  var ORDER = (AR_ENABLED ? AR_KEYS : [])
-    .concat(VYCE_ENABLED ? VY_KEYS : [])
-    .concat(CB_KEYS);
-
-  var LEGACY_DEFAULT = 'or-gemma4';                // исходный дефолт сайта
+  var OFF = VYCE_ENABLED ? [] : VY_KEYS.slice();
+  var ORDER = (VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS);
+  var LEGACY_DEFAULT = 'or-gemma4';
   var DEFAULT_MODEL = ORDER.length ? ORDER[0] : LEGACY_DEFAULT;
 
-  /* Имя модели -> шлюз, для подмены адреса в fetch. Выключенные провайдеры
-     сюда не попадают: если такая модель всё же встретится, запрос пойдёт
-     без подмены, как было до патча. */
   var MODEL_GW = {};
   Object.keys(EXTRA).forEach(function (k) {
     var m = EXTRA[k];
     if (m.gw && OFF.indexOf(k) < 0) MODEL_GW[m.model] = m.gw;
   });
-  if (VYCE_ENABLED) MODEL_GW['auto'] = 'vyce';
+  if (VYCE_ENABLED) MODEL_GW.auto = 'vyce';
 
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
-
-  // ---------------------------------------------------------------- OCR ----
-
   var ocrCache = {};
 
   function cacheKey(s) { return s.length + ':' + s.slice(0, 96) + ':' + s.slice(-48); }
 
-  /** Картинка (data URL или base64) -> текст. Ключ OCR живёт на сервере. */
   function ocrImage(dataUrl) {
     if (!origFetch || typeof dataUrl !== 'string' || !dataUrl) return Promise.resolve('');
     var k = cacheKey(dataUrl);
@@ -117,14 +83,13 @@
       return t;
     }).catch(function () { return ''; });
   }
-  window.dlOcr = ocrImage;   // можно дёрнуть вручную из консоли/кода сайта
+  window.dlOcr = ocrImage;
 
   function ocrBlock(text) {
     return text ? ('[' + OCR_HEAD + ']\n' + text)
-                : '[\u0421\u043a\u0440\u0438\u043d\u0448\u043e\u0442 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d, \u043d\u043e \u0442\u0435\u043a\u0441\u0442 \u043d\u0435 \u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430\u043d]';
+                : '[\u0421\u043a\u0440\u0438\u043d\u0448\u043e\u0442 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d, \u043d\u043e \u0442\u0435\u043a\u0441\u0442 \u043d\u0435 \u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430]';
   }
 
-  /** OpenAI-формат: messages[].content[] с частями image_url. */
   function ocrifyOpenAI(data) {
     if (!Array.isArray(data.messages)) return Promise.resolve(false);
     var jobs = [], touched = [];
@@ -149,14 +114,12 @@
     return Promise.all(jobs).then(function () {
       touched.forEach(function (t) {
         var blocks = t.shots.map(function (s) { return ocrBlock(s.text); });
-        // В модель уходит: текст со скрина + сам запрос пользователя.
         t.msg.content = blocks.concat(t.texts).join('\n\n');
       });
       return true;
     });
   }
 
-  /** Родной формат Gemini: contents[].parts[] с inline_data / inlineData. */
   function ocrifyGemini(data) {
     if (!Array.isArray(data.contents)) return Promise.resolve(false);
     var jobs = [], changed = false;
@@ -176,7 +139,6 @@
     return Promise.all(jobs).then(function () { return changed; });
   }
 
-  /** Тело запроса -> то же тело, но со скринами, заменёнными на текст. */
   function ocrifyBody(bodyStr) {
     if (typeof bodyStr !== 'string' || bodyStr.indexOf('base64,') < 0) return Promise.resolve(null);
     var data;
@@ -189,9 +151,6 @@
     }).catch(function () { return null; });
   }
 
-  // ------------------------------------------------------------- fetch ----
-
-  /** По телу запроса понять, какому шлюзу принадлежит модель. */
   function gatewayOf(body) {
     if (typeof body !== 'string' || !body) return null;
     var names = Object.keys(MODEL_GW);
@@ -207,25 +166,22 @@
     return base + '?url=' + encodeURIComponent(gwUrl);
   }
 
-  /* Запросы к моделям идут через /api/proxy?url=<адрес провайдера>.
-     Здесь: скрины -> OCR-текст и подмена адреса на нужный шлюз. */
   function patchFetch() {
     if (window.__dlFetchPatched || !origFetch) return;
-
     window.fetch = function (input, init) {
       var url, body;
       try {
         url = typeof input === 'string' ? input : (input && input.url) || '';
         body = init && typeof init.body === 'string' ? init.body : null;
       } catch (e) { return origFetch(input, init); }
-
       if (!url || url.indexOf('/api/proxy') < 0 || !body) return origFetch(input, init);
-
       return ocrifyBody(body).then(function (newBody) {
         var nextInit = init;
         if (newBody) {
           nextInit = {};
-          for (var k in init) { if (Object.prototype.hasOwnProperty.call(init, k)) nextInit[k] = init[k]; }
+          for (var k in init) {
+            if (Object.prototype.hasOwnProperty.call(init, k)) nextInit[k] = init[k];
+          }
           nextInit.body = newBody;
         }
         var gw = GATEWAYS[gatewayOf(newBody || body)];
@@ -238,8 +194,6 @@
     window.__dlFetchPatched = true;
   }
 
-  // ------------------------------------------------------------ модели ----
-
   function avatar(bg, letter) {
     return {
       bg: bg,
@@ -247,7 +201,6 @@
     };
   }
 
-  // Аватары брендов, которых может не быть в AV-карте.
   function patchAvatars() {
     try {
       if (typeof AV === 'undefined' || !AV) return;
@@ -255,17 +208,13 @@
       if (!AV.deepseek) AV.deepseek = avatar('#4d6bfe', 'D');
       if (!AV.minimax) AV.minimax = avatar('#e8484a', 'M');
       if (!AV.mimo) AV.mimo = avatar('#ff6900', 'M');
-      if (!AV.kimi) AV.kimi = avatar('#1f1f1f', 'K');
     } catch (e) {}
   }
 
   function patchModels() {
     if (typeof MODELS === 'undefined' || !MODELS) return false;
-
-    // Вычищаем выключенные провайдеры (если успели добавиться раньше).
     OFF.forEach(function (k) { delete MODELS[k]; });
     if (window.__dlModelsPatched) return true;
-
     var old = {}, keys = Object.keys(MODELS);
     keys.forEach(function (k) { old[k] = MODELS[k]; delete MODELS[k]; });
     ORDER.forEach(function (k) { MODELS[k] = EXTRA[k]; });
@@ -274,12 +223,9 @@
     return true;
   }
 
-  // Авто-перебор: сначала наши модели, дальше как было.
   function patchFallback() {
     try {
       if (typeof FALLBACK_ORDER === 'undefined' || !FALLBACK_ORDER || !FALLBACK_ORDER.splice) return;
-      // Выключенные модели из цепочки убираем: иначе каждый запрос
-      // будет тратить время на заведомо нерабочий провайдер.
       for (var i = FALLBACK_ORDER.length - 1; i >= 0; i--) {
         if (OFF.indexOf(FALLBACK_ORDER[i]) >= 0) FALLBACK_ORDER.splice(i, 1);
       }
@@ -292,7 +238,9 @@
     try { if (typeof currentModel !== 'undefined') currentModel = id; } catch (e) {}
     var fns = ['pickModel', 'selectModel', 'setModel', 'chooseModel'];
     for (var i = 0; i < fns.length; i++) {
-      if (typeof window[fns[i]] === 'function') { try { window[fns[i]](id); return; } catch (e) {} }
+      if (typeof window[fns[i]] === 'function') {
+        try { window[fns[i]](id); return; } catch (e) {}
+      }
     }
     var lbl = document.getElementById('mpLabel');
     if (lbl && (EXTRA[id] || (typeof MODELS !== 'undefined' && MODELS[id]))) {
@@ -300,14 +248,10 @@
     }
   }
 
-  /* Выбор модели: по умолчанию первая из включённых (сейчас Claude
-     Opus 4.6). Осознанный выбор пользователя сохраняем, но если сохранённая
-     модель выключена или исчезла — переключаем на рабочую. */
   function applyDefault() {
     try {
       var saved = localStorage.getItem('dl_model');
       var stale = saved && (OFF.indexOf(saved) >= 0 || (typeof MODELS !== 'undefined' && !MODELS[saved]));
-
       if (saved && !stale && saved !== LEGACY_DEFAULT) {
         if (EXTRA[saved]) selectModel(saved);
         return;
