@@ -24,9 +24,10 @@ router = APIRouter(prefix="/api", tags=["proxy"])
 _HOSTS = {
     "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
     "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
-    # Vyce AI — OpenAI-compatible /v1/chat/completions (claude-sonnet-5,
-    # deepseek-v4-flash, gemini-3.6-flash), Bearer auth.
-    "api.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
+    # Vyce AI — OpenAI-compatible, base_url https://vyceai.com/v1
+    # (claude-sonnet-5, deepseek-v4-flash, gemini-3.6-flash), Bearer auth.
+    "vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
+    "www.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
     "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),

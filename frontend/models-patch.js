@@ -15,7 +15,9 @@
 (function () {
   'use strict';
 
-  var VYCE_URL = 'https://api.vyceai.com/v1/chat/completions';
+  // base_url провайдера: https://vyceai.com/v1 (без поддомена api.)
+  var VYCE_URL = 'https://vyceai.com/v1/chat/completions';
+  var VYCE_HOST = 'vyceai.com';
   var VY_GROUP = 'Vyce AI \u00b7 основные';
   var CB_GROUP = 'Сверхбыстрые \u00b7 Cerebras';
   var OCR_ENDPOINT = '/api/ocr';
@@ -184,7 +186,7 @@
         }
         var effective = newBody || body;
         var nextUrl = url;
-        if (isVyceBody(effective) && url.indexOf('api.vyceai.com') < 0) nextUrl = retarget(url);
+        if (isVyceBody(effective) && url.indexOf(VYCE_HOST) < 0) nextUrl = retarget(url);
         if (nextUrl === url && nextInit === init) return origFetch(input, init);
         if (typeof input === 'string') return origFetch(nextUrl, nextInit);
         return origFetch(new Request(nextUrl, input), nextInit);
