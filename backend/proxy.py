@@ -21,14 +21,11 @@ from . import config
 
 router = APIRouter(prefix="/api", tags=["proxy"])
 
-# host -> (comma-separated list of env var names to read keys from, auth style)
 _HOSTS = {
     "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
     "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
-    # Vyce AI — OpenAI-compatible, base https://vyceai.com/v1
     "vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
     "www.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
-    # AgentRouter — OpenAI-compatible gateway, base https://co.agentrouter.org/v1
     "co.agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
     "agentrouter.org": ("AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY", "bearer"),
     "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
@@ -40,54 +37,34 @@ _VYCE_ENV = "VYCE_API_KEYS,VYCE_API_KEY"
 _VYCE_BASE = os.getenv("VYCE_BASE_URL", "https://vyceai.com/v1").rstrip("/")
 _VYCE_ENDPOINT = _VYCE_BASE + "/chat/completions"
 
-# The console lives on agentrouter.org, but that host serves the website: a POST
-# to /v1/chat/completions there answers 405 with an HTML page, and the docs list
-# the root domain only for Claude Code's Anthropic mode (/v1/messages). The
-# OpenAI-compatible API is on the co. subdomain.
+# The token console and the official Codex config both use the root domain.
+# AgentRouter must receive ordinary SDK-style headers: adding browser Origin /
+# Referer can route a server request to the website/WAF and produce HTML 405.
 _AR_ENV = "AGENTROUTER_API_KEYS,AGENTROUTER_API_KEY"
-_AR_BASE = os.getenv("AGENTROUTER_BASE_URL", "https://co.agentrouter.org/v1").rstrip("/")
+_AR_BASE = os.getenv("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1").rstrip("/")
 _AR_ENDPOINT = _AR_BASE + "/chat/completions"
 
-# Models served by each gateway. The frontend is one huge file with several
-# request paths (chat, constructor, streaming edits); instead of patching each
-# of them, the relay looks at the "model" field and routes the request itself.
-# Without this, a model could be sent to another provider's endpoint with the
-# wrong key — which is exactly what produced 403s earlier.
 _VYCE_MODELS = {
-    "auto",
-    "claude-sonnet-5",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5",
-    "claude-fable-5",
-    "deepseek-v4-flash",
-    "gemini-3.6-flash",
-    "gemini-3.1-flash-lite",
-    "glm-5.2",
-    "minimax-m3",
-    "mimo-v2.5-pro",
+    "auto", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5",
+    "claude-fable-5", "deepseek-v4-flash", "gemini-3.6-flash",
+    "gemini-3.1-flash-lite", "glm-5.2", "minimax-m3", "mimo-v2.5-pro",
     "gpt-5.6-sol",
 }
+_AR_MODELS = {"claude-opus-4-6", "gpt-5.5", "kimi-k3"}
 
-_AR_MODELS = {
-    "claude-opus-4-6",
-    "gpt-5.5",
-    "kimi-k3",
-}
-
-# model name -> (endpoint, host). Built once at import time.
 _MODEL_ROUTES = {}
 for _m in _VYCE_MODELS:
     _MODEL_ROUTES[_m] = (_VYCE_ENDPOINT, (urlparse(_VYCE_ENDPOINT).hostname or "").lower())
 for _m in _AR_MODELS:
     _MODEL_ROUTES[_m] = (_AR_ENDPOINT, (urlparse(_AR_ENDPOINT).hostname or "").lower())
 
-# Some gateways sit behind Cloudflare, which challenges requests that do not
-# look like they came from a normal client (httpx sends no User-Agent at all).
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
-_UA_HOSTS = ("vyceai.com", "agentrouter.org")
+# Only Vyce needs the browser-looking request. AgentRouter behaves like an
+# OpenAI API and must not receive browser Origin/Referer headers.
+_UA_HOSTS = ("vyceai.com",)
 
 _counters = {}
 _lock = threading.Lock()
@@ -101,7 +78,6 @@ def _keys(env_names: str):
 
 
 def _next_key(host: str, keys):
-    """Round-robin the available keys for a host so load spreads across them."""
     if not keys:
         return None
     with _lock:
@@ -120,7 +96,6 @@ def _model_of(body: bytes) -> str:
 
 
 def _headers_for(host: str, key: str, auth: str) -> dict:
-    """Build upstream headers: auth plus, for guarded gateways, a browser look."""
     if host.endswith(_UA_HOSTS):
         origin = "https://" + host
         return {
@@ -133,9 +108,11 @@ def _headers_for(host: str, key: str, auth: str) -> dict:
             "Origin": origin,
             "Referer": origin + "/",
         }
-    # Ask for an uncompressed body: the response is re-streamed to the browser
-    # without a Content-Encoding header, so compressed bytes would be garbage.
-    h = {"Content-Type": "application/json", "Accept-Encoding": "identity"}
+    h = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "Accept-Encoding": "identity",
+    }
     if auth == "goog":
         h["x-goog-api-key"] = key
     else:
@@ -147,15 +124,12 @@ def _headers_for(host: str, key: str, auth: str) -> dict:
 
 
 def _is_challenge(ctype: str, data: bytes) -> bool:
-    """True when the provider replied with a bot check page, not with JSON."""
     if "html" not in ctype.lower():
         return False
     head = data[:4096].decode("utf-8", "ignore").lower()
     return (
-        "just a moment" in head
-        or "cf_chl_opt" in head
-        or "cf-browser-verification" in head
-        or "cf_app_waf" in head
+        "just a moment" in head or "cf_chl_opt" in head
+        or "cf-browser-verification" in head or "cf_app_waf" in head
     )
 
 
@@ -168,8 +142,6 @@ async def proxy(request: Request):
     body = await request.body()
 
     host = (urlparse(target).hostname or "").lower()
-    # Route by model first: a known model always goes to its own gateway,
-    # whatever endpoint the frontend guessed.
     route = _MODEL_ROUTES.get(_model_of(body))
     if route and host != route[1]:
         target, host = route[0], route[1]
@@ -184,7 +156,6 @@ async def proxy(request: Request):
         raise HTTPException(status_code=503, detail=f"нет ключа для {host} — задай {first} в .env")
 
     headers = _headers_for(host, key, auth)
-
     client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=True)
     try:
         req = client.build_request("POST", target, content=body, headers=headers)
@@ -194,10 +165,6 @@ async def proxy(request: Request):
         raise HTTPException(status_code=502, detail=f"upstream error: {e}")
 
     ctype = r.headers.get("content-type", "application/json")
-
-    # An HTML body always means "this is not an API answer" — either a bot check
-    # or the provider's website. Return a short, readable error instead of
-    # dumping a whole web page into the chat.
     if "html" in ctype.lower():
         data = await r.aread()
         await r.aclose()
@@ -208,10 +175,7 @@ async def proxy(request: Request):
                 "Провайдер должен разрешить серверные запросы к API или дать отдельный адрес API."
             )
         elif r.status_code in (404, 405, 501):
-            msg = (
-                f"{host}: по этому адресу отвечает сайт, а не API (код {r.status_code}). "
-                "Нужен верный base URL — задай его в AGENTROUTER_BASE_URL."
-            )
+            msg = f"{host}: API вернул HTML вместо JSON (код {r.status_code})."
         else:
             msg = f"{host}: вместо ответа API вернулась HTML-страница (код {r.status_code})."
         return Response(
@@ -228,8 +192,6 @@ async def proxy(request: Request):
 
     async def gen():
         try:
-            # aiter_bytes (not aiter_raw) decodes gzip/deflate if the provider
-            # compresses the body anyway, so the client always gets plain bytes.
             async for chunk in r.aiter_bytes():
                 yield chunk
         finally:
@@ -240,19 +202,11 @@ async def proxy(request: Request):
 
 
 async def _probe(base: str, env_names: str, paths=("models", "me")):
-    """Diagnose a gateway from the server: is a key set, is a bot check in the way?
-
-    Calls the provider's own GET endpoints and reports what came back. The key
-    itself is never echoed — only how many are configured.
-    """
     keys = _keys(env_names)
     if not keys:
         first = env_names.split(",")[0]
         return {
-            "ok": False,
-            "base": base,
-            "keys": 0,
-            "reason": "no_key",
+            "ok": False, "base": base, "keys": 0, "reason": "no_key",
             "message": f"Не задан {first} в переменных окружения.",
         }
 
@@ -268,36 +222,66 @@ async def _probe(base: str, env_names: str, paths=("models", "me")):
                 entry.update(reason="network_error", message=str(e))
                 checks[name] = entry
                 continue
-
             ctype = r.headers.get("content-type", "")
-            entry["status"] = r.status_code
-            entry["contentType"] = ctype
-            entry["cfRay"] = r.headers.get("cf-ray")
+            entry.update(status=r.status_code, contentType=ctype, cfRay=r.headers.get("cf-ray"))
             if _is_challenge(ctype, r.content):
-                entry.update(
-                    reason="cloudflare_challenge",
-                    message="Провайдер вернул проверку браузера вместо ответа API.",
-                )
+                entry.update(reason="cloudflare_challenge", message="Провайдер вернул проверку браузера вместо ответа API.")
             elif r.status_code in (404, 405, 501):
-                entry.update(
-                    reason="wrong_address",
-                    message="По этому адресу отвечает сайт, а не API.",
-                    body=r.text[:300],
-                )
+                entry.update(reason="unsupported_endpoint", message="Этот диагностический GET-эндпоинт не поддерживается.", body=r.text[:300])
             elif r.status_code in (401, 403):
-                entry.update(
-                    reason="auth_error",
-                    message="Ключ отклонён провайдером.",
-                    body=r.text[:300],
-                )
+                entry.update(reason="auth_error", message="Ключ отклонён провайдером.", body=r.text[:300])
             elif r.status_code >= 400:
                 entry.update(reason="http_error", body=r.text[:300])
             else:
                 entry.update(reason="ok", body=r.text[:300])
             checks[name] = entry
-
     ok = any(c.get("reason") == "ok" for c in checks.values())
     return {"ok": ok, "base": base, "keys": len(keys), "checks": checks}
+
+
+async def _probe_agentrouter():
+    """Test the exact authenticated POST used by the app, not optional GET APIs."""
+    keys = _keys(_AR_ENV)
+    if not keys:
+        return {"ok": False, "base": _AR_BASE, "keys": 0, "reason": "no_key"}
+    host = (urlparse(_AR_BASE).hostname or "").lower()
+    headers = _headers_for(host, keys[0], "bearer")
+    payload = {
+        "model": "gpt-5",
+        "messages": [{"role": "user", "content": "Reply with OK"}],
+        "max_tokens": 1,
+        "stream": False,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            r = await client.post(_AR_ENDPOINT, headers=headers, json=payload)
+    except httpx.HTTPError as e:
+        return {"ok": False, "base": _AR_BASE, "keys": len(keys), "reason": "network_error", "message": str(e)}
+
+    ctype = r.headers.get("content-type", "")
+    body = r.text[:500]
+    result = {
+        "ok": 200 <= r.status_code < 300,
+        "base": _AR_BASE,
+        "url": _AR_ENDPOINT,
+        "keys": len(keys),
+        "status": r.status_code,
+        "contentType": ctype,
+        "body": body,
+    }
+    if _is_challenge(ctype, r.content):
+        result.update(ok=False, reason="challenge")
+    elif "html" in ctype.lower():
+        result.update(ok=False, reason="html_response")
+    elif r.status_code in (401, 403):
+        result.update(ok=False, reason="auth_error")
+    elif r.status_code >= 400:
+        # A JSON model/quota error still proves that URL and authentication
+        # reached the API; return it verbatim so the remaining issue is clear.
+        result.update(reason="api_error")
+    else:
+        result.update(reason="ok")
+    return result
 
 
 @router.get("/vyce/check")
@@ -307,4 +291,4 @@ async def vyce_check():
 
 @router.get("/agentrouter/check")
 async def agentrouter_check():
-    return await _probe(_AR_BASE, _AR_ENV)
+    return await _probe_agentrouter()
