@@ -1,20 +1,6 @@
-/* Патч Design Lab: списки моделей + OCR скриншотов.
- *
- * index.html — единый файл на ~700 КБ, поэтому правки живут здесь; backend
- * подставляет <script src="/models-patch.js"> перед </body>.
- *
- * Что делает:
- *  1) возвращает модели Cerebras;
- *  2) прогоняет любой скриншот через OCR.space (/api/ocr) и подставляет
- *     распознанный текст в запрос — так картинку «видит» любая модель;
- *  3) хранит готовые модели Vyce AI — сейчас отключены, см. VYCE_ENABLED.
- *
- * ПОЧЕМУ VYCE ОТКЛЮЧЁН: vyceai.com закрыт Cloudflare Managed Challenge —
- * все запросы к /v1/* с серверного IP получают 403 и HTML-страницу проверки
- * браузера вместо ответа API (см. GET /api/vyce/check). Ключи и адреса при
- * этом верные, поэтому код оставлен целиком: модели просто скрыты из
- * интерфейса. Включить обратно: VYCE_ENABLED = true ниже (или без деплоя —
- * window.DL_VYCE_ENABLED = true; location.reload();).
+/* Патч Design Lab: модели KiwiLLM и Cerebras + OCR скриншотов.
+ * KiwiLLM: https://api.kiwillm.in/v1, ключи хранятся только на сервере.
+ * Vyce AI сохранён в коде, но скрыт из-за Cloudflare Managed Challenge.
  */
 (function () {
   'use strict';
@@ -24,44 +10,50 @@
   }
   var VYCE_ENABLED = flag('DL_VYCE_ENABLED', false);
 
-  var VY_GROUP = 'Vyce AI \u00b7 основные';
-  var CB_GROUP = 'Сверхбыстрые \u00b7 Cerebras';
+  var KIWI_GROUP = 'KiwiLLM · основные';
+  var VY_GROUP = 'Vyce AI · основные';
+  var CB_GROUP = 'Сверхбыстрые · Cerebras';
   var OCR_ENDPOINT = '/api/ocr';
-  var OCR_HEAD = '\u0422\u0435\u043a\u0441\u0442 \u0441\u043e \u0441\u043a\u0440\u0438\u043d\u0448\u043e\u0442\u0430 (OCR)';
+  var OCR_HEAD = 'Текст со скриншота (OCR)';
 
   var GATEWAYS = {
+    kiwi: { url: 'https://api.kiwillm.in/v1/chat/completions', host: 'api.kiwillm.in' },
     vyce: { url: 'https://vyceai.com/v1/chat/completions', host: 'vyceai.com' }
   };
 
   var EXTRA = {
-    'vy-sonnet5':   { name: 'Claude Sonnet 5',       desc: 'Anthropic \u00b7 лучший для кода',  provider: 'cerebras', model: 'claude-sonnet-5',       brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
-    'vy-sonnet46':  { name: 'Claude Sonnet 4.6',     desc: 'Anthropic \u00b7 надёжная рабочая', provider: 'cerebras', model: 'claude-sonnet-4-6',     brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
-    'vy-haiku45':   { name: 'Claude Haiku 4.5',      desc: 'Anthropic \u00b7 быстрая и дешёвая', provider: 'cerebras', model: 'claude-haiku-4-5',      brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
-    'vy-deepseek':  { name: 'DeepSeek V4 Flash',     desc: 'DeepSeek \u00b7 код и математика',  provider: 'cerebras', model: 'deepseek-v4-flash',     brand: 'deepseek',  group: VY_GROUP, gw: 'vyce' },
-    'vy-gemini':    { name: 'Gemini 3.6 Flash',      desc: 'Google \u00b7 с рассуждениями',    provider: 'cerebras', model: 'gemini-3.6-flash',      brand: 'gemini',    group: VY_GROUP, gw: 'vyce' },
-    'vy-minimax':   { name: 'MiniMax M3',            desc: 'MiniMax \u00b7 с vision',            provider: 'cerebras', model: 'minimax-m3',            brand: 'minimax',   group: VY_GROUP, gw: 'vyce' },
-    'vy-glm52':     { name: 'GLM 5.2',               desc: 'Z.ai \u00b7 бюджетная',             provider: 'cerebras', model: 'glm-5.2',               brand: 'glm',       group: VY_GROUP, gw: 'vyce' },
-    'vy-mimo':      { name: 'MiMo v2.5 Pro',         desc: 'Xiaomi \u00b7 1M контекст',        provider: 'cerebras', model: 'mimo-v2.5-pro',         brand: 'mimo',      group: VY_GROUP, gw: 'vyce' },
-    'vy-gem-lite':  { name: 'Gemini 3.1 Flash Lite', desc: 'Google \u00b7 самая дешёвая',     provider: 'cerebras', model: 'gemini-3.1-flash-lite', brand: 'gemini',    group: VY_GROUP, gw: 'vyce' },
-    'cb-glm47':     { name: 'GLM 4.7',               desc: '355B \u00b7 лучший для кода',      provider: 'cerebras', model: 'zai-glm-4.7',           brand: 'glm',       group: CB_GROUP },
-    'cb-gpt-oss':   { name: 'GPT-OSS 120B',          desc: 'OpenAI \u00b7 рассуждающая',        provider: 'cerebras', model: 'gpt-oss-120b',          brand: 'openai',    group: CB_GROUP },
-    'cb-gemma4':    { name: 'Gemma 4 31B',           desc: 'Google \u00b7 самая быстрая',       provider: 'cerebras', model: 'gemma-4-31b',           brand: 'google',    group: CB_GROUP }
+    'vy-sonnet5':   { name: 'Claude Sonnet 5',       desc: 'Anthropic · лучший для кода',    provider: 'cerebras', model: 'claude-sonnet-5',       brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
+    'vy-sonnet46':  { name: 'Claude Sonnet 4.6',     desc: 'Anthropic · надёжная рабочая',   provider: 'cerebras', model: 'claude-sonnet-4-6',     brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
+    'vy-haiku45':   { name: 'Claude Haiku 4.5',      desc: 'Anthropic · быстрая и дешёвая',  provider: 'cerebras', model: 'claude-haiku-4-5',      brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
+    'vy-deepseek':  { name: 'DeepSeek V4 Flash',     desc: 'DeepSeek · код и математика',    provider: 'cerebras', model: 'deepseek-v4-flash',     brand: 'deepseek',  group: VY_GROUP, gw: 'vyce' },
+    'vy-gemini':    { name: 'Gemini 3.6 Flash',      desc: 'Google · с рассуждениями',       provider: 'cerebras', model: 'gemini-3.6-flash',      brand: 'gemini',    group: VY_GROUP, gw: 'vyce' },
+    'vy-minimax':   { name: 'MiniMax M3',            desc: 'MiniMax · с vision',              provider: 'cerebras', model: 'minimax-m3',            brand: 'minimax',   group: VY_GROUP, gw: 'vyce' },
+    'vy-glm52':     { name: 'GLM 5.2',               desc: 'Z.ai · бюджетная',                provider: 'cerebras', model: 'glm-5.2',               brand: 'glm',       group: VY_GROUP, gw: 'vyce' },
+    'vy-mimo':      { name: 'MiMo v2.5 Pro',         desc: 'Xiaomi · 1M контекст',           provider: 'cerebras', model: 'mimo-v2.5-pro',         brand: 'mimo',      group: VY_GROUP, gw: 'vyce' },
+    'vy-gem-lite':  { name: 'Gemini 3.1 Flash Lite', desc: 'Google · самая дешёвая',         provider: 'cerebras', model: 'gemini-3.1-flash-lite', brand: 'gemini',    group: VY_GROUP, gw: 'vyce' },
+
+    'kiwi-deepseek': { name: 'DeepSeek V4 Flash',    desc: 'KiwiLLM · код и рассуждения',    provider: 'cerebras', model: 'DeepSeek-V4-Flash',     brand: 'deepseek',  group: KIWI_GROUP, gw: 'kiwi' },
+    'kiwi-glm52':    { name: 'GLM 5.2',              desc: 'KiwiLLM · универсальная',         provider: 'cerebras', model: 'glm-5.2',               brand: 'glm',       group: KIWI_GROUP, gw: 'kiwi' },
+    'kiwi-qwen36':   { name: 'Qwen 3.6 35B A3B',     desc: 'KiwiLLM · быстрая MoE',           provider: 'cerebras', model: 'Qwen3.6-35B-A3B',       brand: 'qwen',      group: KIWI_GROUP, gw: 'kiwi' },
+
+    'cb-glm47':     { name: 'GLM 4.7',               desc: '355B · лучший для кода',          provider: 'cerebras', model: 'zai-glm-4.7',           brand: 'glm',       group: CB_GROUP },
+    'cb-gpt-oss':   { name: 'GPT-OSS 120B',          desc: 'OpenAI · рассуждающая',           provider: 'cerebras', model: 'gpt-oss-120b',          brand: 'openai',    group: CB_GROUP },
+    'cb-gemma4':    { name: 'Gemma 4 31B',           desc: 'Google · самая быстрая',          provider: 'cerebras', model: 'gemma-4-31b',           brand: 'google',    group: CB_GROUP }
   };
 
+  var KIWI_KEYS = ['kiwi-deepseek', 'kiwi-glm52', 'kiwi-qwen36'];
   var VY_KEYS = ['vy-sonnet5', 'vy-sonnet46', 'vy-deepseek', 'vy-gemini', 'vy-minimax', 'vy-glm52', 'vy-mimo', 'vy-gem-lite', 'vy-haiku45'];
   var CB_KEYS = ['cb-glm47', 'cb-gpt-oss', 'cb-gemma4'];
   var OFF = VYCE_ENABLED ? [] : VY_KEYS.slice();
-  var ORDER = (VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS);
+  var ORDER = KIWI_KEYS.concat(VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS);
   var LEGACY_DEFAULT = 'or-gemma4';
-  var DEFAULT_MODEL = ORDER.length ? ORDER[0] : LEGACY_DEFAULT;
+  var DEFAULT_MODEL = ORDER[0] || LEGACY_DEFAULT;
 
   var MODEL_GW = {};
   Object.keys(EXTRA).forEach(function (k) {
     var m = EXTRA[k];
     if (m.gw && OFF.indexOf(k) < 0) MODEL_GW[m.model] = m.gw;
   });
-  if (VYCE_ENABLED) MODEL_GW.auto = 'vyce';
-
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
   var ocrCache = {};
 
@@ -72,8 +64,7 @@
     var k = cacheKey(dataUrl);
     if (ocrCache[k] !== undefined) return Promise.resolve(ocrCache[k]);
     return origFetch(OCR_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: dataUrl })
     }).then(function (r) {
       return r.json().catch(function () { return {}; });
@@ -87,7 +78,7 @@
 
   function ocrBlock(text) {
     return text ? ('[' + OCR_HEAD + ']\n' + text)
-                : '[\u0421\u043a\u0440\u0438\u043d\u0448\u043e\u0442 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d, \u043d\u043e \u0442\u0435\u043a\u0441\u0442 \u043d\u0435 \u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430]';
+                : '[Скриншот приложен, но текст не распознан]';
   }
 
   function ocrifyOpenAI(data) {
@@ -208,6 +199,7 @@
       if (!AV.deepseek) AV.deepseek = avatar('#4d6bfe', 'D');
       if (!AV.minimax) AV.minimax = avatar('#e8484a', 'M');
       if (!AV.mimo) AV.mimo = avatar('#ff6900', 'M');
+      if (!AV.qwen) AV.qwen = avatar('#615ced', 'Q');
     } catch (e) {}
   }
 

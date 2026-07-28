@@ -1,12 +1,7 @@
 """/api/proxy — same-origin relay to the AI providers.
 
-The single-file frontend keeps its exact UI and logic, but ships with NO keys.
-Every provider call goes to `/api/proxy?url=<encoded provider url>`; this relay
-injects the correct server-side key (from .env / environment), so secrets never
-live in the client or in git. Responses (incl. SSE streams) pass straight
-through with their original status and content-type.
-
-Only a fixed allow-list of AI hosts is proxied — it is NOT an open proxy.
+The frontend ships with no provider keys. Calls go through this allow-listed
+relay, which injects server-side keys and streams responses back to the client.
 """
 import json
 import os
@@ -22,6 +17,7 @@ from . import config
 router = APIRouter(prefix="/api", tags=["proxy"])
 
 _HOSTS = {
+    "api.kiwillm.in": ("KIWILLM_API_KEYS,KIWILLM_API_KEY,KIWI_KEY", "bearer"),
     "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
     "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
     "vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
@@ -30,6 +26,11 @@ _HOSTS = {
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
 }
+
+_KIWI_ENV = "KIWILLM_API_KEYS,KIWILLM_API_KEY,KIWI_KEY"
+_KIWI_BASE = os.getenv("KIWILLM_BASE_URL", "https://api.kiwillm.in/v1").rstrip("/")
+_KIWI_ENDPOINT = _KIWI_BASE + "/chat/completions"
+_KIWI_MODELS = {"DeepSeek-V4-Flash", "glm-5.2", "Qwen3.6-35B-A3B"}
 
 _VYCE_ENV = "VYCE_API_KEYS,VYCE_API_KEY"
 _VYCE_BASE = os.getenv("VYCE_BASE_URL", "https://vyceai.com/v1").rstrip("/")
@@ -44,13 +45,16 @@ _VYCE_MODELS = {
 _MODEL_ROUTES = {}
 for _m in _VYCE_MODELS:
     _MODEL_ROUTES[_m] = (_VYCE_ENDPOINT, (urlparse(_VYCE_ENDPOINT).hostname or "").lower())
+# Kiwi is active while Vyce is hidden; put Kiwi last so the shared glm-5.2 ID
+# routes to Kiwi rather than to the disabled gateway.
+for _m in _KIWI_MODELS:
+    _MODEL_ROUTES[_m] = (_KIWI_ENDPOINT, (urlparse(_KIWI_ENDPOINT).hostname or "").lower())
 
 _BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 _UA_HOSTS = ("vyceai.com",)
-
 _counters = {}
 _lock = threading.Lock()
 
@@ -192,7 +196,6 @@ async def _probe(base: str, env_names: str, paths=("models", "me")):
             "ok": False, "base": base, "keys": 0, "reason": "no_key",
             "message": f"Не задан {first} в переменных окружения.",
         }
-
     host = (urlparse(base).hostname or "").lower()
     headers = _headers_for(host, keys[0], "bearer")
     checks = {}
@@ -220,6 +223,11 @@ async def _probe(base: str, env_names: str, paths=("models", "me")):
             checks[name] = entry
     ok = any(c.get("reason") == "ok" for c in checks.values())
     return {"ok": ok, "base": base, "keys": len(keys), "checks": checks}
+
+
+@router.get("/kiwi/check")
+async def kiwi_check():
+    return await _probe(_KIWI_BASE, _KIWI_ENV, ("models",))
 
 
 @router.get("/vyce/check")
