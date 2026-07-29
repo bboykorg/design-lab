@@ -38,8 +38,6 @@ _VYCE_MODELS = {
     "gpt-5.6-sol",
 }
 
-# Internal aliases disambiguate identical provider model IDs. They never leave
-# the relay: the real model name is restored before the upstream request.
 _MODEL_ALIASES = {"kiwi::glm-5.2": "glm-5.2"}
 _MODEL_ROUTES = {}
 for _m in _VYCE_MODELS:
@@ -47,11 +45,6 @@ for _m in _VYCE_MODELS:
 for _m in _KIWI_MODELS:
     _MODEL_ROUTES[_m] = (_KIWI_ENDPOINT, (urlparse(_KIWI_ENDPOINT).hostname or "").lower())
 
-_BROWSER_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-)
-_UA_HOSTS = ("vyceai.com",)
 _counters = {}
 _lock = threading.Lock()
 
@@ -94,31 +87,20 @@ def _rewrite_model(body: bytes, model: str) -> bytes:
 
 
 def _headers_for(host: str, key: str, auth: str) -> dict:
-    if host.endswith(_UA_HOSTS):
-        origin = "https://" + host
-        return {
-            "Authorization": "Bearer " + key,
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            "Accept-Encoding": "identity",
-            "Accept-Language": "en-US,en;q=0.9",
-            "User-Agent": os.getenv("VYCE_USER_AGENT", _BROWSER_UA),
-            "Origin": origin,
-            "Referer": origin + "/",
-        }
-    h = {
+    """Use ordinary server/SDK headers; never impersonate a browser."""
+    headers = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
         "Accept-Encoding": "identity",
     }
     if auth == "goog":
-        h["x-goog-api-key"] = key
+        headers["x-goog-api-key"] = key
     else:
-        h["Authorization"] = "Bearer " + key
+        headers["Authorization"] = "Bearer " + key
         if host == "openrouter.ai":
-            h["HTTP-Referer"] = os.getenv("PUBLIC_URL", "https://design-lab.onrender.com")
-            h["X-Title"] = "Design Lab"
-    return h
+            headers["HTTP-Referer"] = os.getenv("PUBLIC_URL", "https://design-lab.onrender.com")
+            headers["X-Title"] = "Design Lab"
+    return headers
 
 
 def _is_challenge(ctype: str, data: bytes) -> bool:
@@ -158,52 +140,57 @@ async def proxy(request: Request):
     client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=True)
     try:
         req = client.build_request("POST", target, content=body, headers=headers)
-        r = await client.send(req, stream=True)
-    except httpx.HTTPError as e:
+        response = await client.send(req, stream=True)
+    except httpx.HTTPError as exc:
         await client.aclose()
-        raise HTTPException(status_code=502, detail=f"upstream error: {e}")
+        raise HTTPException(status_code=502, detail=f"upstream error: {exc}")
 
-    ctype = r.headers.get("content-type", "application/json")
+    ctype = response.headers.get("content-type", "application/json")
     if "html" in ctype.lower():
-        data = await r.aread()
-        await r.aclose()
+        data = await response.aread()
+        await response.aclose()
         await client.aclose()
         if _is_challenge(ctype, data):
-            msg = (
+            message = (
                 f"{host}: запрос заблокирован защитой Cloudflare (проверка браузера). "
                 "Провайдер должен разрешить серверные запросы к API или дать отдельный адрес API."
             )
         else:
-            msg = f"{host}: вместо ответа API вернулась HTML-страница (код {r.status_code})."
+            message = f"{host}: вместо ответа API вернулась HTML-страница (код {response.status_code})."
         return Response(
-            content=json.dumps({"error": {"message": msg}}, ensure_ascii=False),
+            content=json.dumps({"error": {"message": message}}, ensure_ascii=False),
             status_code=502,
             media_type="application/json",
         )
 
-    if r.status_code >= 400:
-        data = await r.aread()
-        await r.aclose()
+    if response.status_code >= 400:
+        data = await response.aread()
+        await response.aclose()
         await client.aclose()
-        return Response(content=data, status_code=r.status_code, media_type=ctype)
+        return Response(content=data, status_code=response.status_code, media_type=ctype)
 
-    async def gen():
+    async def generate():
         try:
-            async for chunk in r.aiter_bytes():
+            async for chunk in response.aiter_bytes():
                 yield chunk
         finally:
-            await r.aclose()
+            await response.aclose()
             await client.aclose()
 
-    return StreamingResponse(gen(), status_code=r.status_code, media_type=ctype)
+    return StreamingResponse(generate(), status_code=response.status_code, media_type=ctype)
 
 
 async def _probe(base: str, env_names: str, paths=("models", "me")):
     keys = _keys(env_names)
     if not keys:
         first = env_names.split(",")[0]
-        return {"ok": False, "base": base, "keys": 0, "reason": "no_key",
-                "message": f"Не задан {first} в переменных окружения."}
+        return {
+            "ok": False,
+            "base": base,
+            "keys": 0,
+            "reason": "no_key",
+            "message": f"Не задан {first} в переменных окружения.",
+        }
     host = (urlparse(base).hostname or "").lower()
     headers = _headers_for(host, keys[0], "bearer")
     checks = {}
@@ -211,25 +198,40 @@ async def _probe(base: str, env_names: str, paths=("models", "me")):
         for name in paths:
             entry = {"url": f"{base}/{name}"}
             try:
-                r = await client.get(entry["url"], headers=headers)
-            except httpx.HTTPError as e:
-                entry.update(reason="network_error", message=str(e))
+                response = await client.get(entry["url"], headers=headers)
+            except httpx.HTTPError as exc:
+                entry.update(reason="network_error", message=str(exc))
                 checks[name] = entry
                 continue
-            ctype = r.headers.get("content-type", "")
-            entry.update(status=r.status_code, contentType=ctype, cfRay=r.headers.get("cf-ray"))
-            if _is_challenge(ctype, r.content):
-                entry.update(reason="cloudflare_challenge", message="Провайдер вернул проверку браузера вместо ответа API.")
-            elif r.status_code in (404, 405, 501):
-                entry.update(reason="unsupported_endpoint", message="Этот диагностический GET-эндпоинт не поддерживается.", body=r.text[:300])
-            elif r.status_code in (401, 403):
-                entry.update(reason="auth_error", message="Ключ отклонён провайдером.", body=r.text[:300])
-            elif r.status_code >= 400:
-                entry.update(reason="http_error", body=r.text[:300])
+            ctype = response.headers.get("content-type", "")
+            entry.update(
+                status=response.status_code,
+                contentType=ctype,
+                cfRay=response.headers.get("cf-ray"),
+            )
+            if _is_challenge(ctype, response.content):
+                entry.update(
+                    reason="cloudflare_challenge",
+                    message="Провайдер вернул проверку браузера вместо ответа API.",
+                )
+            elif response.status_code in (404, 405, 501):
+                entry.update(
+                    reason="unsupported_endpoint",
+                    message="Этот диагностический GET-эндпоинт не поддерживается.",
+                    body=response.text[:300],
+                )
+            elif response.status_code in (401, 403):
+                entry.update(
+                    reason="auth_error",
+                    message="Ключ отклонён провайдером.",
+                    body=response.text[:300],
+                )
+            elif response.status_code >= 400:
+                entry.update(reason="http_error", body=response.text[:300])
             else:
-                entry.update(reason="ok", body=r.text[:300])
+                entry.update(reason="ok", body=response.text[:300])
             checks[name] = entry
-    ok = any(c.get("reason") == "ok" for c in checks.values())
+    ok = any(check.get("reason") == "ok" for check in checks.values())
     return {"ok": ok, "base": base, "keys": len(keys), "checks": checks}
 
 
