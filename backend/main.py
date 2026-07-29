@@ -38,22 +38,30 @@ app.include_router(proxy_router)
 app.include_router(ocr_router)
 
 # --- Frontend ---------------------------------------------------------------
-# index.html is one ~700 KB file, so small model-list fixes ship as a companion
-# script: frontend/models-patch.js restores the Cerebras models, adds the Vyce
-# ones and routes screenshots through OCR. It is injected right before the
-# closing </body> when the page is served, so the static file stays untouched.
-_PATCH_TAG = '<script src="/models-patch.js"></script>'
+# index.html is one ~700 KB file, so model/OCR fixes ship as companion scripts.
+# The second script also filters menus that are rendered independently from the
+# global MODELS map in the original page.
+_PATCH_TAGS = (
+    '<script src="/models-patch.js"></script>\n'
+    '<script src="/hide-google-models.js"></script>'
+)
 _index_cache = None
 
 
 def _build_index() -> str:
     raw = (config.FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
-    if "models-patch.js" in raw:
+    missing = []
+    if "models-patch.js" not in raw:
+        missing.append('<script src="/models-patch.js"></script>')
+    if "hide-google-models.js" not in raw:
+        missing.append('<script src="/hide-google-models.js"></script>')
+    if not missing:
         return raw
-    i = raw.rfind("</body>")  # last one = the document's real closing tag
+    patch = "\n".join(missing)
+    i = raw.rfind("</body>")
     if i < 0:
-        return raw + _PATCH_TAG
-    return raw[:i] + _PATCH_TAG + "\n" + raw[i:]
+        return raw + patch
+    return raw[:i] + patch + "\n" + raw[i:]
 
 
 @app.get("/", include_in_schema=False)
