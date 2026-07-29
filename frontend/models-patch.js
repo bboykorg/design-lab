@@ -1,6 +1,7 @@
 /* Патч Design Lab: модели KiwiLLM и Cerebras + OCR скриншотов.
  * KiwiLLM: https://api.kiwillm.in/v1, ключи хранятся только на сервере.
  * Vyce AI сохранён в коде, но скрыт из-за Cloudflare Managed Challenge.
+ * Google-модели сохранены, но скрыты флагом DL_GOOGLE_ENABLED.
  */
 (function () {
   'use strict';
@@ -9,6 +10,7 @@
     return (typeof window[name] === 'boolean') ? window[name] : def;
   }
   var VYCE_ENABLED = flag('DL_VYCE_ENABLED', false);
+  var GOOGLE_ENABLED = flag('DL_GOOGLE_ENABLED', false);
 
   var KIWI_GROUP = 'KiwiLLM · основные';
   var VY_GROUP = 'Vyce AI · основные';
@@ -44,10 +46,18 @@
   var KIWI_KEYS = ['kiwi-deepseek', 'kiwi-glm52', 'kiwi-qwen36'];
   var VY_KEYS = ['vy-sonnet5', 'vy-sonnet46', 'vy-deepseek', 'vy-gemini', 'vy-minimax', 'vy-glm52', 'vy-mimo', 'vy-gem-lite', 'vy-haiku45'];
   var CB_KEYS = ['cb-glm47', 'cb-gpt-oss', 'cb-gemma4'];
-  var OFF = VYCE_ENABLED ? [] : VY_KEYS.slice();
-  var ORDER = KIWI_KEYS.concat(VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS);
+  var GOOGLE_KEYS = ['gemini-pro', 'gemini-flash', 'or-gemma4', 'cb-gemma4', 'vy-gemini', 'vy-gem-lite'];
+
+  var OFF = [];
+  if (!VYCE_ENABLED) OFF = OFF.concat(VY_KEYS);
+  if (!GOOGLE_ENABLED) OFF = OFF.concat(GOOGLE_KEYS);
+
+  var ORDER = KIWI_KEYS
+    .concat(VYCE_ENABLED ? VY_KEYS : [])
+    .concat(CB_KEYS)
+    .filter(function (k) { return OFF.indexOf(k) < 0; });
   var LEGACY_DEFAULT = 'or-gemma4';
-  var DEFAULT_MODEL = ORDER[0] || LEGACY_DEFAULT;
+  var DEFAULT_MODEL = ORDER[0] || 'or-nemotron';
 
   var MODEL_GW = {};
   Object.keys(EXTRA).forEach(function (k) {
@@ -210,7 +220,9 @@
     var old = {}, keys = Object.keys(MODELS);
     keys.forEach(function (k) { old[k] = MODELS[k]; delete MODELS[k]; });
     ORDER.forEach(function (k) { MODELS[k] = EXTRA[k]; });
-    keys.forEach(function (k) { if (ORDER.indexOf(k) < 0) MODELS[k] = old[k]; });
+    keys.forEach(function (k) {
+      if (ORDER.indexOf(k) < 0 && OFF.indexOf(k) < 0) MODELS[k] = old[k];
+    });
     window.__dlModelsPatched = true;
     return true;
   }
