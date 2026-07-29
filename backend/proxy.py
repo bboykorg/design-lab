@@ -1,8 +1,4 @@
-"""/api/proxy — same-origin relay to the AI providers.
-
-The frontend ships with no provider keys. Calls go through this allow-listed
-relay, which injects server-side keys and streams responses back to the client.
-"""
+"""/api/proxy — same-origin relay to allow-listed AI providers."""
 import json
 import os
 import threading
@@ -30,7 +26,7 @@ _HOSTS = {
 _KIWI_ENV = "KIWILLM_API_KEYS,KIWILLM_API_KEY,KIWI_KEY"
 _KIWI_BASE = os.getenv("KIWILLM_BASE_URL", "https://api.kiwillm.in/v1").rstrip("/")
 _KIWI_ENDPOINT = _KIWI_BASE + "/chat/completions"
-_KIWI_MODELS = {"DeepSeek-V4-Flash", "glm-5.2", "Qwen3.6-35B-A3B"}
+_KIWI_MODELS = {"DeepSeek-V4-Flash", "kiwi::glm-5.2", "Qwen3.6-35B-A3B"}
 
 _VYCE_ENV = "VYCE_API_KEYS,VYCE_API_KEY"
 _VYCE_BASE = os.getenv("VYCE_BASE_URL", "https://vyceai.com/v1").rstrip("/")
@@ -42,11 +38,12 @@ _VYCE_MODELS = {
     "gpt-5.6-sol",
 }
 
+# Internal aliases disambiguate identical provider model IDs. They never leave
+# the relay: the real model name is restored before the upstream request.
+_MODEL_ALIASES = {"kiwi::glm-5.2": "glm-5.2"}
 _MODEL_ROUTES = {}
 for _m in _VYCE_MODELS:
     _MODEL_ROUTES[_m] = (_VYCE_ENDPOINT, (urlparse(_VYCE_ENDPOINT).hostname or "").lower())
-# Kiwi is active while Vyce is hidden; put Kiwi last so the shared glm-5.2 ID
-# routes to Kiwi rather than to the disabled gateway.
 for _m in _KIWI_MODELS:
     _MODEL_ROUTES[_m] = (_KIWI_ENDPOINT, (urlparse(_KIWI_ENDPOINT).hostname or "").lower())
 
@@ -82,6 +79,18 @@ def _model_of(body: bytes) -> str:
         return ""
     model = data.get("model") if isinstance(data, dict) else None
     return model.strip() if isinstance(model, str) else ""
+
+
+def _rewrite_model(body: bytes, model: str) -> bytes:
+    real_model = _MODEL_ALIASES.get(model)
+    if not real_model:
+        return body
+    try:
+        data = json.loads(body.decode("utf-8", "ignore"))
+        data["model"] = real_model
+        return json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    except (ValueError, AttributeError, TypeError):
+        return body
 
 
 def _headers_for(host: str, key: str, auth: str) -> dict:
@@ -131,13 +140,14 @@ async def proxy(request: Request):
     body = await request.body()
 
     host = (urlparse(target).hostname or "").lower()
-    route = _MODEL_ROUTES.get(_model_of(body))
+    model = _model_of(body)
+    route = _MODEL_ROUTES.get(model)
     if route and host != route[1]:
         target, host = route[0], route[1]
+    body = _rewrite_model(body, model)
 
     if host not in _HOSTS:
         raise HTTPException(status_code=403, detail=f"host not allowed: {host}")
-
     env_names, auth = _HOSTS[host]
     key = _next_key(host, _keys(env_names))
     if not key:
@@ -192,10 +202,8 @@ async def _probe(base: str, env_names: str, paths=("models", "me")):
     keys = _keys(env_names)
     if not keys:
         first = env_names.split(",")[0]
-        return {
-            "ok": False, "base": base, "keys": 0, "reason": "no_key",
-            "message": f"Не задан {first} в переменных окружения.",
-        }
+        return {"ok": False, "base": base, "keys": 0, "reason": "no_key",
+                "message": f"Не задан {first} в переменных окружения."}
     host = (urlparse(base).hostname or "").lower()
     headers = _headers_for(host, keys[0], "bearer")
     checks = {}

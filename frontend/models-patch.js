@@ -1,22 +1,15 @@
-/* Design Lab: KiwiLLM/Cerebras models, provider visibility flags and OCR.
- * Vyce remains hidden by default. Only the direct GOOGLE GEMINI section
- * (Gemini Pro + Gemini Flash) is additionally hidden by default.
- */
+/* Design Lab: KiwiLLM, Vyce, Cerebras, provider flags and OCR. */
 (function () {
   'use strict';
+  function flag(name, def) { return typeof window[name] === 'boolean' ? window[name] : def; }
 
-  function flag(name, def) {
-    return typeof window[name] === 'boolean' ? window[name] : def;
-  }
-
-  var VYCE_ENABLED = flag('DL_VYCE_ENABLED', false);
+  var VYCE_ENABLED = flag('DL_VYCE_ENABLED', true);
   var GOOGLE_ENABLED = flag('DL_GOOGLE_ENABLED', false);
   var KIWI_GROUP = 'KiwiLLM · основные';
   var VY_GROUP = 'Vyce AI · основные';
   var CB_GROUP = 'Сверхбыстрые · Cerebras';
   var OCR_ENDPOINT = '/api/ocr';
   var OCR_HEAD = 'Текст со скриншота (OCR)';
-
   var GATEWAYS = {
     kiwi: { url: 'https://api.kiwillm.in/v1/chat/completions', host: 'api.kiwillm.in' },
     vyce: { url: 'https://vyceai.com/v1/chat/completions', host: 'vyceai.com' }
@@ -34,7 +27,7 @@
     'vy-gem-lite': { name: 'Gemini 3.1 Flash Lite', desc: 'Google · самая дешёвая',        provider: 'cerebras', model: 'gemini-3.1-flash-lite', brand: 'gemini',    group: VY_GROUP, gw: 'vyce' },
 
     'kiwi-deepseek': { name: 'DeepSeek V4 Flash', desc: 'KiwiLLM · код и рассуждения', provider: 'cerebras', model: 'DeepSeek-V4-Flash', brand: 'deepseek', group: KIWI_GROUP, gw: 'kiwi' },
-    'kiwi-glm52':    { name: 'GLM 5.2',           desc: 'KiwiLLM · универсальная',      provider: 'cerebras', model: 'glm-5.2',           brand: 'glm',      group: KIWI_GROUP, gw: 'kiwi' },
+    'kiwi-glm52':    { name: 'GLM 5.2',           desc: 'KiwiLLM · универсальная',      provider: 'cerebras', model: 'kiwi::glm-5.2',     brand: 'glm',      group: KIWI_GROUP, gw: 'kiwi' },
     'kiwi-qwen36':   { name: 'Qwen 3.6 35B A3B', desc: 'KiwiLLM · быстрая MoE',        provider: 'cerebras', model: 'Qwen3.6-35B-A3B',   brand: 'qwen',     group: KIWI_GROUP, gw: 'kiwi' },
 
     'cb-glm47':   { name: 'GLM 4.7',      desc: '355B · лучший для кода', provider: 'cerebras', model: 'zai-glm-4.7',  brand: 'glm',    group: CB_GROUP },
@@ -46,18 +39,13 @@
   var VY_KEYS = ['vy-sonnet5', 'vy-sonnet46', 'vy-deepseek', 'vy-gemini', 'vy-minimax', 'vy-glm52', 'vy-mimo', 'vy-gem-lite', 'vy-haiku45'];
   var CB_KEYS = ['cb-glm47', 'cb-gpt-oss', 'cb-gemma4'];
   var DIRECT_GOOGLE_KEYS = ['gemini-pro', 'gemini-flash'];
-
   var OFF = [];
   if (!VYCE_ENABLED) OFF = OFF.concat(VY_KEYS);
   if (!GOOGLE_ENABLED) OFF = OFF.concat(DIRECT_GOOGLE_KEYS);
-
-  var ORDER = KIWI_KEYS
-    .concat(VYCE_ENABLED ? VY_KEYS : [])
-    .concat(CB_KEYS)
+  var ORDER = KIWI_KEYS.concat(VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS)
     .filter(function (k) { return OFF.indexOf(k) < 0; });
   var DEFAULT_MODEL = ORDER[0] || 'or-nemotron';
   var LEGACY_DEFAULT = 'or-gemma4';
-
   var MODEL_GW = {};
   Object.keys(EXTRA).forEach(function (k) {
     var m = EXTRA[k];
@@ -66,32 +54,23 @@
 
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
   var ocrCache = {};
-
-  function cacheKey(s) {
-    return s.length + ':' + s.slice(0, 96) + ':' + s.slice(-48);
-  }
-
+  function cacheKey(s) { return s.length + ':' + s.slice(0, 96) + ':' + s.slice(-48); }
   function ocrImage(dataUrl) {
     if (!origFetch || typeof dataUrl !== 'string' || !dataUrl) return Promise.resolve('');
     var k = cacheKey(dataUrl);
     if (ocrCache[k] !== undefined) return Promise.resolve(ocrCache[k]);
     return origFetch(OCR_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: dataUrl })
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; });
-    }).then(function (j) {
-      var text = j && typeof j.text === 'string' ? j.text.trim() : '';
-      ocrCache[k] = text;
-      return text;
-    }).catch(function () { return ''; });
+    }).then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (j) {
+        var text = j && typeof j.text === 'string' ? j.text.trim() : '';
+        ocrCache[k] = text;
+        return text;
+      }).catch(function () { return ''; });
   }
   window.dlOcr = ocrImage;
-
-  function ocrBlock(text) {
-    return text ? '[' + OCR_HEAD + ']\n' + text : '[Скриншот приложен, но текст не распознан]';
-  }
+  function ocrBlock(text) { return text ? '[' + OCR_HEAD + ']\n' + text : '[Скриншот приложен, но текст не распознан]'; }
 
   function ocrifyOpenAI(data) {
     if (!Array.isArray(data.messages)) return Promise.resolve(false);
@@ -105,11 +84,8 @@
           var slot = { text: '' };
           shots.push(slot);
           jobs.push(ocrImage(part.image_url.url).then(function (t) { slot.text = t; }));
-        } else if (part && part.type === 'text' && typeof part.text === 'string') {
-          texts.push(part.text);
-        } else if (typeof part === 'string') {
-          texts.push(part);
-        }
+        } else if (part && part.type === 'text' && typeof part.text === 'string') texts.push(part.text);
+        else if (typeof part === 'string') texts.push(part);
       });
       if (hasImage) touched.push({ msg: msg, texts: texts, shots: shots });
     });
@@ -131,40 +107,31 @@
         var inline = part && (part.inline_data || part.inlineData);
         if (!inline || typeof inline.data !== 'string') return;
         var mime = inline.mime_type || inline.mimeType || 'image/png';
-        jobs.push(ocrImage('data:' + mime + ';base64,' + inline.data).then(function (text) {
-          item.parts[i] = { text: ocrBlock(text) };
-        }));
+        jobs.push(ocrImage('data:' + mime + ';base64,' + inline.data).then(function (text) { item.parts[i] = { text: ocrBlock(text) }; }));
       });
     });
-    if (!jobs.length) return Promise.resolve(false);
-    return Promise.all(jobs).then(function () { return true; });
+    return jobs.length ? Promise.all(jobs).then(function () { return true; }) : Promise.resolve(false);
   }
 
   function ocrifyBody(body) {
     if (typeof body !== 'string' || body.indexOf('base64,') < 0) return Promise.resolve(null);
     var data;
     try { data = JSON.parse(body); } catch (e) { return Promise.resolve(null); }
-    return ocrifyOpenAI(data).then(function (openAIChanged) {
-      return ocrifyGemini(data).then(function (geminiChanged) {
-        return openAIChanged || geminiChanged ? JSON.stringify(data) : null;
-      });
+    return ocrifyOpenAI(data).then(function (a) {
+      return ocrifyGemini(data).then(function (b) { return a || b ? JSON.stringify(data) : null; });
     }).catch(function () { return null; });
   }
 
   function gatewayOf(body) {
     if (typeof body !== 'string') return null;
     var names = Object.keys(MODEL_GW);
-    for (var i = 0; i < names.length; i++) {
-      if (body.indexOf('"' + names[i] + '"') >= 0) return MODEL_GW[names[i]];
-    }
+    for (var i = 0; i < names.length; i++) if (body.indexOf('"' + names[i] + '"') >= 0) return MODEL_GW[names[i]];
     return null;
   }
-
   function retarget(url, gatewayUrl) {
     var q = url.indexOf('?');
     return (q < 0 ? url : url.slice(0, q)) + '?url=' + encodeURIComponent(gatewayUrl);
   }
-
   function patchFetch() {
     if (window.__dlFetchPatched || !origFetch) return;
     window.fetch = function (input, init) {
@@ -193,7 +160,6 @@
   function avatar(bg, letter) {
     return { bg: bg, svg: '<svg viewBox="0 0 24 24"><text x="12" y="16.5" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" font-family="Arial,sans-serif">' + letter + '</text></svg>' };
   }
-
   function patchAvatars() {
     try {
       if (typeof AV === 'undefined' || !AV) return;
@@ -204,7 +170,6 @@
       if (!AV.qwen) AV.qwen = avatar('#615ced', 'Q');
     } catch (e) {}
   }
-
   function patchModels() {
     if (typeof MODELS === 'undefined' || !MODELS) return false;
     OFF.forEach(function (k) { delete MODELS[k]; });
@@ -212,24 +177,18 @@
     var old = {}, keys = Object.keys(MODELS);
     keys.forEach(function (k) { old[k] = MODELS[k]; delete MODELS[k]; });
     ORDER.forEach(function (k) { MODELS[k] = EXTRA[k]; });
-    keys.forEach(function (k) {
-      if (ORDER.indexOf(k) < 0 && OFF.indexOf(k) < 0) MODELS[k] = old[k];
-    });
+    keys.forEach(function (k) { if (ORDER.indexOf(k) < 0 && OFF.indexOf(k) < 0) MODELS[k] = old[k]; });
     window.__dlModelsPatched = true;
     return true;
   }
-
   function patchFallback() {
     try {
       if (typeof FALLBACK_ORDER === 'undefined' || !FALLBACK_ORDER || !FALLBACK_ORDER.splice) return;
-      for (var i = FALLBACK_ORDER.length - 1; i >= 0; i--) {
-        if (OFF.indexOf(FALLBACK_ORDER[i]) >= 0) FALLBACK_ORDER.splice(i, 1);
-      }
+      for (var i = FALLBACK_ORDER.length - 1; i >= 0; i--) if (OFF.indexOf(FALLBACK_ORDER[i]) >= 0) FALLBACK_ORDER.splice(i, 1);
       var add = ORDER.filter(function (k) { return FALLBACK_ORDER.indexOf(k) < 0; });
       if (add.length) FALLBACK_ORDER.unshift.apply(FALLBACK_ORDER, add);
     } catch (e) {}
   }
-
   function selectModel(id) {
     try { if (typeof currentModel !== 'undefined') currentModel = id; } catch (e) {}
     ['pickModel', 'selectModel', 'setModel', 'chooseModel'].some(function (name) {
@@ -239,7 +198,6 @@
     var label = document.getElementById('mpLabel');
     if (label && EXTRA[id]) label.textContent = EXTRA[id].name;
   }
-
   function applyDefault() {
     try {
       var saved = localStorage.getItem('dl_model');
@@ -252,22 +210,16 @@
       selectModel(DEFAULT_MODEL);
     } catch (e) {}
   }
-
   function refreshMenus() {
     ['buildModelMenu', 'renderModelMenu', 'renderModels', 'initModelMenu', 'fillModelMenu', 'updateModelPill', 'syncModelPill'].forEach(function (name) {
       try { if (typeof window[name] === 'function') window[name](); } catch (e) {}
     });
   }
-
   function apply() {
-    patchFetch();
-    patchAvatars();
+    patchFetch(); patchAvatars();
     if (!patchModels()) return;
-    patchFallback();
-    applyDefault();
-    refreshMenus();
+    patchFallback(); applyDefault(); refreshMenus();
   }
-
   apply();
   document.addEventListener('DOMContentLoaded', apply);
   window.addEventListener('load', apply);
