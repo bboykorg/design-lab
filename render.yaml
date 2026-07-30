@@ -13,6 +13,9 @@ services:
         value: json
       - key: CORS_ORIGINS
         value: "*"
+      # Base URL of a separate persistent service for users, sessions and projects.
+      - key: USER_DB_SERVICE_URL
+        sync: false
       # AI provider keys for /api/proxy (comma-separated for several keys).
       - key: GOROUTER_API_KEYS
         sync: false
