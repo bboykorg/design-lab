@@ -13,6 +13,8 @@ from . import config
 router = APIRouter(prefix="/api", tags=["proxy"])
 
 _HOSTS = {
+    "gorouter.app": ("GOROUTER_API_KEYS,GOROUTER_API_KEY", "bearer"),
+    "www.gorouter.app": ("GOROUTER_API_KEYS,GOROUTER_API_KEY", "bearer"),
     "api.kiwillm.in": ("KIWILLM_API_KEYS,KIWILLM_API_KEY,KIWI_KEY", "bearer"),
     "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
     "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
@@ -21,6 +23,16 @@ _HOSTS = {
     "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
+}
+
+_GOROUTER_ENV = "GOROUTER_API_KEYS,GOROUTER_API_KEY"
+_GOROUTER_BASE = os.getenv("GOROUTER_BASE_URL", "https://gorouter.app/v1").rstrip("/")
+_GOROUTER_ENDPOINT = _GOROUTER_BASE + "/chat/completions"
+_GOROUTER_MODELS = {
+    "claude-opus-4-8",
+    "claude-opus-4-8-thinking",
+    "claude-opus-5",
+    "claude-opus-5-thinking",
 }
 
 _KIWI_ENV = "KIWILLM_API_KEYS,KIWILLM_API_KEY,KIWI_KEY"
@@ -40,10 +52,12 @@ _VYCE_MODELS = {
 
 _MODEL_ALIASES = {"kiwi::glm-5.2": "glm-5.2"}
 _MODEL_ROUTES = {}
-for _m in _VYCE_MODELS:
-    _MODEL_ROUTES[_m] = (_VYCE_ENDPOINT, (urlparse(_VYCE_ENDPOINT).hostname or "").lower())
-for _m in _KIWI_MODELS:
-    _MODEL_ROUTES[_m] = (_KIWI_ENDPOINT, (urlparse(_KIWI_ENDPOINT).hostname or "").lower())
+for _model in _VYCE_MODELS:
+    _MODEL_ROUTES[_model] = (_VYCE_ENDPOINT, (urlparse(_VYCE_ENDPOINT).hostname or "").lower())
+for _model in _KIWI_MODELS:
+    _MODEL_ROUTES[_model] = (_KIWI_ENDPOINT, (urlparse(_KIWI_ENDPOINT).hostname or "").lower())
+for _model in _GOROUTER_MODELS:
+    _MODEL_ROUTES[_model] = (_GOROUTER_ENDPOINT, (urlparse(_GOROUTER_ENDPOINT).hostname or "").lower())
 
 _counters = {}
 _lock = threading.Lock()
@@ -52,7 +66,7 @@ _lock = threading.Lock()
 def _keys(env_names: str):
     out = []
     for name in env_names.split(","):
-        out += [k.strip() for k in os.getenv(name.strip(), "").split(",") if k.strip()]
+        out += [key.strip() for key in os.getenv(name.strip(), "").split(",") if key.strip()]
     return out
 
 
@@ -60,9 +74,9 @@ def _next_key(host: str, keys):
     if not keys:
         return None
     with _lock:
-        i = _counters.get(host, 0) % len(keys)
-        _counters[host] = (i + 1) % len(keys)
-    return keys[i]
+        index = _counters.get(host, 0) % len(keys)
+        _counters[host] = (index + 1) % len(keys)
+    return keys[index]
 
 
 def _model_of(body: bytes) -> str:
@@ -87,7 +101,6 @@ def _rewrite_model(body: bytes, model: str) -> bytes:
 
 
 def _headers_for(host: str, key: str, auth: str) -> dict:
-    """Use ordinary server/SDK headers; never impersonate a browser."""
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
@@ -103,8 +116,8 @@ def _headers_for(host: str, key: str, auth: str) -> dict:
     return headers
 
 
-def _is_challenge(ctype: str, data: bytes) -> bool:
-    if "html" not in ctype.lower():
+def _is_challenge(content_type: str, data: bytes) -> bool:
+    if "html" not in content_type.lower():
         return False
     head = data[:4096].decode("utf-8", "ignore").lower()
     return (
@@ -139,22 +152,20 @@ async def proxy(request: Request):
     headers = _headers_for(host, key, auth)
     client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=True)
     try:
-        req = client.build_request("POST", target, content=body, headers=headers)
-        response = await client.send(req, stream=True)
+        upstream_request = client.build_request("POST", target, content=body, headers=headers)
+        response = await client.send(upstream_request, stream=True)
     except httpx.HTTPError as exc:
         await client.aclose()
-        raise HTTPException(status_code=502, detail=f"upstream error: {exc}")
+        detail = f"{type(exc).__name__}: {exc}".rstrip()
+        raise HTTPException(status_code=502, detail=f"upstream error: {detail}")
 
-    ctype = response.headers.get("content-type", "application/json")
-    if "html" in ctype.lower():
+    content_type = response.headers.get("content-type", "application/json")
+    if "html" in content_type.lower():
         data = await response.aread()
         await response.aclose()
         await client.aclose()
-        if _is_challenge(ctype, data):
-            message = (
-                f"{host}: запрос заблокирован защитой Cloudflare (проверка браузера). "
-                "Провайдер должен разрешить серверные запросы к API или дать отдельный адрес API."
-            )
+        if _is_challenge(content_type, data):
+            message = f"{host}: запрос заблокирован проверкой браузера Cloudflare."
         else:
             message = f"{host}: вместо ответа API вернулась HTML-страница (код {response.status_code})."
         return Response(
@@ -167,7 +178,7 @@ async def proxy(request: Request):
         data = await response.aread()
         await response.aclose()
         await client.aclose()
-        return Response(content=data, status_code=response.status_code, media_type=ctype)
+        return Response(content=data, status_code=response.status_code, media_type=content_type)
 
     async def generate():
         try:
@@ -177,10 +188,10 @@ async def proxy(request: Request):
             await response.aclose()
             await client.aclose()
 
-    return StreamingResponse(generate(), status_code=response.status_code, media_type=ctype)
+    return StreamingResponse(generate(), status_code=response.status_code, media_type=content_type)
 
 
-async def _probe(base: str, env_names: str, paths=("models", "me")):
+async def _probe(base: str, env_names: str, paths=("models",)):
     keys = _keys(env_names)
     if not keys:
         first = env_names.split(",")[0]
@@ -195,51 +206,45 @@ async def _probe(base: str, env_names: str, paths=("models", "me")):
     headers = _headers_for(host, keys[0], "bearer")
     checks = {}
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
-        for name in paths:
-            entry = {"url": f"{base}/{name}"}
+        for path in paths:
+            entry = {"url": f"{base}/{path}"}
             try:
                 response = await client.get(entry["url"], headers=headers)
             except httpx.HTTPError as exc:
-                entry.update(reason="network_error", message=str(exc))
-                checks[name] = entry
+                entry.update(reason="network_error", message=f"{type(exc).__name__}: {exc}".rstrip())
+                checks[path] = entry
                 continue
-            ctype = response.headers.get("content-type", "")
+            content_type = response.headers.get("content-type", "")
             entry.update(
                 status=response.status_code,
-                contentType=ctype,
+                contentType=content_type,
                 cfRay=response.headers.get("cf-ray"),
             )
-            if _is_challenge(ctype, response.content):
-                entry.update(
-                    reason="cloudflare_challenge",
-                    message="Провайдер вернул проверку браузера вместо ответа API.",
-                )
+            if _is_challenge(content_type, response.content):
+                entry.update(reason="cloudflare_challenge", message="Провайдер вернул проверку браузера вместо API.")
             elif response.status_code in (404, 405, 501):
-                entry.update(
-                    reason="unsupported_endpoint",
-                    message="Этот диагностический GET-эндпоинт не поддерживается.",
-                    body=response.text[:300],
-                )
+                entry.update(reason="unsupported_endpoint", body=response.text[:300])
             elif response.status_code in (401, 403):
-                entry.update(
-                    reason="auth_error",
-                    message="Ключ отклонён провайдером.",
-                    body=response.text[:300],
-                )
+                entry.update(reason="auth_error", body=response.text[:300])
             elif response.status_code >= 400:
                 entry.update(reason="http_error", body=response.text[:300])
             else:
-                entry.update(reason="ok", body=response.text[:300])
-            checks[name] = entry
+                entry.update(reason="ok", body=response.text[:500])
+            checks[path] = entry
     ok = any(check.get("reason") == "ok" for check in checks.values())
     return {"ok": ok, "base": base, "keys": len(keys), "checks": checks}
 
 
+@router.get("/gorouter/check")
+async def gorouter_check():
+    return await _probe(_GOROUTER_BASE, _GOROUTER_ENV)
+
+
 @router.get("/kiwi/check")
 async def kiwi_check():
-    return await _probe(_KIWI_BASE, _KIWI_ENV, ("models",))
+    return await _probe(_KIWI_BASE, _KIWI_ENV)
 
 
 @router.get("/vyce/check")
 async def vyce_check():
-    return await _probe(_VYCE_BASE, _VYCE_ENV)
+    return await _probe(_VYCE_BASE, _VYCE_ENV, ("models", "me"))

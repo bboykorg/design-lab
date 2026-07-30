@@ -1,21 +1,28 @@
-/* Design Lab: KiwiLLM, Vyce, Cerebras, provider flags and OCR. */
+/* Design Lab: GoRouter, KiwiLLM, hidden Vyce, Cerebras and OCR. */
 (function () {
   'use strict';
   function flag(name, def) { return typeof window[name] === 'boolean' ? window[name] : def; }
 
-  var VYCE_ENABLED = flag('DL_VYCE_ENABLED', true);
+  var VYCE_ENABLED = flag('DL_VYCE_ENABLED', false);
   var GOOGLE_ENABLED = flag('DL_GOOGLE_ENABLED', false);
+  var GO_GROUP = 'GoRouter · Claude Opus';
   var KIWI_GROUP = 'KiwiLLM · основные';
   var VY_GROUP = 'Vyce AI · основные';
   var CB_GROUP = 'Сверхбыстрые · Cerebras';
   var OCR_ENDPOINT = '/api/ocr';
   var OCR_HEAD = 'Текст со скриншота (OCR)';
   var GATEWAYS = {
+    gorouter: { url: 'https://gorouter.app/v1/chat/completions', host: 'gorouter.app' },
     kiwi: { url: 'https://api.kiwillm.in/v1/chat/completions', host: 'api.kiwillm.in' },
     vyce: { url: 'https://vyceai.com/v1/chat/completions', host: 'vyceai.com' }
   };
 
   var EXTRA = {
+    'go-opus48':          { name: 'Claude Opus 4.8',          desc: 'GoRouter · мощная',              provider: 'cerebras', model: 'claude-opus-4-8',          brand: 'anthropic', group: GO_GROUP, gw: 'gorouter' },
+    'go-opus48-thinking': { name: 'Claude Opus 4.8 Thinking', desc: 'GoRouter · глубокое мышление',   provider: 'cerebras', model: 'claude-opus-4-8-thinking', brand: 'anthropic', group: GO_GROUP, gw: 'gorouter' },
+    'go-opus5':           { name: 'Claude Opus 5',            desc: 'GoRouter · новое поколение',      provider: 'cerebras', model: 'claude-opus-5',            brand: 'anthropic', group: GO_GROUP, gw: 'gorouter' },
+    'go-opus5-thinking':  { name: 'Claude Opus 5 Thinking',   desc: 'GoRouter · максимум рассуждений', provider: 'cerebras', model: 'claude-opus-5-thinking',   brand: 'anthropic', group: GO_GROUP, gw: 'gorouter' },
+
     'vy-sonnet5':  { name: 'Claude Sonnet 5',       desc: 'Anthropic · лучший для кода',   provider: 'cerebras', model: 'claude-sonnet-5',       brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
     'vy-sonnet46': { name: 'Claude Sonnet 4.6',     desc: 'Anthropic · надёжная рабочая',  provider: 'cerebras', model: 'claude-sonnet-4-6',     brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
     'vy-haiku45':  { name: 'Claude Haiku 4.5',      desc: 'Anthropic · быстрая и дешёвая', provider: 'cerebras', model: 'claude-haiku-4-5',      brand: 'anthropic', group: VY_GROUP, gw: 'vyce' },
@@ -35,6 +42,7 @@
     'cb-gemma4':  { name: 'Gemma 4 31B',  desc: 'Google · самая быстрая', provider: 'cerebras', model: 'gemma-4-31b',  brand: 'google', group: CB_GROUP }
   };
 
+  var GO_KEYS = ['go-opus48', 'go-opus48-thinking', 'go-opus5', 'go-opus5-thinking'];
   var KIWI_KEYS = ['kiwi-deepseek', 'kiwi-glm52', 'kiwi-qwen36'];
   var VY_KEYS = ['vy-sonnet5', 'vy-sonnet46', 'vy-deepseek', 'vy-gemini', 'vy-minimax', 'vy-glm52', 'vy-mimo', 'vy-gem-lite', 'vy-haiku45'];
   var CB_KEYS = ['cb-glm47', 'cb-gpt-oss', 'cb-gemma4'];
@@ -42,30 +50,30 @@
   var OFF = [];
   if (!VYCE_ENABLED) OFF = OFF.concat(VY_KEYS);
   if (!GOOGLE_ENABLED) OFF = OFF.concat(DIRECT_GOOGLE_KEYS);
-  var ORDER = KIWI_KEYS.concat(VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS)
-    .filter(function (k) { return OFF.indexOf(k) < 0; });
+  var ORDER = GO_KEYS.concat(KIWI_KEYS).concat(VYCE_ENABLED ? VY_KEYS : []).concat(CB_KEYS)
+    .filter(function (key) { return OFF.indexOf(key) < 0; });
   var DEFAULT_MODEL = ORDER[0] || 'or-nemotron';
   var LEGACY_DEFAULT = 'or-gemma4';
   var MODEL_GW = {};
-  Object.keys(EXTRA).forEach(function (k) {
-    var m = EXTRA[k];
-    if (m.gw && OFF.indexOf(k) < 0) MODEL_GW[m.model] = m.gw;
+  Object.keys(EXTRA).forEach(function (key) {
+    var model = EXTRA[key];
+    if (model.gw && OFF.indexOf(key) < 0) MODEL_GW[model.model] = model.gw;
   });
 
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
   var ocrCache = {};
-  function cacheKey(s) { return s.length + ':' + s.slice(0, 96) + ':' + s.slice(-48); }
+  function cacheKey(value) { return value.length + ':' + value.slice(0, 96) + ':' + value.slice(-48); }
   function ocrImage(dataUrl) {
     if (!origFetch || typeof dataUrl !== 'string' || !dataUrl) return Promise.resolve('');
-    var k = cacheKey(dataUrl);
-    if (ocrCache[k] !== undefined) return Promise.resolve(ocrCache[k]);
+    var key = cacheKey(dataUrl);
+    if (ocrCache[key] !== undefined) return Promise.resolve(ocrCache[key]);
     return origFetch(OCR_ENDPOINT, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: dataUrl })
-    }).then(function (r) { return r.json().catch(function () { return {}; }); })
-      .then(function (j) {
-        var text = j && typeof j.text === 'string' ? j.text.trim() : '';
-        ocrCache[k] = text;
+    }).then(function (response) { return response.json().catch(function () { return {}; }); })
+      .then(function (json) {
+        var text = json && typeof json.text === 'string' ? json.text.trim() : '';
+        ocrCache[key] = text;
         return text;
       }).catch(function () { return ''; });
   }
@@ -75,24 +83,24 @@
   function ocrifyOpenAI(data) {
     if (!Array.isArray(data.messages)) return Promise.resolve(false);
     var jobs = [], touched = [];
-    data.messages.forEach(function (msg) {
-      if (!msg || !Array.isArray(msg.content)) return;
+    data.messages.forEach(function (message) {
+      if (!message || !Array.isArray(message.content)) return;
       var texts = [], shots = [], hasImage = false;
-      msg.content.forEach(function (part) {
+      message.content.forEach(function (part) {
         if (part && part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
           hasImage = true;
           var slot = { text: '' };
           shots.push(slot);
-          jobs.push(ocrImage(part.image_url.url).then(function (t) { slot.text = t; }));
+          jobs.push(ocrImage(part.image_url.url).then(function (value) { slot.text = value; }));
         } else if (part && part.type === 'text' && typeof part.text === 'string') texts.push(part.text);
         else if (typeof part === 'string') texts.push(part);
       });
-      if (hasImage) touched.push({ msg: msg, texts: texts, shots: shots });
+      if (hasImage) touched.push({ message: message, texts: texts, shots: shots });
     });
     if (!touched.length) return Promise.resolve(false);
     return Promise.all(jobs).then(function () {
-      touched.forEach(function (t) {
-        t.msg.content = t.shots.map(function (s) { return ocrBlock(s.text); }).concat(t.texts).join('\n\n');
+      touched.forEach(function (item) {
+        item.message.content = item.shots.map(function (shot) { return ocrBlock(shot.text); }).concat(item.texts).join('\n\n');
       });
       return true;
     });
@@ -103,11 +111,11 @@
     var jobs = [];
     data.contents.forEach(function (item) {
       if (!item || !Array.isArray(item.parts)) return;
-      item.parts.forEach(function (part, i) {
+      item.parts.forEach(function (part, index) {
         var inline = part && (part.inline_data || part.inlineData);
         if (!inline || typeof inline.data !== 'string') return;
         var mime = inline.mime_type || inline.mimeType || 'image/png';
-        jobs.push(ocrImage('data:' + mime + ';base64,' + inline.data).then(function (text) { item.parts[i] = { text: ocrBlock(text) }; }));
+        jobs.push(ocrImage('data:' + mime + ';base64,' + inline.data).then(function (text) { item.parts[index] = { text: ocrBlock(text) }; }));
       });
     });
     return jobs.length ? Promise.all(jobs).then(function () { return true; }) : Promise.resolve(false);
@@ -116,21 +124,25 @@
   function ocrifyBody(body) {
     if (typeof body !== 'string' || body.indexOf('base64,') < 0) return Promise.resolve(null);
     var data;
-    try { data = JSON.parse(body); } catch (e) { return Promise.resolve(null); }
-    return ocrifyOpenAI(data).then(function (a) {
-      return ocrifyGemini(data).then(function (b) { return a || b ? JSON.stringify(data) : null; });
+    try { data = JSON.parse(body); } catch (error) { return Promise.resolve(null); }
+    return ocrifyOpenAI(data).then(function (openAIChanged) {
+      return ocrifyGemini(data).then(function (geminiChanged) {
+        return openAIChanged || geminiChanged ? JSON.stringify(data) : null;
+      });
     }).catch(function () { return null; });
   }
 
   function gatewayOf(body) {
     if (typeof body !== 'string') return null;
     var names = Object.keys(MODEL_GW);
-    for (var i = 0; i < names.length; i++) if (body.indexOf('"' + names[i] + '"') >= 0) return MODEL_GW[names[i]];
+    for (var index = 0; index < names.length; index++) {
+      if (body.indexOf('"' + names[index] + '"') >= 0) return MODEL_GW[names[index]];
+    }
     return null;
   }
   function retarget(url, gatewayUrl) {
-    var q = url.indexOf('?');
-    return (q < 0 ? url : url.slice(0, q)) + '?url=' + encodeURIComponent(gatewayUrl);
+    var query = url.indexOf('?');
+    return (query < 0 ? url : url.slice(0, query)) + '?url=' + encodeURIComponent(gatewayUrl);
   }
   function patchFetch() {
     if (window.__dlFetchPatched || !origFetch) return;
@@ -139,13 +151,13 @@
       try {
         url = typeof input === 'string' ? input : (input && input.url) || '';
         body = init && typeof init.body === 'string' ? init.body : null;
-      } catch (e) { return origFetch(input, init); }
+      } catch (error) { return origFetch(input, init); }
       if (!url || url.indexOf('/api/proxy') < 0 || !body) return origFetch(input, init);
       return ocrifyBody(body).then(function (newBody) {
         var nextInit = init;
         if (newBody) {
           nextInit = {};
-          Object.keys(init || {}).forEach(function (k) { nextInit[k] = init[k]; });
+          Object.keys(init || {}).forEach(function (key) { nextInit[key] = init[key]; });
           nextInit.body = newBody;
         }
         var gateway = GATEWAYS[gatewayOf(newBody || body)];
@@ -157,8 +169,8 @@
     window.__dlFetchPatched = true;
   }
 
-  function avatar(bg, letter) {
-    return { bg: bg, svg: '<svg viewBox="0 0 24 24"><text x="12" y="16.5" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" font-family="Arial,sans-serif">' + letter + '</text></svg>' };
+  function avatar(background, letter) {
+    return { bg: background, svg: '<svg viewBox="0 0 24 24"><text x="12" y="16.5" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" font-family="Arial,sans-serif">' + letter + '</text></svg>' };
   }
   function patchAvatars() {
     try {
@@ -168,32 +180,34 @@
       if (!AV.minimax) AV.minimax = avatar('#e8484a', 'M');
       if (!AV.mimo) AV.mimo = avatar('#ff6900', 'M');
       if (!AV.qwen) AV.qwen = avatar('#615ced', 'Q');
-    } catch (e) {}
+    } catch (error) {}
   }
   function patchModels() {
     if (typeof MODELS === 'undefined' || !MODELS) return false;
-    OFF.forEach(function (k) { delete MODELS[k]; });
+    OFF.forEach(function (key) { delete MODELS[key]; });
     if (window.__dlModelsPatched) return true;
     var old = {}, keys = Object.keys(MODELS);
-    keys.forEach(function (k) { old[k] = MODELS[k]; delete MODELS[k]; });
-    ORDER.forEach(function (k) { MODELS[k] = EXTRA[k]; });
-    keys.forEach(function (k) { if (ORDER.indexOf(k) < 0 && OFF.indexOf(k) < 0) MODELS[k] = old[k]; });
+    keys.forEach(function (key) { old[key] = MODELS[key]; delete MODELS[key]; });
+    ORDER.forEach(function (key) { MODELS[key] = EXTRA[key]; });
+    keys.forEach(function (key) { if (ORDER.indexOf(key) < 0 && OFF.indexOf(key) < 0) MODELS[key] = old[key]; });
     window.__dlModelsPatched = true;
     return true;
   }
   function patchFallback() {
     try {
       if (typeof FALLBACK_ORDER === 'undefined' || !FALLBACK_ORDER || !FALLBACK_ORDER.splice) return;
-      for (var i = FALLBACK_ORDER.length - 1; i >= 0; i--) if (OFF.indexOf(FALLBACK_ORDER[i]) >= 0) FALLBACK_ORDER.splice(i, 1);
-      var add = ORDER.filter(function (k) { return FALLBACK_ORDER.indexOf(k) < 0; });
+      for (var index = FALLBACK_ORDER.length - 1; index >= 0; index--) {
+        if (OFF.indexOf(FALLBACK_ORDER[index]) >= 0) FALLBACK_ORDER.splice(index, 1);
+      }
+      var add = ORDER.filter(function (key) { return FALLBACK_ORDER.indexOf(key) < 0; });
       if (add.length) FALLBACK_ORDER.unshift.apply(FALLBACK_ORDER, add);
-    } catch (e) {}
+    } catch (error) {}
   }
   function selectModel(id) {
-    try { if (typeof currentModel !== 'undefined') currentModel = id; } catch (e) {}
+    try { if (typeof currentModel !== 'undefined') currentModel = id; } catch (error) {}
     ['pickModel', 'selectModel', 'setModel', 'chooseModel'].some(function (name) {
       if (typeof window[name] !== 'function') return false;
-      try { window[name](id); return true; } catch (e) { return false; }
+      try { window[name](id); return true; } catch (error) { return false; }
     });
     var label = document.getElementById('mpLabel');
     if (label && EXTRA[id]) label.textContent = EXTRA[id].name;
@@ -208,17 +222,20 @@
       }
       localStorage.setItem('dl_model', DEFAULT_MODEL);
       selectModel(DEFAULT_MODEL);
-    } catch (e) {}
+    } catch (error) {}
   }
   function refreshMenus() {
     ['buildModelMenu', 'renderModelMenu', 'renderModels', 'initModelMenu', 'fillModelMenu', 'updateModelPill', 'syncModelPill'].forEach(function (name) {
-      try { if (typeof window[name] === 'function') window[name](); } catch (e) {}
+      try { if (typeof window[name] === 'function') window[name](); } catch (error) {}
     });
   }
   function apply() {
-    patchFetch(); patchAvatars();
+    patchFetch();
+    patchAvatars();
     if (!patchModels()) return;
-    patchFallback(); applyDefault(); refreshMenus();
+    patchFallback();
+    applyDefault();
+    refreshMenus();
   }
   apply();
   document.addEventListener('DOMContentLoaded', apply);
