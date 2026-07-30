@@ -7,8 +7,8 @@ class AIRequest(BaseModel):
     mode: Literal["scratch", "edit"] = "edit"
     message: str = Field(..., min_length=1, max_length=20000)
     html: str = Field("", max_length=400000)
-    model: Optional[str] = None            # client hint (label); real model set by server env
-    images: Optional[List[str]] = None     # data: URLs (optional, vision)
+    model: Optional[str] = None
+    images: Optional[List[str]] = None
 
 
 class AIResponse(BaseModel):
@@ -61,8 +61,13 @@ class AuthIn(BaseModel):
 class AuthOut(BaseModel):
     token: str
     username: str
+    plan: str = "free"
 
 
 class Me(BaseModel):
+    id: Optional[str] = None
     username: str
+    plan: str = "free"
+    subscription_status: Optional[str] = None
+    subscription_expires_at: Optional[str] = None
     enabled: bool

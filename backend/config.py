@@ -5,7 +5,7 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
     load_dotenv()
-except Exception:  # dotenv optional
+except Exception:
     pass
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -14,10 +14,9 @@ DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
 PROJECTS_DIR = DATA_DIR / "projects"
 PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Separate persistent service for users, sessions and projects.
-# Intentionally not used yet: the current local storage keeps working until
-# the external service is implemented and connected.
+# Separate persistent service for users, sessions, subscriptions and usage.
 USER_DB_SERVICE_URL = os.getenv("USER_DB_SERVICE_URL", "").rstrip("/")
+USER_DB_SERVICE_TIMEOUT = float(os.getenv("USER_DB_SERVICE_TIMEOUT", "60"))
 
 # --- AI provider (OpenAI-compatible: OpenAI, OpenRouter, Groq, Cerebras, Mistral, local…) ---
 AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
@@ -30,11 +29,10 @@ AI_TIMEOUT = float(os.getenv("AI_TIMEOUT", "120"))
 # CORS: comma-separated origins, or * for dev
 CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
 
-# --- Auth (optional). Off by default: projects stay anonymous/shared.
-# Turn on with AUTH_ENABLED=1 to require login and make projects private per user. ---
+# Local fallback auth and optional per-user project protection.
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "0").lower() in ("1", "true", "yes", "on")
 AUTH_DB = DATA_DIR / "auth.db"
-AUTH_TOKEN_TTL = float(os.getenv("AUTH_TOKEN_TTL_DAYS", "30"))  # days
+AUTH_TOKEN_TTL = float(os.getenv("AUTH_TOKEN_TTL_DAYS", "30"))
 
 
 def has_ai_key() -> bool:
