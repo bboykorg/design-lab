@@ -4,12 +4,13 @@ Storage backend (JSON default, SQLite optional) lives in store.py.
 """
 import re
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 
 from . import config
 from .models import ProjectIn, Project, ProjectMeta
 from .store import get_store, new_id
-from .auth import require_user
+from .auth import require_project_user
+from .ratelimit import guard
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 _store = get_store()
@@ -37,7 +38,8 @@ def _owned(data, user):
 
 
 @router.get("", response_model=list[ProjectMeta])
-def list_projects(user=Depends(require_user)):
+def list_projects(request: Request, user=Depends(require_project_user)):
+    guard("projects", request, user)
     items = _store.list()
     if config.AUTH_ENABLED:
         uid = _uid(user)
@@ -46,7 +48,8 @@ def list_projects(user=Depends(require_user)):
 
 
 @router.post("", response_model=Project)
-def upsert_project(body: ProjectIn, user=Depends(require_user)):
+def upsert_project(body: ProjectIn, request: Request, user=Depends(require_project_user)):
+    guard("projects", request, user)
     now = _now()
     if body.id:
         _safe_id(body.id)
@@ -61,7 +64,8 @@ def upsert_project(body: ProjectIn, user=Depends(require_user)):
 
 
 @router.get("/{pid}", response_model=Project)
-def get_project(pid: str, user=Depends(require_user)):
+def get_project(pid: str, request: Request, user=Depends(require_project_user)):
+    guard("projects", request, user)
     _safe_id(pid)
     d = _store.get(pid)
     if not d or not _owned(d, user):
@@ -70,7 +74,8 @@ def get_project(pid: str, user=Depends(require_user)):
 
 
 @router.delete("/{pid}", status_code=204)
-def delete_project(pid: str, user=Depends(require_user)):
+def delete_project(pid: str, request: Request, user=Depends(require_project_user)):
+    guard("projects", request, user)
     _safe_id(pid)
     d = _store.get(pid)
     if not d or not _owned(d, user):
