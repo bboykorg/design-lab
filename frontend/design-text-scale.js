@@ -1,8 +1,9 @@
 /* Design Lab — text scales together with the block that is being dragged.
-   Rules that keep neighbours untouched:
-     1. scaling happens only while a resize drag is in progress;
-     2. only the dragged element and its inline text parts change;
-        nested blocks (sections, cards, buttons, paragraphs) are never touched. */
+   Strict rules so nothing else moves:
+     1. only while a resize drag is in progress;
+     2. only the dragged block itself, and only if it shows its own text;
+     3. nested blocks, buttons and links are never rescaled — a container with
+        no text of its own just changes its frame. */
 (function () {
   'use strict';
   if (window.__dlTextScale) return;
@@ -10,10 +11,9 @@
 
   var MIN_PX = 5;
   var MAX_PX = 400;
-  var MIN_STEP = 0.015;
-  var DRAG_TAIL_MS = 400;
-  /* Inline pieces of the same text — not neighbouring blocks. */
-  var INLINE = { SPAN: 1, A: 1, B: 1, I: 1, EM: 1, STRONG: 1, SMALL: 1, U: 1, S: 1, MARK: 1, CODE: 1, SUB: 1, SUP: 1, LABEL: 1, TIME: 1 };
+  var MIN_STEP = 0.02;
+  var DRAG_MAX_MS = 15000;
+  var DRAG_TAIL_MS = 300;
 
   var dragUntil = 0;
   function dragging() { return Date.now() < dragUntil; }
@@ -21,7 +21,7 @@
     if (!target || target.__dlDragWatch) return;
     target.__dlDragWatch = true;
     ['pointerdown', 'mousedown', 'touchstart'].forEach(function (name) {
-      target.addEventListener(name, function () { dragUntil = Date.now() + 60000; }, true);
+      target.addEventListener(name, function () { dragUntil = Date.now() + DRAG_MAX_MS; }, true);
     });
     ['pointerup', 'mouseup', 'touchend', 'pointercancel', 'touchcancel'].forEach(function (name) {
       target.addEventListener(name, function () { dragUntil = Date.now() + DRAG_TAIL_MS; }, true);
@@ -33,28 +33,26 @@
     var value = el.style && el.style[prop];
     return !!value && value !== 'auto' && value !== '100%';
   }
-  function parts(el) {
-    var win = el.ownerDocument.defaultView;
-    var items = [];
-    function record(node) {
-      var size = num(win.getComputedStyle(node).fontSize);
-      if (size) items.push({ node: node, size: size });
+  /* Direct text only. A wrapper around other blocks has none, so it is skipped. */
+  function ownText(el) {
+    for (var i = 0; i < el.childNodes.length; i++) {
+      var node = el.childNodes[i];
+      if (node.nodeType === 3 && String(node.nodeValue).trim()) return true;
     }
-    record(el);
-    Array.prototype.forEach.call(el.querySelectorAll('*'), function (child) {
-      if (INLINE[child.tagName]) record(child);
-    });
-    return items;
+    return false;
   }
   function baseline(el) {
     var rect = el.getBoundingClientRect();
     if (!rect.width || !rect.height) return null;
+    var win = el.ownerDocument.defaultView;
     return {
-      w: rect.width, h: rect.height, items: parts(el),
+      w: rect.width, h: rect.height,
+      font: num(win.getComputedStyle(el).fontSize),
       lockW: hasInline(el, 'width'), lockH: hasInline(el, 'height'), last: 1
     };
   }
   function scale(el, base) {
+    if (!base.font || !ownText(el)) return;
     var rect = el.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     /* Only pinned dimensions drive the ratio: a pinned box cannot grow because
@@ -65,10 +63,7 @@
     if (!ratio || !isFinite(ratio) || ratio <= 0) return;
     if (Math.abs(ratio - base.last) < MIN_STEP) return;
     base.last = ratio;
-    base.items.forEach(function (item) {
-      var size = Math.min(MAX_PX, Math.max(MIN_PX, item.size * ratio));
-      item.node.style.fontSize = size.toFixed(2) + 'px';
-    });
+    el.style.fontSize = Math.min(MAX_PX, Math.max(MIN_PX, base.font * ratio)).toFixed(2) + 'px';
   }
   function attach(doc) {
     if (!doc || !doc.body || doc.__dlTextScale) return;
@@ -82,13 +77,8 @@
       entries.forEach(function (entry) {
         var el = entry.target;
         var base = bases.get(el);
-        if (!base) {
-          base = baseline(el);
-          if (base) bases.set(el, base);
-          return;
-        }
-        /* Layout reflow, window resize and AI re-render must not touch fonts. */
-        if (!dragging()) {
+        if (!base || !dragging()) {
+          /* Reflow, window resize and AI re-render must not touch fonts. */
           var fresh = baseline(el);
           if (fresh) bases.set(el, fresh);
           return;
@@ -123,11 +113,11 @@
     });
   }
   function tick() {
-    Array.prototype.forEach.call(document.querySelectorAll('iframe'), function (frame) {
-      var doc = null;
-      try { doc = frame.contentDocument; } catch (e) { doc = null; }
-      if (doc) attach(doc);
-    });
+    var frame = document.getElementById('pvFrame');
+    if (!frame) return;
+    var doc = null;
+    try { doc = frame.contentDocument; } catch (e) { doc = null; }
+    if (doc) attach(doc);
   }
   watchDrag(document);
   tick();
