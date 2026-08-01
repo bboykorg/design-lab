@@ -1,98 +1,136 @@
 /* Design Lab — keep the edited site through a page reload.
-   The current HTML is mirrored into local storage and put back only when the
-   editor opens empty, so templates, saved projects and a deliberate "new site"
-   are never overwritten. */
+   The HTML is read straight out of the preview frame and written back into it,
+   so nothing depends on the editor's internal variables. The blank starter
+   canvas is never saved, and an already opened project is never overwritten. */
 (function () {
   'use strict';
   if (window.__dlSessionRestore) return;
   window.__dlSessionRestore = true;
 
-  var KEY = 'dl_session_v1';
-  var MAX_BYTES = 3000000;
-  var SAVE_MS = 1500;
-  var WAIT_MS = 1400;
+  var KEY = 'dl_session_v2';
+  var MAX_CHARS = 2000000;
+  var MIN_CHARS = 400;
+  var SAVE_MS = 2500;
+  var FIRST_MS = 1500;
+  var WATCH_MS = 900;
+  var WATCH_TRIES = 20;
+  var INERT = 'data-dl-inert-';
+  var BLANK = ['чистый холст', 'опиши сайт в чате', 'начнём с чистого листа'];
 
-  var canSave = false;
   var lastSaved = null;
+  var restored = false;
 
   function read() {
     try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; }
   }
   function write(data) {
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
-  }
-  function htmlNow() {
-    try {
-      if (window.current && typeof window.current.html === 'string') return window.current.html;
-    } catch (e) {}
-    var area = document.getElementById('codeTa');
-    return area && typeof area.value === 'string' ? area.value : '';
+    try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
   }
   function frame() { return document.getElementById('pvFrame'); }
-  function editorVisible() {
+  function frameDoc() {
     var el = frame();
-    if (!el) return false;
-    if (!el.offsetParent && el.style.display === 'none') return false;
-    var rect = el.getBoundingClientRect();
-    return rect.width > 100 && rect.height > 100;
+    if (!el) return null;
+    try {
+      var doc = el.contentDocument;
+      return doc && doc.body ? doc : null;
+    } catch (e) { return null; }
+  }
+  function isBlank(doc) {
+    var text = String(doc.body.innerText || doc.body.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (text.length < 40) return true;
+    return BLANK.some(function (mark) { return text.indexOf(mark) >= 0; });
+  }
+  /* Design mode stashes handlers and links away; the saved copy keeps them. */
+  function clean(doc) {
+    var clone = doc.documentElement.cloneNode(true);
+    var list;
+    try { list = clone.querySelectorAll('*'); } catch (e) { return clone; }
+    Array.prototype.forEach.call(list, function (el) {
+      var names = [];
+      for (var i = 0; i < el.attributes.length; i++) {
+        var attr = el.attributes[i];
+        if (attr.name.indexOf(INERT) === 0) names.push(attr.name);
+      }
+      names.forEach(function (name) {
+        var value = el.getAttribute(name);
+        el.removeAttribute(name);
+        el.setAttribute(name.slice(INERT.length), value);
+      });
+      if (el.hasAttribute('data-dl-editable')) el.removeAttribute('data-dl-editable');
+      if (el.getAttribute('contenteditable') === 'true') el.removeAttribute('contenteditable');
+    });
+    return clone;
+  }
+  function grab() {
+    var doc = frameDoc();
+    if (!doc || isBlank(doc)) return null;
+    var html;
+    try { html = '<!DOCTYPE html>' + clean(doc).outerHTML; } catch (e) { return null; }
+    if (html.length < MIN_CHARS || html.length > MAX_CHARS) return null;
+    return html;
   }
 
   function save() {
-    if (!canSave) return;
-    var html = htmlNow();
-    if (html === lastSaved) return;
-    if (html && html.length > MAX_BYTES) return;
-    lastSaved = html;
-    var id = null;
-    try { id = window.current ? window.current.id : null; } catch (e) {}
-    write({ html: html, id: id, at: Date.now() });
+    var html = grab();
+    if (!html || html === lastSaved) return;
+    if (write({ html: html, at: Date.now() })) lastSaved = html;
   }
-  function render(html) {
+  function tellApp(html) {
     try {
-      if (window.current) {
+      if (window.current && typeof window.current === 'object') {
         window.current.html = html;
         if (typeof window.current.scratch === 'boolean') window.current.scratch = true;
       }
     } catch (e) {}
     var area = document.getElementById('codeTa');
-    if (area) area.value = html;
+    if (area && !area.value) area.value = html;
+  }
+  function put(html) {
+    var el = frame();
+    if (!el) return false;
     var done = ['renderHtml', 'renderHtmlLive'].some(function (name) {
       if (typeof window[name] !== 'function') return false;
       try { window[name](html); return true; } catch (e) { return false; }
     });
     if (!done) {
-      var el = frame();
-      if (!el) return false;
-      try { el.srcdoc = html; done = true; } catch (e) { done = false; }
+      try { el.removeAttribute('src'); el.srcdoc = html; done = true; } catch (e) { return false; }
     }
+    tellApp(html);
     return done;
   }
-  function restore() {
-    var saved = read();
-    if (!saved || !saved.html) { canSave = true; return; }
-    /* Something is already open: keep it and start mirroring that instead. */
-    if (htmlNow()) { canSave = true; return; }
-    if (!editorVisible()) return;
-    if (render(saved.html)) {
-      lastSaved = saved.html;
-      if (typeof window.toast === 'function') {
-        try { window.toast('Восстановлен последний сайт'); } catch (e) {}
-      }
+  function tryRestore(saved) {
+    var doc = frameDoc();
+    if (!doc) return false;
+    /* A template or saved project is already open: leave it alone. */
+    if (!isBlank(doc)) { restored = true; return true; }
+    if (!put(saved.html)) return false;
+    lastSaved = saved.html;
+    restored = true;
+    if (typeof window.toast === 'function') {
+      try { window.toast('Восстановлен последний сайт'); } catch (e) {}
     }
-    canSave = true;
+    return true;
   }
 
   function start() {
-    setTimeout(restore, WAIT_MS);
-    /* The editor may open later, after a template or project is picked. */
-    var tries = 0;
-    var wait = setInterval(function () {
-      tries++;
-      if (canSave || tries > 40) { clearInterval(wait); return; }
-      restore();
-    }, 600);
+    var saved = read();
+    if (saved && saved.html) {
+      setTimeout(function () {
+        if (tryRestore(saved)) return;
+        /* The editor may still be booting or the frame may reload once. */
+        var tries = 0;
+        var wait = setInterval(function () {
+          tries++;
+          if (restored || tries > WATCH_TRIES) { clearInterval(wait); return; }
+          tryRestore(saved);
+        }, WATCH_MS);
+      }, FIRST_MS);
+    } else {
+      restored = true;
+    }
     setInterval(save, SAVE_MS);
     window.addEventListener('beforeunload', save);
+    window.addEventListener('pagehide', save);
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'hidden') save();
     });
