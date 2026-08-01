@@ -1,6 +1,6 @@
 """/api/ai — proxy to an OpenAI-compatible chat API. Keys stay on the server.
 
-Two endpoints:
+Two endpoints (только для вошедших пользователей):
 - POST /api/ai         → single JSON response {html, model, say}
 - POST /api/ai/stream  → Server-Sent Events: {"delta": "..."} chunks, then
                           a final {"done": true, "html": "...", "say": "..."}.
@@ -8,12 +8,14 @@ Two endpoints:
 import json
 import re
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from . import config
+from .auth import require_user
 from .models import AIRequest, AIResponse
 from .prompts import build_system_prompt, build_user_message
+from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["ai"])
 
@@ -76,11 +78,13 @@ def _sse(obj) -> str:
 
 @router.get("/models")
 def list_models():
-    return {"model": config.AI_MODEL, "base_url": config.AI_BASE_URL, "ready": config.has_ai_key()}
+    """Только флаг готовности — без адреса провайдера и имени модели."""
+    return {"ready": config.has_ai_key()}
 
 
 @router.post("/ai", response_model=AIResponse)
-async def generate(req: AIRequest):
+async def generate(req: AIRequest, request: Request, user=Depends(require_user)):
+    guard("ai", request, user)
     if not config.has_ai_key():
         raise HTTPException(status_code=503, detail="AI_API_KEY не задан на сервере (.env)")
 
@@ -139,7 +143,8 @@ async def _provider_deltas(payload, headers, url):
 
 
 @router.post("/ai/stream")
-async def generate_stream(req: AIRequest):
+async def generate_stream(req: AIRequest, request: Request, user=Depends(require_user)):
+    guard("ai", request, user)
     if not config.has_ai_key():
         raise HTTPException(status_code=503, detail="AI_API_KEY не задан на сервере (.env)")
 
