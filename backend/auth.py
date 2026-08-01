@@ -1,8 +1,11 @@
 """Design Lab authentication.
 
-Remote auth relays to the persistent users service. Local fallback stores only
-hashed session tokens. New passwords require 10+ chars; login still accepts
-legacy passwords so existing accounts are not locked out.
+When USER_DB_SERVICE_URL is set, the public auth routes relay to the separate
+persistent users/subscriptions service, and bearer tokens are validated against
+that service too, so protected routes accept remote sessions. Without it, the
+local SQLite implementation remains available for development and rollback.
+
+Local session tokens are stored hashed, never in clear text.
 """
 import hashlib
 import re
@@ -18,7 +21,7 @@ from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import Response
 
 from . import config
-from .models import AuthIn, RegisterIn, AuthOut, Me
+from .models import AuthIn, AuthOut, Me
 from .ratelimit import guard
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -27,10 +30,6 @@ _PBKDF2_ITERS = 200_000
 _REMOTE_CACHE = {}
 _REMOTE_CACHE_TTL = 60.0
 _REMOTE_REJECT_TTL = 10.0
-_COMMON_PASSWORDS = {
-    "password", "password123", "qwerty12345", "1234567890",
-    "12345678910", "admin12345", "letmein123", "iloveyou123",
-}
 
 
 @contextmanager
@@ -63,14 +62,6 @@ def _init():
 _init()
 
 
-def validate_new_password(password: str) -> None:
-    value = password or ""
-    if len(value) < 10:
-        raise HTTPException(status_code=400, detail="Пароль минимум 10 символов")
-    if value.lower() in _COMMON_PASSWORDS:
-        raise HTTPException(status_code=400, detail="Этот пароль слишком распространён")
-
-
 def _token_hash(token: str) -> str:
     return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
 
@@ -85,7 +76,8 @@ def create_user(username: str, password: str) -> dict:
     username = (username or "").strip().lower()
     if not re.fullmatch(r"[a-z0-9_.-]{3,40}", username):
         raise HTTPException(status_code=400, detail="Логин: 3–40 символов из [a-z0-9_.-]")
-    validate_new_password(password)
+    if len(password or "") < 6:
+        raise HTTPException(status_code=400, detail="Пароль минимум 6 символов")
     salt, uid = secrets.token_hex(16), secrets.token_hex(8)
     with _lock, _db() as connection:
         if connection.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
@@ -93,7 +85,10 @@ def create_user(username: str, password: str) -> dict:
         connection.execute(
             "INSERT INTO users(id,username,pwhash,salt,created) VALUES(?,?,?,?,?)",
             (
-                uid, username, _hash(password, salt), salt,
+                uid,
+                username,
+                _hash(password, salt),
+                salt,
                 datetime.now(timezone.utc).isoformat(timespec="seconds"),
             ),
         )
@@ -103,7 +98,9 @@ def create_user(username: str, password: str) -> dict:
 def verify_user(username: str, password: str) -> dict:
     username = (username or "").strip().lower()
     with _lock, _db() as connection:
-        row = connection.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        row = connection.execute(
+            "SELECT * FROM users WHERE username=?", (username,)
+        ).fetchone()
     if not row or _hash(password or "", row["salt"]) != row["pwhash"]:
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
     return {"id": row["id"], "username": row["username"]}
@@ -164,7 +161,8 @@ async def _remote_user(token: str):
     url = f"{config.USER_DB_SERVICE_URL}/v1/auth/me"
     try:
         async with httpx.AsyncClient(
-            timeout=config.USER_DB_SERVICE_TIMEOUT, follow_redirects=False,
+            timeout=config.USER_DB_SERVICE_TIMEOUT,
+            follow_redirects=False,
         ) as client:
             response = await client.get(url, headers={"Authorization": "Bearer " + token})
     except httpx.HTTPError as exc:
@@ -176,11 +174,16 @@ async def _remote_user(token: str):
         _REMOTE_CACHE[digest] = (now + _REMOTE_REJECT_TTL, None)
         return None
     if response.status_code >= 400:
-        raise HTTPException(status_code=502, detail=f"Сервис пользователей ответил {response.status_code}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Сервис пользователей ответил {response.status_code}",
+        )
     try:
         data = response.json()
     except ValueError as exc:
-        raise HTTPException(status_code=502, detail="Сервис пользователей вернул некорректный ответ") from exc
+        raise HTTPException(
+            status_code=502, detail="Сервис пользователей вернул некорректный ответ"
+        ) from exc
     uid = str(data.get("id") or data.get("user_id") or "").strip()
     if not uid:
         return None
@@ -236,7 +239,8 @@ async def _remote_auth(
     url = f"{config.USER_DB_SERVICE_URL}/v1/auth/{path}"
     try:
         async with httpx.AsyncClient(
-            timeout=config.USER_DB_SERVICE_TIMEOUT, follow_redirects=False,
+            timeout=config.USER_DB_SERVICE_TIMEOUT,
+            follow_redirects=False,
         ) as client:
             upstream = await client.request(method, url, json=body, headers=headers)
     except httpx.HTTPError as exc:
@@ -244,6 +248,7 @@ async def _remote_auth(
             status_code=502,
             detail=f"Сервис пользователей недоступен: {type(exc).__name__}",
         ) from exc
+
     if upstream.status_code == 204:
         return Response(status_code=204)
     media_type = upstream.headers.get("content-type", "application/json").split(";", 1)[0]
@@ -255,9 +260,8 @@ async def _remote_auth(
 
 
 @router.post("/register", response_model=AuthOut)
-async def register(body: RegisterIn, request: Request):
+async def register(body: AuthIn, request: Request):
     guard("register", request)
-    validate_new_password(body.password)
     if config.USER_DB_SERVICE_URL:
         return await _remote_auth("POST", "register", body.model_dump())
     user = create_user(body.username, body.password)
@@ -281,8 +285,11 @@ async def me(authorization: str = Header(None)):
     if not user:
         raise HTTPException(status_code=401, detail="Не авторизован")
     return {
-        "id": user["id"], "username": user["username"], "plan": "free",
-        "subscription_status": None, "subscription_expires_at": None,
+        "id": user["id"],
+        "username": user["username"],
+        "plan": "free",
+        "subscription_status": None,
+        "subscription_expires_at": None,
         "enabled": config.AUTH_ENABLED,
     }
 
