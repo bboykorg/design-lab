@@ -24,35 +24,44 @@ class JSONStore:
     def __init__(self, directory):
         self.dir = Path(directory)
         self.dir.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
 
     def _p(self, pid):
         return self.dir / f"{pid}.json"
 
     def list(self):
-        out = []
-        for f in self.dir.glob("*.json"):
-            try:
-                d = json.loads(f.read_text(encoding="utf-8"))
-                out.append({k: d.get(k, "") for k in META_KEYS})
-            except Exception:
-                continue
-        out.sort(key=lambda d: d.get("updated", ""), reverse=True)
-        return out
+        with self._lock:
+            out = []
+            for f in self.dir.glob("*.json"):
+                try:
+                    d = json.loads(f.read_text(encoding="utf-8"))
+                    out.append({k: d.get(k, "") for k in META_KEYS})
+                except Exception:
+                    continue
+            out.sort(key=lambda d: d.get("updated", ""), reverse=True)
+            return out
 
     def get(self, pid):
-        p = self._p(pid)
-        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+        with self._lock:
+            p = self._p(pid)
+            return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
     def save(self, data):
-        self._p(data["id"]).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        destination = self._p(data["id"])
+        temporary = destination.with_suffix(".tmp")
+        payload = json.dumps(data, ensure_ascii=False)
+        with self._lock:
+            temporary.write_text(payload, encoding="utf-8")
+            temporary.replace(destination)
         return data
 
     def delete(self, pid):
-        p = self._p(pid)
-        if p.exists():
-            p.unlink()
-            return True
-        return False
+        with self._lock:
+            p = self._p(pid)
+            if p.exists():
+                p.unlink()
+                return True
+            return False
 
 
 class SQLiteStore:
