@@ -1,7 +1,7 @@
 """Простой in-memory rate limit: одна инстанция Render, без внешних зависимостей.
 
 Лимиты настраиваются переменными окружения RATE_<BUCKET>_LIMIT и
-RATE_<BUCKET>_WINDOW (окно в секундах). Для нескольких инстансов нужен Redis.
+RATE_<BUCKET>_WINDOW (окно в секундах).
 """
 import os
 import threading
@@ -23,7 +23,6 @@ RULES = {
     "proxy": _rule("PROXY", 60, 3600),
     "ocr": _rule("OCR", 40, 3600),
     "ai": _rule("AI", 40, 3600),
-    "audit": _rule("AUDIT", 30, 3600),
     "projects": _rule("PROJECTS", 300, 3600),
 }
 
@@ -33,7 +32,9 @@ _last_sweep = 0.0
 
 
 def client_ip(request: Request) -> str:
-    """Не доверять клиентскому X-Forwarded-For без списка доверенных proxy."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 

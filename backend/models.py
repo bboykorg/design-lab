@@ -54,14 +54,8 @@ class AuditResponse(BaseModel):
 
 
 class AuthIn(BaseModel):
-    """Login accepts legacy passwords; registration uses RegisterIn."""
     username: str = Field(..., min_length=3, max_length=40)
-    password: str = Field(..., min_length=1, max_length=200)
-
-
-class RegisterIn(BaseModel):
-    username: str = Field(..., min_length=3, max_length=40)
-    password: str = Field(..., min_length=10, max_length=200)
+    password: str = Field(..., min_length=6, max_length=200)
 
 
 class AuthOut(BaseModel):
