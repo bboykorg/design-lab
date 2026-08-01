@@ -46,7 +46,8 @@ app.include_router(ocr_router)
 # models-patch.js       — model list, saved model, auth header, OCR;
 # hide-google-models.js — menus rendered independently from the MODELS map;
 # plans-patch.js        — pricing cards and one-click plan switch;
-# profile-patch.js      — profile screen (login and password change).
+# profile-patch.js      — profile screen (login and password change);
+# ui-cleanup.js         — small visual cleanup after dynamic rendering.
 #
 # sandbox-patch.js больше не подключается: редактору нужен прямой доступ
 # к DOM превью, и снятие allow-same-origin ломало перерисовку.
@@ -55,6 +56,7 @@ _PATCH_SCRIPTS = (
     "hide-google-models.js",
     "plans-patch.js",
     "profile-patch.js",
+    "ui-cleanup.js",
 )
 _index_cache = None
 
