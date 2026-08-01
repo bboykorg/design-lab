@@ -71,6 +71,7 @@ _PATCH_SCRIPTS = (
     "plans-patch.js",
     "plan-lock-ui.js",
     "profile-patch.js",
+    "profile-id-patch.js",
     "ui-cleanup.js",
     "proxy-auth-patch.js",
 )
