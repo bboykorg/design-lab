@@ -1,4 +1,6 @@
 """Design&Lab — FastAPI entry point. Serves the API and the static frontend."""
+import time
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -28,7 +30,24 @@ app.add_middleware(
 @app.middleware("http")
 async def add_security_headers(request, call_next):
     """Базовая защита ответов; iframe/CSP намеренно не меняем."""
-    response = await call_next(request)
+    started = time.perf_counter()
+    is_proxy = request.url.path == "/api/proxy"
+    try:
+        response = await call_next(request)
+    except Exception:
+        if is_proxy:
+            elapsed = (time.perf_counter() - started) * 1000
+            print(f"[proxy-timing] outcome=exception elapsed_ms={elapsed:.0f}")
+        raise
+
+    if is_proxy:
+        elapsed = (time.perf_counter() - started) * 1000
+        upstream = request.query_params.get("url", "").split("?")[0]
+        print(
+            f"[proxy-timing] status={response.status_code} "
+            f"first_response_ms={elapsed:.0f} upstream={upstream}"
+        )
+
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), geolocation=(), payment=()"
