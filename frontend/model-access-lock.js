@@ -1,5 +1,5 @@
 /* Design Lab — model availability for guests and Free users.
-   Scope: strictly the rows inside #modelMenu. Nothing else in the app is ever blocked. */
+   Scope: only rows that actually select a model. Nothing else in the app is ever blocked. */
 (function () {
   'use strict';
   if (window.__dlModelAccessLock) return;
@@ -7,11 +7,6 @@
 
   var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
   var state = { signedIn: false, plan: 'guest' };
-  var FREE_MODEL_IDS = {
-    'zai-glm-4.7': true, 'gpt-oss-120b': true, 'gemma-4-31b': true,
-    'google/gemma-4-31b-it:free': true, 'nvidia/nemotron-3-ultra-550b-a55b:free': true,
-    'openai/gpt-oss-20b:free': true, 'cohere/north-mini-code:free': true, 'openrouter/free': true
-  };
 
   function map() { try { return typeof MODELS !== 'undefined' ? MODELS : null; } catch (e) { return null; } }
   function token() {
@@ -23,30 +18,42 @@
     } catch (e) {}
     return '';
   }
+  function isFree(model) {
+    return typeof window.dlIsFreeModel === 'function' ? window.dlIsFreeModel(model) : false;
+  }
   function isAllowed(key) {
     var models = map(), model = models && models[key];
     if (!state.signedIn) return false;
     if (state.plan !== 'free') return true;
-    return !!(model && FREE_MODEL_IDS[model.model || '']);
+    return isFree(model);
   }
   function message() {
     return state.signedIn
       ? 'Эта модель доступна на тарифе Pro'
       : 'Зарегистрируйтесь, чтобы выбирать модели';
   }
-  /* Row keys come from the menu markup itself: onclick="pickModel('key')". */
+  /* Row keys come from the markup itself: onclick="pickModel('key')". */
   function rowKey(row) {
     var attr = row.getAttribute('onclick') || '';
-    var found = attr.match(/pickModel\(\s*['"]([^'"]+)['"]/);
-    return found ? found[1] : '';
+    var found = attr.match(/pickModel\(\s*['\"]([^'\"]+)['\"]/);
+    if (found) return found[1];
+    return row.getAttribute('data-model') || row.getAttribute('data-model-id') || '';
+  }
+  function rows() {
+    var found = [], seen = [];
+    var lists = [document.querySelectorAll('.mopt'), document.querySelectorAll('[onclick*="pickModel"]')];
+    lists.forEach(function (list) {
+      Array.prototype.forEach.call(list, function (node) {
+        if (seen.indexOf(node) < 0) { seen.push(node); found.push(node); }
+      });
+    });
+    return found;
   }
   function mark() {
-    var menu = document.getElementById('modelMenu');
-    if (!menu || !map()) return;
-    var rows = menu.querySelectorAll('.mopt');
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i], key = rowKey(row);
-      if (!key) continue;
+    if (!map()) return;
+    rows().forEach(function (row) {
+      var key = rowKey(row);
+      if (!key) return;
       row.setAttribute('data-dl-model-key', key);
       if (isAllowed(key)) {
         row.removeAttribute('data-dl-model-locked');
@@ -59,7 +66,7 @@
         row.style.opacity = '.45';
         row.style.cursor = 'not-allowed';
       }
-    }
+    });
   }
   function notice(text) {
     if (typeof toast === 'function') { toast(text); return; }
@@ -95,15 +102,14 @@
   function start() {
     guardPick();
     loadState();
-    setTimeout(function () { guardPick(); mark(); }, 400);
-    setTimeout(function () { guardPick(); mark(); }, 1400);
-    var menu = document.getElementById('modelMenu');
-    if (menu) new MutationObserver(function () {
+    [400, 1200, 2500].forEach(function (delay) {
+      setTimeout(function () { guardPick(); mark(); }, delay);
+    });
+    new MutationObserver(function () {
       clearTimeout(start.timer);
-      start.timer = setTimeout(mark, 60);
-    }).observe(menu, { childList: true, subtree: true });
-    var pill = document.getElementById('modelPill');
-    if (pill) pill.addEventListener('click', function () { setTimeout(mark, 30); });
+      start.timer = setTimeout(function () { guardPick(); mark(); }, 80);
+    }).observe(document.documentElement, { childList: true, subtree: true });
+    document.addEventListener('click', function () { setTimeout(mark, 40); }, true);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
