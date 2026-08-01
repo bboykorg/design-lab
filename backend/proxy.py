@@ -1,8 +1,12 @@
 """/api/proxy — same-origin relay to allow-listed AI providers.
 
-Доступен только авторизованным пользователям: сервер подставляет свои ключи,
-поэтому публичный доступ означал бы бесплатный доступ к платным моделям.
-Кроме хоста проверяется и путь: разрешены только chat-эндпоинты.
+Правила:
+- только для вошедших пользователей — сервер подставляет свои ключи;
+- адрес апстрима строит сам сервер по provider или по модели из тела запроса;
+  параметр url от клиента используется только чтобы опознать провайдера;
+- Gemini — единственный случай с моделью в пути, там разрешены только
+  :generateContent и :streamGenerateContent;
+- авторедиректы выключены, чтобы ключ не ушёл на чужой хост.
 """
 import json
 import os
@@ -20,22 +24,9 @@ from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["proxy"])
 
-_HOSTS = {
-    "gorouter.app": ("GOROUTER_API_KEYS,GOROUTER_API_KEY", "bearer"),
-    "www.gorouter.app": ("GOROUTER_API_KEYS,GOROUTER_API_KEY", "bearer"),
-    "api.kiwillm.in": ("KIWILLM_API_KEYS,KIWILLM_API_KEY,KIWI_KEY", "bearer"),
-    "api.cerebras.ai": ("CEREBRAS_API_KEYS,CEREBRAS_API_KEY", "bearer"),
-    "openrouter.ai": ("OPENROUTER_API_KEYS,OPENROUTER_API_KEY", "bearer"),
-    "vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
-    "www.vyceai.com": ("VYCE_API_KEYS,VYCE_API_KEY", "bearer"),
-    "generativelanguage.googleapis.com": ("GEMINI_API_KEYS,GEMINI_API_KEY", "goog"),
-    "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
-    "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
-}
-
-# На разрешённых хостах разрешены только эти пути.
-_ALLOWED_SUFFIXES = ("/chat/completions", "/messages", "/responses")
 _GOOGLE_HOST = "generativelanguage.googleapis.com"
+_GOOGLE_ENV = "GEMINI_API_KEYS,GEMINI_API_KEY"
+_GOOGLE_METHODS = (":generateContent", ":streamGenerateContent")
 
 _GOROUTER_ENV = "GOROUTER_API_KEYS,GOROUTER_API_KEY"
 _GOROUTER_BASE = os.getenv("GOROUTER_BASE_URL", "https://gorouter.app/v1").rstrip("/")
@@ -62,14 +53,57 @@ _VYCE_MODELS = {
     "gpt-5.6-sol",
 }
 
+_CEREBRAS_ENV = "CEREBRAS_API_KEYS,CEREBRAS_API_KEY"
+_CEREBRAS_BASE = os.getenv("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1").rstrip("/")
+_CEREBRAS_ENDPOINT = _CEREBRAS_BASE + "/chat/completions"
+_CEREBRAS_MODELS = {"zai-glm-4.7", "gpt-oss-120b", "gemma-4-31b"}
+
+_OPENROUTER_ENV = "OPENROUTER_API_KEYS,OPENROUTER_API_KEY"
+_OPENROUTER_BASE = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+_OPENROUTER_ENDPOINT = _OPENROUTER_BASE + "/chat/completions"
+
+_GLM_ENV = "GLM_API_KEYS,GLM_API_KEY"
+_GLM_BASE = os.getenv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4").rstrip("/")
+_GLM_ENDPOINT = _GLM_BASE + "/chat/completions"
+
+_MISTRAL_ENV = "MISTRAL_API_KEYS,MISTRAL_API_KEY"
+_MISTRAL_BASE = os.getenv("MISTRAL_BASE_URL", "https://api.mistral.ai/v1").rstrip("/")
+_MISTRAL_ENDPOINT = _MISTRAL_BASE + "/chat/completions"
+
+# Единственный список адресов, куда вообще может уйти запрос.
+_PROVIDERS = {
+    "gorouter": (_GOROUTER_ENDPOINT, _GOROUTER_ENV, "bearer"),
+    "kiwi": (_KIWI_ENDPOINT, _KIWI_ENV, "bearer"),
+    "vyce": (_VYCE_ENDPOINT, _VYCE_ENV, "bearer"),
+    "cerebras": (_CEREBRAS_ENDPOINT, _CEREBRAS_ENV, "bearer"),
+    "openrouter": (_OPENROUTER_ENDPOINT, _OPENROUTER_ENV, "bearer"),
+    "glm": (_GLM_ENDPOINT, _GLM_ENV, "bearer"),
+    "mistral": (_MISTRAL_ENDPOINT, _MISTRAL_ENV, "bearer"),
+}
+
 _MODEL_ALIASES = {"kiwi::glm-5.2": "glm-5.2"}
-_MODEL_ROUTES = {}
+_MODEL_PROVIDER = {}
 for _model in _VYCE_MODELS:
-    _MODEL_ROUTES[_model] = (_VYCE_ENDPOINT, (urlparse(_VYCE_ENDPOINT).hostname or "").lower())
+    _MODEL_PROVIDER[_model] = "vyce"
 for _model in _KIWI_MODELS:
-    _MODEL_ROUTES[_model] = (_KIWI_ENDPOINT, (urlparse(_KIWI_ENDPOINT).hostname or "").lower())
+    _MODEL_PROVIDER[_model] = "kiwi"
 for _model in _GOROUTER_MODELS:
-    _MODEL_ROUTES[_model] = (_GOROUTER_ENDPOINT, (urlparse(_GOROUTER_ENDPOINT).hostname or "").lower())
+    _MODEL_PROVIDER[_model] = "gorouter"
+for _model in _CEREBRAS_MODELS:
+    _MODEL_PROVIDER[_model] = "cerebras"
+
+# Старый фронтенд всё ещё шлёт ?url=… — из него берётся только имя провайдера.
+_HOST_PROVIDER = {
+    "gorouter.app": "gorouter",
+    "www.gorouter.app": "gorouter",
+    "api.kiwillm.in": "kiwi",
+    "vyceai.com": "vyce",
+    "www.vyceai.com": "vyce",
+    "api.cerebras.ai": "cerebras",
+    "openrouter.ai": "openrouter",
+    "open.bigmodel.cn": "glm",
+    "api.mistral.ai": "mistral",
+}
 
 _counters = {}
 _lock = threading.Lock()
@@ -120,7 +154,7 @@ def _rewrite_model(body: bytes, model: str) -> bytes:
         return body
 
 
-def _clean_target(target: str) -> tuple[str, str, str]:
+def _split(target: str):
     """Отбросить query и fragment клиента, вернуть (url, host, path)."""
     parsed = urlparse(target)
     if parsed.scheme != "https":
@@ -131,10 +165,37 @@ def _clean_target(target: str) -> tuple[str, str, str]:
     return clean, host, path
 
 
-def _allowed_path(host: str, path: str) -> bool:
-    if host == _GOOGLE_HOST:
-        return path.startswith("/v1beta/models/") or path.startswith("/v1/models/")
-    return path.endswith(_ALLOWED_SUFFIXES)
+def _google_target(target: str):
+    """Gemini: модель стоит в пути, поэтому путь берётся из запроса, но строго."""
+    clean, host, path = _split(target)
+    if host != _GOOGLE_HOST:
+        return None
+    starts = path.startswith("/v1beta/models/") or path.startswith("/v1/models/")
+    if not starts or not path.endswith(_GOOGLE_METHODS):
+        raise HTTPException(status_code=403, detail="endpoint not allowed")
+    if ".." in path:
+        raise HTTPException(status_code=403, detail="endpoint not allowed")
+    return clean, host, _GOOGLE_ENV, "goog"
+
+
+def _resolve(request: Request, target: str, model: str):
+    """Вернуть (url, host, env_names, auth). Адрес строит сервер, не клиент."""
+    name = (request.query_params.get("provider") or "").strip().lower()
+    if not name:
+        name = _MODEL_PROVIDER.get(model, "")
+    if not name and target:
+        google = _google_target(target)
+        if google:
+            return google
+        name = _HOST_PROVIDER.get(_split(target)[1], "")
+    if not name:
+        raise HTTPException(status_code=403, detail="provider not allowed")
+    entry = _PROVIDERS.get(name)
+    if not entry:
+        raise HTTPException(status_code=403, detail=f"provider not allowed: {name}")
+    endpoint, env_names, auth = entry
+    host = (urlparse(endpoint).hostname or "").lower()
+    return endpoint, host, env_names, auth
 
 
 def _headers_for(host: str, key: str, auth: str) -> dict:
@@ -148,7 +209,7 @@ def _headers_for(host: str, key: str, auth: str) -> dict:
     else:
         headers["Authorization"] = "Bearer " + key
         if host == "openrouter.ai":
-            headers["HTTP-Referer"] = os.getenv("PUBLIC_URL", "https://design-lab.onrender.com")
+            headers["HTTP-Referer"] = os.getenv("PUBLIC_URL", "https://desing-lab.onrender.com")
             headers["X-Title"] = "Design Lab"
     return headers
 
@@ -166,31 +227,21 @@ def _is_challenge(content_type: str, data: bytes) -> bool:
 @router.api_route("/proxy", methods=["POST"])
 async def proxy(request: Request, user=Depends(require_user)):
     guard("proxy", request, user)
-    target = request.query_params.get("url")
-    if not target:
-        raise HTTPException(status_code=400, detail="missing url")
-    target = unquote(target)
+    raw = request.query_params.get("url")
+    target = unquote(raw) if raw else ""
     body = await request.body()
 
-    target, host, path = _clean_target(target)
     model = _model_of(body)
-    route = _MODEL_ROUTES.get(model)
-    if route and host != route[1]:
-        target, host, path = _clean_target(route[0])
+    target, host, env_names, auth = _resolve(request, target, model)
     body = _rewrite_model(body, model)
 
-    if host not in _HOSTS:
-        raise HTTPException(status_code=403, detail=f"host not allowed: {host}")
-    if not _allowed_path(host, path):
-        raise HTTPException(status_code=403, detail="endpoint not allowed")
-    env_names, auth = _HOSTS[host]
     key = _next_key(host, _keys(env_names))
     if not key:
         first = env_names.split(",")[0]
         raise HTTPException(status_code=503, detail=f"нет ключа для {host} — задай {first} в .env")
 
     headers = _headers_for(host, key, auth)
-    client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=True)
+    client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=False)
     try:
         upstream_request = client.build_request("POST", target, content=body, headers=headers)
         response = await client.send(upstream_request, stream=True)
@@ -198,6 +249,19 @@ async def proxy(request: Request, user=Depends(require_user)):
         await client.aclose()
         detail = f"{type(exc).__name__}: {exc}".rstrip()
         raise HTTPException(status_code=502, detail=f"upstream error: {detail}")
+
+    if 300 <= response.status_code < 400:
+        location = response.headers.get("location", "")
+        await response.aclose()
+        await client.aclose()
+        message = f"{host}: провайдер просит перейти на другой адрес ({response.status_code})."
+        if location:
+            message += " Обнови адрес провайдера в настройках сервера."
+        return Response(
+            content=json.dumps({"error": {"message": message}}, ensure_ascii=False),
+            status_code=502,
+            media_type="application/json",
+        )
 
     content_type = response.headers.get("content-type", "application/json")
     if "html" in content_type.lower():
@@ -245,7 +309,7 @@ async def _probe(base: str, env_names: str, paths=("models",)):
     host = (urlparse(base).hostname or "").lower()
     headers = _headers_for(host, keys[0], "bearer")
     checks = {}
-    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
         for path in paths:
             entry = {"url": f"{base}/{path}"}
             try:
@@ -262,6 +326,8 @@ async def _probe(base: str, env_names: str, paths=("models",)):
             )
             if _is_challenge(content_type, response.content):
                 entry.update(reason="cloudflare_challenge", message="Провайдер вернул проверку браузера вместо API.")
+            elif 300 <= response.status_code < 400:
+                entry.update(reason="redirect", location=response.headers.get("location", ""))
             elif response.status_code in (404, 405, 501):
                 entry.update(reason="unsupported_endpoint", body=response.text[:300])
             elif response.status_code in (401, 403):
