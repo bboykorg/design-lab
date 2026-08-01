@@ -1,8 +1,10 @@
-/* Design Lab — forward pointer movement from the editable preview iframe. */
+/* Design Lab — forward pointer movement from every editable preview iframe. */
 (function () {
   'use strict';
   if (window.__dlIframeCursorBridge) return;
   window.__dlIframeCursorBridge = true;
+
+  var currentFrame = null;
 
   function forward(frame, event, type) {
     var rect = frame.getBoundingClientRect();
@@ -16,7 +18,7 @@
     }));
   }
 
-  function bind(frame) {
+  function bindDocument(frame) {
     try {
       var doc = frame.contentDocument;
       if (!doc || doc.__dlCursorBridgeBound) return;
@@ -24,23 +26,39 @@
       doc.addEventListener('mousemove', function (event) { forward(frame, event, 'mousemove'); }, true);
       doc.addEventListener('pointermove', function (event) { forward(frame, event, 'pointermove'); }, true);
     } catch (e) {
-      /* Preview may be cross-origin; the editor remains usable without bridging. */
+      /* Cross-origin preview: browser correctly prevents parent-page access. */
     }
   }
 
-  function start() {
-    var frame = document.getElementById('pvFrame');
-    if (!frame) return false;
-    frame.addEventListener('load', function () { bind(frame); });
-    bind(frame);
-    setTimeout(function () { bind(frame); }, 500);
-    return true;
+  function bindFrame(frame) {
+    if (!frame) return;
+    if (!frame.__dlCursorBridgeFrameBound) {
+      frame.__dlCursorBridgeFrameBound = true;
+      frame.addEventListener('load', function () { bindDocument(frame); });
+    }
+    bindDocument(frame);
+    setTimeout(function () { bindDocument(frame); }, 300);
   }
 
-  if (!start()) {
-    var observer = new MutationObserver(function () {
-      if (start()) observer.disconnect();
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+  function scan() {
+    var frame = document.getElementById('pvFrame');
+    if (!frame) return;
+    if (frame !== currentFrame) currentFrame = frame;
+    bindFrame(frame);
   }
+
+  function start() {
+    scan();
+    new MutationObserver(function () {
+      /* Some templates replace the iframe itself instead of only its srcdoc. */
+      var frame = document.getElementById('pvFrame');
+      if (frame && frame !== currentFrame) {
+        currentFrame = frame;
+        bindFrame(frame);
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })();
