@@ -4,6 +4,7 @@
 - только для вошедших пользователей — сервер подставляет свои ключи;
 - адрес апстрима строит сам сервер по provider или по модели из тела запроса;
   параметр url от клиента используется только чтобы опознать провайдера;
+- тариф решает, какие модели доступны и сколько генераций в сутки;
 - Gemini — единственный случай с моделью в пути, там разрешены только
   :generateContent и :streamGenerateContent;
 - авторедиректы выключены, чтобы ключ не ушёл на чужой хост.
@@ -20,6 +21,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from . import config
 from .auth import require_user
+from .plans import consume_edit, ensure_model_allowed
 from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["proxy"])
@@ -171,15 +173,13 @@ def _google_target(target: str):
     if host != _GOOGLE_HOST:
         return None
     starts = path.startswith("/v1beta/models/") or path.startswith("/v1/models/")
-    if not starts or not path.endswith(_GOOGLE_METHODS):
+    if not starts or not path.endswith(_GOOGLE_METHODS) or ".." in path:
         raise HTTPException(status_code=403, detail="endpoint not allowed")
-    if ".." in path:
-        raise HTTPException(status_code=403, detail="endpoint not allowed")
-    return clean, host, _GOOGLE_ENV, "goog"
+    return clean, host, _GOOGLE_ENV, "goog", "google"
 
 
 def _resolve(request: Request, target: str, model: str):
-    """Вернуть (url, host, env_names, auth). Адрес строит сервер, не клиент."""
+    """Вернуть (url, host, env_names, auth, provider). Адрес строит сервер, не клиент."""
     name = (request.query_params.get("provider") or "").strip().lower()
     if not name:
         name = _MODEL_PROVIDER.get(model, "")
@@ -195,7 +195,7 @@ def _resolve(request: Request, target: str, model: str):
         raise HTTPException(status_code=403, detail=f"provider not allowed: {name}")
     endpoint, env_names, auth = entry
     host = (urlparse(endpoint).hostname or "").lower()
-    return endpoint, host, env_names, auth
+    return endpoint, host, env_names, auth, name
 
 
 def _headers_for(host: str, key: str, auth: str) -> dict:
@@ -232,7 +232,9 @@ async def proxy(request: Request, user=Depends(require_user)):
     body = await request.body()
 
     model = _model_of(body)
-    target, host, env_names, auth = _resolve(request, target, model)
+    target, host, env_names, auth, provider = _resolve(request, target, model)
+    ensure_model_allowed(user, provider)
+    consume_edit(user)
     body = _rewrite_model(body, model)
 
     key = _next_key(host, _keys(env_names))
