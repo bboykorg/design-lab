@@ -16,7 +16,6 @@ from .ocr import router as ocr_router
 from .admin import router as admin_router
 
 app = FastAPI(title="Design&Lab API", version="1.0.0", docs_url=None, redoc_url=None, openapi_url=None)
-
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 @app.middleware("http")
@@ -48,7 +47,8 @@ app.include_router(admin_router)
 _PATCH_SCRIPTS = (
     "models-patch.js", "model-plan-groups.js", "hide-google-models.js", "model-access-lock.js",
     "plans-patch.js", "plan-lock-ui.js", "profile-patch.js", "profile-id-patch.js",
-    "ui-cleanup.js", "iframe-cursor-bridge.js", "proxy-auth-patch.js", "auth-error-patch.js",
+    "ui-cleanup.js", "iframe-cursor-bridge.js", "design-edit-fix.js",
+    "proxy-auth-patch.js", "auth-error-patch.js",
 )
 _index_cache = None
 

@@ -7,25 +7,26 @@
     'openai/gpt-oss-20b:free': true, 'cohere/north-mini-code:free': true, 'openrouter/free': true
   };
   var PROVIDERS = /\b(GoRouter|KiwiLLM|Vyce(?:\s*AI)?|Cerebras|OpenRouter|Anthropic|OpenAI|Google|DeepSeek|Z\.ai|Xiaomi)\b\s*·?\s*/gi;
+  var rebuilt = false;
 
   function apply() {
     try {
-      if (typeof MODELS === 'undefined' || !MODELS) return false;
+      if (typeof MODELS === 'undefined' || !MODELS) return;
       Object.keys(MODELS).forEach(function (id) {
-        var model = MODELS[id];
-        if (!model) return;
+        var model = MODELS[id]; if (!model) return;
         model.group = FREE[model.model || ''] ? 'FREE' : 'PRO';
-        if (typeof model.desc === 'string') {
-          model.desc = model.desc.replace(PROVIDERS, '').replace(/^\s*·\s*/, '').replace(/\s{2,}/g, ' ').trim();
-        }
+        if (typeof model.desc === 'string') model.desc = model.desc.replace(PROVIDERS, '').replace(/^\s*·\s*/, '').replace(/\s{2,}/g, ' ').trim();
       });
-      ['buildModelMenu', 'renderModelMenu', 'renderModels', 'initModelMenu', 'fillModelMenu', 'updateModelPill', 'syncModelPill'].forEach(function (name) {
-        try { if (typeof window[name] === 'function') window[name](); } catch (e) {}
-      });
-      return true;
-    } catch (e) { return false; }
+      /* Rebuild only the model list. Calling every menu initializer caused a stuck full-screen backdrop. */
+      if (!rebuilt && typeof window.buildModelMenu === 'function') {
+        rebuilt = true;
+        var menu = document.getElementById('modelMenu');
+        var wasOpen = !!(menu && menu.classList.contains('on'));
+        window.buildModelMenu();
+        if (menu) menu.classList.toggle('on', wasOpen);
+      }
+    } catch (e) {}
   }
   apply();
   document.addEventListener('DOMContentLoaded', apply);
-  window.addEventListener('load', apply);
 })();
