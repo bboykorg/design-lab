@@ -1,13 +1,15 @@
 /* Design Lab — тарифы.
  * index.html огромный, поэтому карточки переписываются уже в браузере:
  * — списки возможностей берутся из этого файла;
- * — кнопка сразу оформляет тариф через /api/plan/subscribe (без оплаты, для проверки).
+ * — кнопка сразу оформляет тариф через /api/plan/subscribe (без оплаты, для проверки);
+ * — действующий тариф подсвечен, его кнопка неактивна.
  */
 (function () {
   if (window.__dlPlansPatched) return;
   window.__dlPlansPatched = true;
 
   var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
+  var currentPlan = '';
 
   var PLANS = [
     {
@@ -133,6 +135,14 @@
     return true;
   }
 
+  function clearNotes(except) {
+    var boxes = document.querySelectorAll('[data-dl-plan-note]');
+    for (var i = 0; i < boxes.length; i++) {
+      if (except && boxes[i] === except) continue;
+      boxes[i].textContent = '';
+    }
+  }
+
   function note(card, text, tone) {
     var box = card.querySelector('[data-dl-plan-note]');
     if (!box) {
@@ -141,13 +151,55 @@
       box.style.cssText = 'margin-top:10px;font-size:12px;line-height:1.4;opacity:.85;';
       card.appendChild(box);
     }
+    clearNotes(box);
     box.style.color = tone === 'error' ? '#ff8080' : '#8fe08f';
     box.textContent = text;
   }
 
+  /* Действующий тариф: рамка вокруг карточки и неактивная кнопка. */
+  function markActive() {
+    var cards = document.querySelectorAll('[data-dl-plan]');
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      var active = card.getAttribute('data-dl-plan') === currentPlan;
+      if (active) {
+        if (!card.getAttribute('data-dl-plan-outline')) {
+          card.setAttribute('data-dl-plan-outline', card.style.outline || 'none');
+        }
+        card.style.outline = '1px solid rgba(143,224,143,.7)';
+        card.style.outlineOffset = '2px';
+      } else if (card.getAttribute('data-dl-plan-outline')) {
+        var saved = card.getAttribute('data-dl-plan-outline');
+        card.style.outline = saved === 'none' ? '' : saved;
+      }
+      var buttons = card.querySelectorAll('[data-dl-plan-button]');
+      for (var b = 0; b < buttons.length; b++) {
+        var button = buttons[b];
+        if (!button.getAttribute('data-dl-plan-label')) {
+          button.setAttribute('data-dl-plan-label', textOf(button));
+        }
+        if (active) {
+          button.textContent = '\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u0442\u0430\u0440\u0438\u0444';
+          button.setAttribute('aria-disabled', 'true');
+          button.style.opacity = '.55';
+          button.style.cursor = 'default';
+        } else {
+          button.textContent = button.getAttribute('data-dl-plan-label');
+          button.removeAttribute('aria-disabled');
+          button.style.opacity = '';
+          button.style.cursor = '';
+        }
+      }
+    }
+  }
+
   function subscribe(planId, card, button) {
-    var original = button.textContent;
-    button.textContent = 'Оформляем…';
+    if (planId === currentPlan) {
+      note(card, '\u042d\u0442\u043e\u0442 \u0442\u0430\u0440\u0438\u0444 \u0443\u0436\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442.');
+      return;
+    }
+    var original = button.getAttribute('data-dl-plan-label') || textOf(button);
+    button.textContent = '\u041e\u0444\u043e\u0440\u043c\u043b\u044f\u0435\u043c\u2026';
     fetch('/api/plan/subscribe', {
       method: 'POST',
       headers: headers(),
@@ -171,6 +223,8 @@
         var limit = result.data.limit;
         note(card, 'Готово: тариф ' + (result.data.title || planId) +
           (limit ? ', лимит ' + limit + ' в сутки' : ', без лимита') + '.');
+        currentPlan = result.data.plan || planId;
+        markActive();
         showCurrent();
       })
       .catch(function (error) {
@@ -184,10 +238,12 @@
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (data) {
         if (!data) return;
+        currentPlan = data.plan || '';
         var nodes = document.querySelectorAll('[data-dl-plan-current]');
         var text = 'Текущий тариф: ' + (data.title || data.plan) +
           (data.limit ? ' — сегодня ' + data.used + ' из ' + data.limit : ' — без лимита');
         for (var i = 0; i < nodes.length; i++) nodes[i].textContent = text;
+        markActive();
       })
       .catch(function () {});
   }
@@ -207,6 +263,7 @@
       var buttons = findButtons(plan.buttons);
       for (var b = 0; b < buttons.length; b++) {
         var button = buttons[b];
+        if (button.getAttribute('data-dl-plan-button')) { done++; continue; }
         var card = cardOf(button);
         if (!card) continue;
         if (card.getAttribute('data-dl-plan') !== plan.id) {
@@ -214,20 +271,22 @@
           card.setAttribute('data-dl-plan', plan.id);
           badge(card);
         }
-        if (!button.getAttribute('data-dl-plan-button')) {
-          button.setAttribute('data-dl-plan-button', plan.id);
-          (function (planId, cardEl, buttonEl) {
-            buttonEl.addEventListener('click', function (event) {
-              event.preventDefault();
-              event.stopPropagation();
-              subscribe(planId, cardEl, buttonEl);
-            }, true);
-          })(plan.id, card, button);
-        }
+        button.setAttribute('data-dl-plan-button', plan.id);
+        button.setAttribute('data-dl-plan-label', textOf(button));
+        (function (planId, cardEl, buttonEl) {
+          buttonEl.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            subscribe(planId, cardEl, buttonEl);
+          }, true);
+        })(plan.id, card, button);
         done++;
       }
     }
-    if (done) showCurrent();
+    if (done) {
+      markActive();
+      if (!currentPlan) showCurrent();
+    }
     return done;
   }
 
