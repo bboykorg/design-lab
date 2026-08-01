@@ -1,5 +1,5 @@
-"""Design&Lab — FastAPI entry point. Serves the API and the static frontend."""
-from fastapi import FastAPI, HTTPException
+"""Design&Lab — FastAPI entry point. Serves the API and static frontend."""
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,7 +14,13 @@ from .profile import router as profile_router
 from .proxy import router as proxy_router
 from .ocr import router as ocr_router
 
-app = FastAPI(title="Design&Lab API", version="1.0.0")
+app = FastAPI(
+    title="Design&Lab API",
+    version="1.0.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,14 +30,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_CSP_REPORT_ONLY = "; ".join((
+    "default-src 'self' data: blob: https:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
+    "style-src 'self' 'unsafe-inline' https:",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data: https:",
+    "connect-src 'self' https: wss:",
+    "frame-src 'self' data: blob: https:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'self'",
+))
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), geolocation=(), payment=()"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    # Сначала только отчёты в консоли: строгий CSP сломает большой inline frontend.
+    response.headers["Content-Security-Policy-Report-Only"] = _CSP_REPORT_ONLY
+    return response
+
 
 @app.get("/api/health")
 def health():
-    """Liveness only — без деталей о ключах и моделях."""
     return {"ok": True}
 
 
-# API routers first, so they take precedence over the static catch-all mount.
 app.include_router(ai_router)
 app.include_router(audit_router)
 app.include_router(projects_router)
@@ -41,22 +71,13 @@ app.include_router(profile_router)
 app.include_router(proxy_router)
 app.include_router(ocr_router)
 
-# --- Frontend ---------------------------------------------------------------
-# index.html is one ~700 KB file, so fixes ship as companion scripts:
-# models-patch.js       — model list, saved model, auth header, OCR;
-# hide-google-models.js — menus rendered independently from the MODELS map;
-# plans-patch.js        — pricing cards and one-click plan switch;
-# profile-patch.js      — profile screen (login and password change);
-# ui-cleanup.js         — small visual cleanup after dynamic rendering.
-#
-# sandbox-patch.js больше не подключается: редактору нужен прямой доступ
-# к DOM превью, и снятие allow-same-origin ломало перерисовку.
 _PATCH_SCRIPTS = (
     "models-patch.js",
     "hide-google-models.js",
     "plans-patch.js",
     "profile-patch.js",
     "ui-cleanup.js",
+    "iframe-mode-patch.js",
 )
 _index_cache = None
 
@@ -89,6 +110,5 @@ def index():
     return HTMLResponse(_index_cache)
 
 
-# Static frontend at "/" (assets; index.html is handled by the route above).
 if config.FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(config.FRONTEND_DIR), html=True), name="frontend")

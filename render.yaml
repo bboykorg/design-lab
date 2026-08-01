@@ -9,20 +9,27 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      # JSON remains temporary on a free service; writes are now atomic/locked.
+      # Move projects to Postgres or attach a persistent disk before production.
       - key: STORE
         value: json
-      # Проекты и API только для вошедших пользователей.
       - key: AUTH_ENABLED
         value: "1"
       - key: CORS_ORIGINS
         value: "https://desing-lab.onrender.com"
-      # Доступ к /api/*/check (заголовок X-Admin-Token).
+      - key: MAX_PROXY_BODY
+        value: "2097152"
+      - key: RATE_AUDIT_LIMIT
+        value: "30"
+      - key: RATE_AUDIT_WINDOW
+        value: "3600"
       - key: ADMIN_API_TOKEN
         generateValue: true
-      # Base URL of a separate persistent service for users, sessions and projects.
       - key: USER_DB_SERVICE_URL
         sync: false
-      # AI provider keys for /api/proxy (comma-separated for several keys).
+      # Must match SERVICE_API_TOKEN in design-lab-users.
+      - key: SERVICE_API_TOKEN
+        sync: false
       - key: GOROUTER_API_KEYS
         sync: false
       - key: KIWILLM_API_KEYS
