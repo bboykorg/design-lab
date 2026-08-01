@@ -3,7 +3,7 @@
 Правила:
 - только для вошедших пользователей — сервер подставляет свои ключи;
 - адрес апстрима строит сам сервер по модели, затем по provider или host;
-- тело запроса ограничено до чтения в память;
+  параметр url от клиента используется только чтобы опознать провайдера;
 - тариф решает, какие модели доступны и сколько генераций в сутки;
 - Gemini — единственный случай с моделью в пути, там разрешены только
   :generateContent и :streamGenerateContent;
@@ -25,7 +25,6 @@ from .plans import consume_edit, ensure_model_allowed
 from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["proxy"])
-MAX_PROXY_BODY = int(os.getenv("MAX_PROXY_BODY", str(2 * 1024 * 1024)))
 
 _GOOGLE_HOST = "generativelanguage.googleapis.com"
 _GOOGLE_ENV = "GEMINI_API_KEYS,GEMINI_API_KEY"
@@ -35,8 +34,10 @@ _GOROUTER_ENV = "GOROUTER_API_KEYS,GOROUTER_API_KEY"
 _GOROUTER_BASE = os.getenv("GOROUTER_BASE_URL", "https://gorouter.app/v1").rstrip("/")
 _GOROUTER_ENDPOINT = _GOROUTER_BASE + "/chat/completions"
 _GOROUTER_MODELS = {
-    "claude-opus-4-8", "claude-opus-4-8-thinking",
-    "claude-opus-5", "claude-opus-5-thinking",
+    "claude-opus-4-8",
+    "claude-opus-4-8-thinking",
+    "claude-opus-5",
+    "claude-opus-5-thinking",
 }
 
 _KIWI_ENV = "KIWILLM_API_KEYS,KIWILLM_API_KEY,KIWI_KEY"
@@ -93,10 +94,14 @@ for _model in _CEREBRAS_MODELS:
     _MODEL_PROVIDER[_model] = "cerebras"
 
 _HOST_PROVIDER = {
-    "gorouter.app": "gorouter", "www.gorouter.app": "gorouter",
-    "api.kiwillm.in": "kiwi", "vyceai.com": "vyce",
-    "www.vyceai.com": "vyce", "api.cerebras.ai": "cerebras",
-    "openrouter.ai": "openrouter", "open.bigmodel.cn": "glm",
+    "gorouter.app": "gorouter",
+    "www.gorouter.app": "gorouter",
+    "api.kiwillm.in": "kiwi",
+    "vyceai.com": "vyce",
+    "www.vyceai.com": "vyce",
+    "api.cerebras.ai": "cerebras",
+    "openrouter.ai": "openrouter",
+    "open.bigmodel.cn": "glm",
     "api.mistral.ai": "mistral",
 }
 
@@ -109,29 +114,6 @@ def admin_only(x_admin_token: str = Header(None)):
     if not expected or not x_admin_token or not _secrets.compare_digest(x_admin_token, expected):
         raise HTTPException(status_code=404, detail="Not Found")
     return True
-
-
-async def read_limited_body(request: Request) -> bytes:
-    """Read chunked or regular body without ever buffering over the limit."""
-    content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            declared = int(content_length)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Некорректный Content-Length") from exc
-        if declared < 0:
-            raise HTTPException(status_code=400, detail="Некорректный Content-Length")
-        if declared > MAX_PROXY_BODY:
-            raise HTTPException(status_code=413, detail="Запрос слишком большой")
-
-    chunks = []
-    total = 0
-    async for chunk in request.stream():
-        total += len(chunk)
-        if total > MAX_PROXY_BODY:
-            raise HTTPException(status_code=413, detail="Запрос слишком большой")
-        chunks.append(chunk)
-    return b"".join(chunks)
 
 
 def _keys(env_names: str):
@@ -241,7 +223,7 @@ async def proxy(request: Request, user=Depends(require_user)):
     guard("proxy", request, user)
     raw = request.query_params.get("url")
     target = unquote(raw) if raw else ""
-    body = await read_limited_body(request)
+    body = await request.body()
 
     model = _model_of(body)
     target, host, env_names, auth, provider = _resolve(request, target, model)
@@ -271,10 +253,7 @@ async def proxy(request: Request, user=Depends(require_user)):
         message = f"{host}: провайдер просит перейти на другой адрес ({response.status_code})."
         if location:
             message += " Обнови адрес провайдера в настройках сервера."
-        return Response(
-            content=json.dumps({"error": {"message": message}}, ensure_ascii=False),
-            status_code=502, media_type="application/json",
-        )
+        return Response(content=json.dumps({"error": {"message": message}}, ensure_ascii=False), status_code=502, media_type="application/json")
 
     content_type = response.headers.get("content-type", "application/json")
     if "html" in content_type.lower():
@@ -285,10 +264,7 @@ async def proxy(request: Request, user=Depends(require_user)):
             message = f"{host}: запрос заблокирован проверкой браузера Cloudflare."
         else:
             message = f"{host}: вместо ответа API вернулась HTML-страница (код {response.status_code})."
-        return Response(
-            content=json.dumps({"error": {"message": message}}, ensure_ascii=False),
-            status_code=502, media_type="application/json",
-        )
+        return Response(content=json.dumps({"error": {"message": message}}, ensure_ascii=False), status_code=502, media_type="application/json")
 
     if response.status_code >= 400:
         data = await response.aread()
@@ -311,10 +287,7 @@ async def _probe(base: str, env_names: str, paths=("models",)):
     keys = _keys(env_names)
     if not keys:
         first = env_names.split(",")[0]
-        return {
-            "ok": False, "base": base, "keys": 0, "reason": "no_key",
-            "message": f"Не задан {first} в переменных окружения.",
-        }
+        return {"ok": False, "base": base, "keys": 0, "reason": "no_key", "message": f"Не задан {first} в переменных окружения."}
     host = (urlparse(base).hostname or "").lower()
     headers = _headers_for(host, keys[0], "bearer")
     checks = {}
@@ -328,10 +301,7 @@ async def _probe(base: str, env_names: str, paths=("models",)):
                 checks[path] = entry
                 continue
             content_type = response.headers.get("content-type", "")
-            entry.update(
-                status=response.status_code, contentType=content_type,
-                cfRay=response.headers.get("cf-ray"),
-            )
+            entry.update(status=response.status_code, contentType=content_type, cfRay=response.headers.get("cf-ray"))
             if _is_challenge(content_type, response.content):
                 entry.update(reason="cloudflare_challenge", message="Провайдер вернул проверку браузера вместо API.")
             elif 300 <= response.status_code < 400:
