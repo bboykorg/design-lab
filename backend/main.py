@@ -1,7 +1,7 @@
 """Design&Lab — FastAPI entry point. Serves the API and the static frontend."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
@@ -13,6 +13,7 @@ from .plans import router as plans_router
 from .profile import router as profile_router
 from .proxy import router as proxy_router
 from .ocr import router as ocr_router
+from .admin import router as admin_router
 
 app = FastAPI(
     title="Design&Lab API",
@@ -32,8 +33,13 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def add_security_headers(request, call_next):
+async def add_security_headers(request: Request, call_next):
     """Базовая защита ответов; iframe/CSP намеренно не меняем."""
+    if request.method == "POST" and request.url.path == "/api/plan/subscribe":
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Самостоятельная смена тарифа отключена."},
+        )
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -57,6 +63,7 @@ app.include_router(plans_router)
 app.include_router(profile_router)
 app.include_router(proxy_router)
 app.include_router(ocr_router)
+app.include_router(admin_router)
 
 _PATCH_SCRIPTS = (
     "models-patch.js",
