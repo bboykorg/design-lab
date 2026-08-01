@@ -18,8 +18,20 @@ from .ratelimit import guard
 
 router = APIRouter(prefix="/api/plan", tags=["plan"])
 
-# Что доступно бесплатно: свои ключи к Cerebras, OpenRouter и прямым API.
-FREE_PROVIDERS = {"cerebras", "openrouter", "glm", "mistral", "google"}
+# Free ограничивается точными ID моделей, а не провайдером. Иначе через
+# разрешённый OpenRouter можно было бы вручную запросить любую платную модель.
+FREE_MODELS = {
+    # OpenRouter free
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "openai/gpt-oss-20b:free",
+    "cohere/north-mini-code:free",
+    "openrouter/free",
+    # Cerebras
+    "zai-glm-4.7",
+    "gpt-oss-120b",
+    "gemma-4-31b",
+}
 
 PLANS = {
     "free": {
@@ -125,10 +137,12 @@ def consume_edit(user) -> None:
         _usage[key] = used + 1
 
 
-def ensure_model_allowed(user, provider: str) -> None:
+def ensure_model_allowed(user, provider: str, model: str = "") -> None:
+    """Проверить точный ID модели; provider оставлен для диагностики/расширения."""
     if PLANS[plan_of(user)]["all_models"]:
         return
-    if provider not in FREE_PROVIDERS:
+    model = (model or "").strip()
+    if model not in FREE_MODELS:
         raise HTTPException(
             status_code=403,
             detail="Эта модель доступна на тарифе Pro.",
