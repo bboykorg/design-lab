@@ -37,7 +37,7 @@ async def add_security_headers(request, call_next):
     except Exception:
         if is_proxy:
             elapsed = (time.perf_counter() - started) * 1000
-            print(f"[proxy-timing] outcome=exception elapsed_ms={elapsed:.0f}")
+            print(f"[proxy-timing] outcome=exception elapsed_ms={elapsed:.0f}", flush=True)
         raise
 
     if is_proxy:
@@ -45,7 +45,8 @@ async def add_security_headers(request, call_next):
         upstream = request.query_params.get("url", "").split("?")[0]
         print(
             f"[proxy-timing] status={response.status_code} "
-            f"first_response_ms={elapsed:.0f} upstream={upstream}"
+            f"first_response_ms={elapsed:.0f} upstream={upstream}",
+            flush=True,
         )
 
     response.headers["X-Content-Type-Options"] = "nosniff"
