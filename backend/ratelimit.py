@@ -23,6 +23,7 @@ RULES = {
     "proxy": _rule("PROXY", 60, 3600),
     "ocr": _rule("OCR", 40, 3600),
     "ai": _rule("AI", 40, 3600),
+    "audit": _rule("AUDIT", 30, 3600),
     "projects": _rule("PROJECTS", 300, 3600),
 }
 

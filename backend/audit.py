@@ -1,9 +1,17 @@
 """/api/audit — server-side static security/quality audit (parity with the client)."""
 import re
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
+
 from .models import AuditResponse, AuditItem
+from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["audit"])
+
+
+class AuditRequest(BaseModel):
+    html: str = Field("", max_length=800_000)
+
 
 KEY_PATTERNS = [
     (r"sk-or-v1-[A-Za-z0-9]{20,}", "OpenRouter"),
@@ -113,5 +121,6 @@ def audit_html(html: str) -> dict:
 
 
 @router.post("/audit", response_model=AuditResponse)
-def audit(body: dict):
-    return audit_html(body.get("html", ""))
+def audit(body: AuditRequest, request: Request):
+    guard("audit", request)
+    return audit_html(body.html)
