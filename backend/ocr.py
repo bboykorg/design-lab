@@ -5,15 +5,19 @@ to OCR.space with a server-side key and returns the recognised text. The
 frontend then puts that text into the prompt, so even models without vision get
 the contents of the user's screenshot.
 
-The OCR key never reaches the client — same approach as /api/proxy.
+The OCR key never reaches the client, and the endpoint requires a login — same
+approach as /api/proxy.
 """
 import os
 import threading
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+
+from .auth import require_user
+from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["ocr"])
 
@@ -51,7 +55,8 @@ class OcrRequest(BaseModel):
 
 
 @router.post("/ocr")
-async def ocr(req: OcrRequest):
+async def ocr(req: OcrRequest, request: Request, user=Depends(require_user)):
+    guard("ocr", request, user)
     key = _next_key(_keys())
     if not key:
         raise HTTPException(

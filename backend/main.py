@@ -25,8 +25,8 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "ai_ready": config.has_ai_key(), "model": config.AI_MODEL,
-            "auth": config.AUTH_ENABLED}
+    """Liveness only — без деталей о ключах и моделях."""
+    return {"ok": True}
 
 
 # API routers first, so they take precedence over the static catch-all mount.

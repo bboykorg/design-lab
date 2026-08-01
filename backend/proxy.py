@@ -1,14 +1,22 @@
-"""/api/proxy — same-origin relay to allow-listed AI providers."""
+"""/api/proxy — same-origin relay to allow-listed AI providers.
+
+Доступен только авторизованным пользователям: сервер подставляет свои ключи,
+поэтому публичный доступ означал бы бесплатный доступ к платным моделям.
+Кроме хоста проверяется и путь: разрешены только chat-эндпоинты.
+"""
 import json
 import os
+import secrets as _secrets
 import threading
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, urlunparse
 
 import httpx
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Depends, Header, Request, HTTPException
 from fastapi.responses import Response, StreamingResponse
 
 from . import config
+from .auth import require_user
+from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["proxy"])
 
@@ -24,6 +32,10 @@ _HOSTS = {
     "open.bigmodel.cn": ("GLM_API_KEYS,GLM_API_KEY", "bearer"),
     "api.mistral.ai": ("MISTRAL_API_KEYS,MISTRAL_API_KEY", "bearer"),
 }
+
+# На разрешённых хостах разрешены только эти пути.
+_ALLOWED_SUFFIXES = ("/chat/completions", "/messages", "/responses")
+_GOOGLE_HOST = "generativelanguage.googleapis.com"
 
 _GOROUTER_ENV = "GOROUTER_API_KEYS,GOROUTER_API_KEY"
 _GOROUTER_BASE = os.getenv("GOROUTER_BASE_URL", "https://gorouter.app/v1").rstrip("/")
@@ -63,6 +75,14 @@ _counters = {}
 _lock = threading.Lock()
 
 
+def admin_only(x_admin_token: str = Header(None)):
+    """Диагностика видна только с верным X-Admin-Token, иначе эндпоинта как бы нет."""
+    expected = config.ADMIN_API_TOKEN
+    if not expected or not x_admin_token or not _secrets.compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return True
+
+
 def _keys(env_names: str):
     out = []
     for name in env_names.split(","):
@@ -100,6 +120,23 @@ def _rewrite_model(body: bytes, model: str) -> bytes:
         return body
 
 
+def _clean_target(target: str) -> tuple[str, str, str]:
+    """Отбросить query и fragment клиента, вернуть (url, host, path)."""
+    parsed = urlparse(target)
+    if parsed.scheme != "https":
+        raise HTTPException(status_code=403, detail="разрешён только https")
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    clean = urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+    return clean, host, path
+
+
+def _allowed_path(host: str, path: str) -> bool:
+    if host == _GOOGLE_HOST:
+        return path.startswith("/v1beta/models/") or path.startswith("/v1/models/")
+    return path.endswith(_ALLOWED_SUFFIXES)
+
+
 def _headers_for(host: str, key: str, auth: str) -> dict:
     headers = {
         "Content-Type": "application/json",
@@ -127,22 +164,25 @@ def _is_challenge(content_type: str, data: bytes) -> bool:
 
 
 @router.api_route("/proxy", methods=["POST"])
-async def proxy(request: Request):
+async def proxy(request: Request, user=Depends(require_user)):
+    guard("proxy", request, user)
     target = request.query_params.get("url")
     if not target:
         raise HTTPException(status_code=400, detail="missing url")
     target = unquote(target)
     body = await request.body()
 
-    host = (urlparse(target).hostname or "").lower()
+    target, host, path = _clean_target(target)
     model = _model_of(body)
     route = _MODEL_ROUTES.get(model)
     if route and host != route[1]:
-        target, host = route[0], route[1]
+        target, host, path = _clean_target(route[0])
     body = _rewrite_model(body, model)
 
     if host not in _HOSTS:
         raise HTTPException(status_code=403, detail=f"host not allowed: {host}")
+    if not _allowed_path(host, path):
+        raise HTTPException(status_code=403, detail="endpoint not allowed")
     env_names, auth = _HOSTS[host]
     key = _next_key(host, _keys(env_names))
     if not key:
@@ -236,15 +276,15 @@ async def _probe(base: str, env_names: str, paths=("models",)):
 
 
 @router.get("/gorouter/check")
-async def gorouter_check():
+async def gorouter_check(_admin=Depends(admin_only)):
     return await _probe(_GOROUTER_BASE, _GOROUTER_ENV)
 
 
 @router.get("/kiwi/check")
-async def kiwi_check():
+async def kiwi_check(_admin=Depends(admin_only)):
     return await _probe(_KIWI_BASE, _KIWI_ENV)
 
 
 @router.get("/vyce/check")
-async def vyce_check():
+async def vyce_check(_admin=Depends(admin_only)):
     return await _probe(_VYCE_BASE, _VYCE_ENV, ("models", "me"))
