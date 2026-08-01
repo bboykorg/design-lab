@@ -52,7 +52,6 @@ async def security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "camera=(), geolocation=(), payment=()"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    # Сначала только отчёты в консоли: строгий CSP сломает большой inline frontend.
     response.headers["Content-Security-Policy-Report-Only"] = _CSP_REPORT_ONLY
     return response
 
@@ -77,6 +76,7 @@ _PATCH_SCRIPTS = (
     "plans-patch.js",
     "profile-patch.js",
     "ui-cleanup.js",
+    "security-ui-patch.js",
     "iframe-mode-patch.js",
 )
 _index_cache = None
