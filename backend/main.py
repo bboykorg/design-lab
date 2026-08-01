@@ -49,6 +49,7 @@ _PATCH_SCRIPTS = (
     "model-access-lock.js", "ai-creative-prompt.js", "plans-patch.js", "plan-lock-ui.js",
     "profile-patch.js", "profile-id-patch.js",
     "ui-cleanup.js", "iframe-cursor-bridge.js", "design-edit-fix.js", "design-text-scale.js",
+    "design-inert.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
 )
 _index_cache = None
