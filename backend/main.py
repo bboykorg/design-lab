@@ -10,6 +10,7 @@ from .audit import router as audit_router
 from .projects import router as projects_router
 from .auth import router as auth_router
 from .plans import router as plans_router
+from .profile import router as profile_router
 from .proxy import router as proxy_router
 from .ocr import router as ocr_router
 
@@ -36,15 +37,22 @@ app.include_router(audit_router)
 app.include_router(projects_router)
 app.include_router(auth_router)
 app.include_router(plans_router)
+app.include_router(profile_router)
 app.include_router(proxy_router)
 app.include_router(ocr_router)
 
 # --- Frontend ---------------------------------------------------------------
 # index.html is one ~700 KB file, so fixes ship as companion scripts:
-# models-patch.js      — model list, saved model, auth header, OCR;
+# models-patch.js       — model list, saved model, auth header, OCR;
 # hide-google-models.js — menus rendered independently from the MODELS map;
-# plans-patch.js       — pricing cards and one-click plan switch.
-_PATCH_SCRIPTS = ("models-patch.js", "hide-google-models.js", "plans-patch.js")
+# plans-patch.js        — pricing cards and one-click plan switch;
+# profile-patch.js      — profile screen (login and password change).
+_PATCH_SCRIPTS = (
+    "models-patch.js",
+    "hide-google-models.js",
+    "plans-patch.js",
+    "profile-patch.js",
+)
 _index_cache = None
 
 
