@@ -62,16 +62,83 @@
   });
 
   var origFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+
+  /* ---- session token: server API теперь требует входа ---- */
+
+  var TOKEN_STORE = 'dl_auth_token';
+  var TOKEN_KEYS = [TOKEN_STORE, 'dl_token', 'auth_token', 'authToken', 'token', 'access_token'];
+  function looksLikeToken(value) {
+    return typeof value === 'string' && value.length >= 16 && value.length < 4096 && value.indexOf(' ') < 0;
+  }
+  function fromJson(raw) {
+    if (typeof raw !== 'string' || raw.charAt(0) !== '{') return '';
+    try {
+      var parsed = JSON.parse(raw);
+      if (parsed && looksLikeToken(parsed.token)) return parsed.token;
+      if (parsed && looksLikeToken(parsed.access_token)) return parsed.access_token;
+    } catch (error) {}
+    return '';
+  }
+  function readToken() {
+    try {
+      for (var i = 0; i < TOKEN_KEYS.length; i++) {
+        var direct = localStorage.getItem(TOKEN_KEYS[i]);
+        if (looksLikeToken(direct)) return direct;
+        var nested = fromJson(direct);
+        if (nested) return nested;
+      }
+      for (var j = 0; j < localStorage.length; j++) {
+        var key = localStorage.key(j);
+        if (!key) continue;
+        var raw = localStorage.getItem(key);
+        if (/token/i.test(key) && looksLikeToken(raw)) return raw;
+        var inner = fromJson(raw);
+        if (inner) return inner;
+      }
+    } catch (error) {}
+    return '';
+  }
+  function saveToken(value) {
+    if (!looksLikeToken(value)) return;
+    try { localStorage.setItem(TOKEN_STORE, value); } catch (error) {}
+  }
+  function clearToken() {
+    try { localStorage.removeItem(TOKEN_STORE); } catch (error) {}
+  }
+  function withAuth(init) {
+    var token = readToken();
+    if (!token) return init;
+    var next = {};
+    Object.keys(init || {}).forEach(function (key) { next[key] = init[key]; });
+    var headers = next.headers;
+    try {
+      if (headers && typeof headers.get === 'function') {
+        if (!headers.get('Authorization')) headers.set('Authorization', 'Bearer ' + token);
+        next.headers = headers;
+      } else {
+        var plain = {};
+        if (headers) Object.keys(headers).forEach(function (key) { plain[key] = headers[key]; });
+        var has = Object.keys(plain).some(function (key) { return key.toLowerCase() === 'authorization'; });
+        if (!has) plain.Authorization = 'Bearer ' + token;
+        next.headers = plain;
+      }
+    } catch (error) {}
+    return next;
+  }
+  function needsAuth(url) {
+    return url.indexOf('/api/proxy') >= 0 || url.indexOf('/api/ocr') >= 0 || url.indexOf('/api/projects') >= 0;
+  }
+
   var ocrCache = {};
   function cacheKey(value) { return value.length + ':' + value.slice(0, 96) + ':' + value.slice(-48); }
   function ocrImage(dataUrl) {
     if (!origFetch || typeof dataUrl !== 'string' || !dataUrl) return Promise.resolve('');
     var key = cacheKey(dataUrl);
     if (ocrCache[key] !== undefined) return Promise.resolve(ocrCache[key]);
-    return origFetch(OCR_ENDPOINT, {
+    return origFetch(OCR_ENDPOINT, withAuth({
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: dataUrl })
-    }).then(function (response) { return response.json().catch(function () { return {}; }); })
+    })).then(function (response) { return response.json().catch(function () { return {}; }); })
       .then(function (json) {
         var text = json && typeof json.text === 'string' ? json.text.trim() : '';
         ocrCache[key] = text;
@@ -153,7 +220,24 @@
         url = typeof input === 'string' ? input : (input && input.url) || '';
         body = init && typeof init.body === 'string' ? init.body : null;
       } catch (error) { return origFetch(input, init); }
-      if (!url || url.indexOf('/api/proxy') < 0 || !body) return origFetch(input, init);
+
+      if (url && url.indexOf('/api/auth/') >= 0) {
+        return origFetch(input, init).then(function (response) {
+          try {
+            if (url.indexOf('logout') >= 0) clearToken();
+            else if (response && response.ok && (url.indexOf('login') >= 0 || url.indexOf('register') >= 0)) {
+              response.clone().json().then(function (json) {
+                if (json && json.token) saveToken(json.token);
+              }).catch(function () {});
+            }
+          } catch (error) {}
+          return response;
+        });
+      }
+
+      if (!url || url.indexOf('/api/proxy') < 0 || !body) {
+        return origFetch(input, url && needsAuth(url) ? withAuth(init) : init);
+      }
       return ocrifyBody(body).then(function (newBody) {
         var nextInit = init;
         if (newBody) {
@@ -161,11 +245,12 @@
           Object.keys(init || {}).forEach(function (key) { nextInit[key] = init[key]; });
           nextInit.body = newBody;
         }
+        nextInit = withAuth(nextInit);
         var gateway = GATEWAYS[gatewayOf(newBody || body)];
         var nextUrl = gateway && url.indexOf(gateway.host) < 0 ? retarget(url, gateway.url) : url;
         if (typeof input === 'string') return origFetch(nextUrl, nextInit);
         return origFetch(new Request(nextUrl, input), nextInit);
-      }).catch(function () { return origFetch(input, init); });
+      }).catch(function () { return origFetch(input, withAuth(init)); });
     };
     window.__dlFetchPatched = true;
   }
