@@ -55,7 +55,7 @@
     var planLabels = document.querySelectorAll('[data-dl-plan-current]');
     for (var i = 0; i < planLabels.length; i++) planLabels[i].remove();
 
-    replaceExact('2 провайдера ИИ', 'Много моделей ИИ');
+    replaceExact('2 провайдера ИИ', 'Множество моделей ИИ');
     replaceExact(
       'GLM и Mistral — переключай в один клик.',
       'Выбирай модель под задачу — от быстрых до самых мощных.'
