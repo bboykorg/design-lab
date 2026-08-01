@@ -173,13 +173,35 @@ class PostgresStore:
             return cursor.rowcount > 0
 
 
+def _truthy(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def get_store():
     database_url = os.getenv("PROJECTS_DATABASE_URL", "").strip()
     if database_url:
-        return PostgresStore(database_url)
+        try:
+            store = PostgresStore(database_url)
+            print("[projects] PostgreSQL storage connected", flush=True)
+            return store
+        except Exception as exc:
+            # Keep the whole website online if a Render internal hostname is
+            # unavailable (for example services are in different regions).
+            print(
+                f"[projects] PostgreSQL unavailable ({type(exc).__name__}: {exc}); "
+                "using temporary JSON storage",
+                flush=True,
+            )
+            if _truthy("PROJECTS_DATABASE_REQUIRED"):
+                raise
+            return JSONStore(config.PROJECTS_DIR)
+
     kind = os.getenv("STORE", "json").lower()
     if kind == "postgres":
-        raise RuntimeError("STORE=postgres requires PROJECTS_DATABASE_URL")
+        if _truthy("PROJECTS_DATABASE_REQUIRED"):
+            raise RuntimeError("STORE=postgres requires PROJECTS_DATABASE_URL")
+        print("[projects] PROJECTS_DATABASE_URL is empty; using temporary JSON storage", flush=True)
+        return JSONStore(config.PROJECTS_DIR)
     if kind == "sqlite":
         return SQLiteStore(config.DATA_DIR / "projects.db")
     return JSONStore(config.PROJECTS_DIR)
