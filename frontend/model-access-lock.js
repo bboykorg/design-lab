@@ -1,5 +1,8 @@
 /* Design Lab — model availability for guests and Free users.
-   Scope: only the model picker. Everything stays clickable; unavailable models just look gray. */
+   Scope: only model pickers. Everything stays clickable; unavailable models just look gray.
+   Rows are found two ways, so every screen is covered:
+     1. explicit markup (.mopt / onclick="pickModel('key')");
+     2. any container that lists three or more model names (the hero picker on the main page). */
 (function () {
   'use strict';
   if (window.__dlModelAccessLock) return;
@@ -8,7 +11,8 @@
   var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
   var LOCK_ATTR = 'data-dl-model-locked';
   var PILL_ATTR = 'data-dl-model-pill-locked';
-  var state = { ready: false, signedIn: false, plan: 'guest' };
+  var KEY_ATTR = 'data-dl-model-key';
+  var state = { ready: false, signedIn: false, plan: 'guest', rows: 0, locked: 0 };
   window.dlModelLock = state;
 
   function style() {
@@ -35,6 +39,7 @@
     } catch (e) {}
     return '';
   }
+  function norm(value) { return String(value == null ? '' : value).replace(/\s+/g, ' ').trim(); }
   function isFree(model) {
     return typeof window.dlIsFreeModel === 'function' ? window.dlIsFreeModel(model) : false;
   }
@@ -49,19 +54,58 @@
       ? 'Эта модель доступна на тарифе Pro'
       : 'Зарегистрируйтесь, чтобы выбирать модели';
   }
-  /* Row keys come from the markup itself: onclick="pickModel('key')". */
-  function rowKey(row) {
-    var attr = row.getAttribute('onclick') || '';
-    var found = attr.match(/pickModel\(\s*['"]([^'"]+)['"]/);
-    if (found) return found[1];
-    return row.getAttribute('data-model') || row.getAttribute('data-model-id') || '';
+
+  /* name -> model key, longest names first so "Claude Opus 4.8 Thinking" wins over "Claude Opus 4.8". */
+  function names() {
+    var models = map(), list = [];
+    if (!models) return list;
+    Object.keys(models).forEach(function (key) {
+      var name = norm(models[key] && models[key].name);
+      if (name) list.push({ key: key, name: name, lower: name.toLowerCase() });
+    });
+    list.sort(function (a, b) { return b.name.length - a.name.length; });
+    return list;
   }
-  function rows() {
+  function keyOfText(text, list) {
+    var value = norm(text).toLowerCase();
+    if (!value || value.length > 80) return '';
+    for (var i = 0; i < list.length; i++) {
+      if (value.indexOf(list[i].lower) === 0) return list[i].key;
+    }
+    return '';
+  }
+  function keyOfRow(row, list) {
+    var attr = row.getAttribute('onclick') || '';
+    var found = attr.match(/(?:pick|select|set|choose)Model\(\s*['"]([^'"]+)['"]/i);
+    if (found) return found[1];
+    var data = row.getAttribute('data-model') || row.getAttribute('data-model-id') || row.getAttribute('data-value');
+    if (data && map() && map()[data]) return data;
+    return keyOfText(row.textContent, list);
+  }
+  function explicitRows() {
     var out = [];
     ['.mopt', '[onclick*="pickModel"]'].forEach(function (selector) {
       var list;
       try { list = document.querySelectorAll(selector); } catch (e) { return; }
       Array.prototype.forEach.call(list, function (node) { if (out.indexOf(node) < 0) out.push(node); });
+    });
+    return out;
+  }
+  /* Any list that shows three or more model names is a model picker, whatever its markup is. */
+  function listedRows(list) {
+    var out = [];
+    if (!list.length) return out;
+    var all;
+    try { all = document.body ? document.body.querySelectorAll('*') : []; } catch (e) { return out; }
+    Array.prototype.forEach.call(all, function (node) {
+      var count = node.childElementCount;
+      if (count < 3 || count > 80) return;
+      var hits = [];
+      Array.prototype.forEach.call(node.children, function (child) {
+        if (keyOfText(child.textContent, list)) hits.push(child);
+      });
+      if (hits.length < 3) return;
+      hits.forEach(function (row) { if (out.indexOf(row) < 0) out.push(row); });
     });
     return out;
   }
@@ -74,9 +118,9 @@
   function pills() {
     var out = [];
     ['#modelPill', '[onclick*="toggleModelMenu"]'].forEach(function (selector) {
-      var list;
-      try { list = document.querySelectorAll(selector); } catch (e) { return; }
-      Array.prototype.forEach.call(list, function (node) { if (out.indexOf(node) < 0) out.push(node); });
+      var found;
+      try { found = document.querySelectorAll(selector); } catch (e) { return; }
+      Array.prototype.forEach.call(found, function (node) { if (out.indexOf(node) < 0) out.push(node); });
     });
     return out;
   }
@@ -93,17 +137,33 @@
       }
     });
   }
+  /* Guard is attached to the locked row itself, never to the document. */
+  function guardRow(row) {
+    if (row.__dlGuarded) return;
+    row.__dlGuarded = true;
+    row.addEventListener('click', function (event) {
+      if (row.getAttribute(LOCK_ATTR) !== '1') return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+      notice(message());
+    }, true);
+  }
   function mark() {
     if (!state.ready || !map()) return;
+    var list = names();
+    var rows = explicitRows();
+    listedRows(list).forEach(function (row) { if (rows.indexOf(row) < 0) rows.push(row); });
     var locked = 0, total = 0;
-    rows().forEach(function (row) {
-      var key = rowKey(row);
+    rows.forEach(function (row) {
+      var key = keyOfRow(row, list);
       if (!key) return;
       total++;
-      row.setAttribute('data-dl-model-key', key);
+      row.setAttribute(KEY_ATTR, key);
+      guardRow(row);
       if (isAllowed(key)) {
         row.removeAttribute(LOCK_ATTR);
-        row.removeAttribute('title');
+        if (row.getAttribute('title') === message()) row.removeAttribute('title');
       } else {
         locked++;
         row.setAttribute(LOCK_ATTR, '1');
@@ -139,17 +199,22 @@
     clearTimeout(notice.timer);
     notice.timer = setTimeout(function () { box.remove(); }, 2400);
   }
-  /* Guard the selection itself instead of intercepting clicks across the page. */
   function guardPick() {
-    if (typeof window.pickModel !== 'function' || window.pickModel.__dlGuarded) return;
-    var original = window.pickModel;
-    window.pickModel = function (key) {
-      if (state.ready && !isAllowed(key)) { notice(message()); mark(); return; }
-      var result = original.apply(this, arguments);
-      mark();
-      return result;
-    };
-    window.pickModel.__dlGuarded = true;
+    ['pickModel', 'selectModel', 'setModel', 'chooseModel'].forEach(function (name) {
+      var fn = window[name];
+      if (typeof fn !== 'function' || fn.__dlGuarded) return;
+      window[name] = function (key) {
+        if (state.ready && typeof key === 'string' && map() && map()[key] && !isAllowed(key)) {
+          notice(message());
+          mark();
+          return;
+        }
+        var result = fn.apply(this, arguments);
+        mark();
+        return result;
+      };
+      window[name].__dlGuarded = true;
+    });
   }
   function loadState() {
     var value = token();
