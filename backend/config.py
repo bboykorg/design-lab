@@ -31,10 +31,8 @@ AI_TIMEOUT = float(os.getenv("AI_TIMEOUT", "120"))
 # CORS: comma-separated origins, or * for dev
 CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
 
-# Local fallback auth and per-user project protection.
+# Authentication and project access are backed by USER_DB_SERVICE_URL.
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "0").lower() in ("1", "true", "yes", "on")
-AUTH_DB = DATA_DIR / "auth.db"
-AUTH_TOKEN_TTL = float(os.getenv("AUTH_TOKEN_TTL_DAYS", "30"))
 
 # Admin-only diagnostics (/api/*/check). Empty value disables them completely.
 ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN", "")
