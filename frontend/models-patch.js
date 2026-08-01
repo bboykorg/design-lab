@@ -54,6 +54,7 @@
     .filter(function (key) { return OFF.indexOf(key) < 0; });
   var DEFAULT_MODEL = ORDER[0] || 'or-nemotron';
   var LEGACY_DEFAULT = 'or-gemma4';
+  var STORE_KEY = 'dl_model';
   var MODEL_GW = {};
   Object.keys(EXTRA).forEach(function (key) {
     var model = EXTRA[key];
@@ -203,26 +204,123 @@
       if (add.length) FALLBACK_ORDER.unshift.apply(FALLBACK_ORDER, add);
     } catch (error) {}
   }
-  function selectModel(id) {
-    try { if (typeof currentModel !== 'undefined') currentModel = id; } catch (error) {}
-    ['pickModel', 'selectModel', 'setModel', 'chooseModel'].some(function (name) {
-      if (typeof window[name] !== 'function') return false;
-      try { window[name](id); return true; } catch (error) { return false; }
+
+  /* ---- selected model: one source of truth for every label on the page ---- */
+
+  function allModels() {
+    var map = {};
+    Object.keys(EXTRA).forEach(function (key) { map[key] = EXTRA[key]; });
+    try {
+      if (typeof MODELS !== 'undefined' && MODELS) {
+        Object.keys(MODELS).forEach(function (key) { if (MODELS[key]) map[key] = MODELS[key]; });
+      }
+    } catch (error) {}
+    return map;
+  }
+  function nameOf(id) {
+    var model = allModels()[id];
+    return model && model.name ? String(model.name) : '';
+  }
+  function knownNames() {
+    var map = allModels(), names = {};
+    Object.keys(map).forEach(function (key) {
+      if (map[key] && map[key].name) names[String(map[key].name).replace(/\s+/g, ' ').trim()] = true;
     });
-    var label = document.getElementById('mpLabel');
-    if (label && EXTRA[id]) label.textContent = EXTRA[id].name;
+    // Stale names of models that are no longer in the map but may still be
+    // painted into the markup as a hardcoded default (for example Gemma 3).
+    ['Gemma 3', 'Gemma 3 27B', 'Gemma 3 12B', 'Gemma 2', 'Gemma 4 31B'].forEach(function (name) { names[name] = true; });
+    return names;
+  }
+  function norm(value) { return String(value || '').replace(/\s+/g, ' ').trim(); }
+  function isMenuRow(el) {
+    try {
+      if (el.closest && el.closest('[data-model],[data-model-id],[data-id],[data-value],[role="option"],[role="menuitem"],li,.model-item,.model-option,.model-row')) return true;
+      var names = knownNames();
+      var node = el.parentElement, hops = 0;
+      while (node && hops < 3) {
+        var found = 0;
+        Array.prototype.forEach.call(node.children || [], function (child) {
+          var text = norm(child.textContent);
+          Object.keys(names).forEach(function (name) { if (text.indexOf(name) >= 0) found++; });
+        });
+        if (found > 1) return true;
+        node = node.parentElement;
+        hops++;
+      }
+    } catch (error) {}
+    return false;
+  }
+  function paintLabels(name) {
+    if (!name) return;
+    var names = knownNames();
+    ['mpLabel', 'modelLabel', 'mpName', 'currentModelName', 'heroModelLabel'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && norm(el.textContent) !== name) el.textContent = name;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-dl-model-label]'), function (el) {
+      if (norm(el.textContent) !== name) el.textContent = name;
+    });
+    var root = document.body || document.documentElement;
+    if (!root || !root.querySelectorAll) return;
+    Array.prototype.forEach.call(root.querySelectorAll('span,div,b,strong,p,button'), function (el) {
+      if (el.children.length || el.hasAttribute('data-dl-model-label')) return;
+      var text = norm(el.textContent);
+      if (!text || text.length > 40 || text === name || !names[text]) return;
+      if (isMenuRow(el)) return;
+      el.setAttribute('data-dl-model-label', '1');
+      el.textContent = name;
+    });
+  }
+  function currentId() {
+    try { if (typeof currentModel !== 'undefined' && currentModel) return currentModel; } catch (error) {}
+    try { return localStorage.getItem(STORE_KEY) || ''; } catch (error) { return ''; }
+  }
+  function remember(id) {
+    if (!id) return;
+    try { localStorage.setItem(STORE_KEY, id); } catch (error) {}
+  }
+  function selectModel(id) {
+    if (!id) return;
+    try { if (typeof currentModel !== 'undefined') currentModel = id; } catch (error) {}
+    try { window.currentModel = id; } catch (error) {}
+    ['pickModel', 'selectModel', 'setModel', 'chooseModel'].some(function (fn) {
+      if (typeof window[fn] !== 'function') return false;
+      try { window[fn](id); return true; } catch (error) { return false; }
+    });
+    remember(id);
+    paintLabels(nameOf(id));
+  }
+  function usable(id) {
+    if (!id || id === LEGACY_DEFAULT || OFF.indexOf(id) >= 0) return false;
+    try { if (typeof MODELS !== 'undefined' && MODELS && !MODELS[id]) return false; } catch (error) {}
+    return true;
   }
   function applyDefault() {
-    try {
-      var saved = localStorage.getItem('dl_model');
-      var stale = saved && (OFF.indexOf(saved) >= 0 || (typeof MODELS !== 'undefined' && !MODELS[saved]));
-      if (saved && !stale && saved !== LEGACY_DEFAULT) {
-        if (EXTRA[saved]) selectModel(saved);
-        return;
-      }
-      localStorage.setItem('dl_model', DEFAULT_MODEL);
-      selectModel(DEFAULT_MODEL);
-    } catch (error) {}
+    var saved = '';
+    try { saved = localStorage.getItem(STORE_KEY) || ''; } catch (error) {}
+    var target = usable(saved) ? saved : DEFAULT_MODEL;
+    if (!window.__dlDefaultApplied) {
+      window.__dlDefaultApplied = true;
+      selectModel(target);
+      return;
+    }
+    var live = currentId();
+    selectModel(usable(live) ? live : target);
+  }
+  function watch() {
+    if (window.__dlModelWatch) return;
+    window.__dlModelWatch = true;
+    var last = currentId();
+    function tick() {
+      var id = currentId();
+      if (id && id !== last && usable(id)) {
+        last = id;
+        remember(id);
+        paintLabels(nameOf(id));
+      } else if (id === last) paintLabels(nameOf(id));
+    }
+    document.addEventListener('click', function () { setTimeout(tick, 0); setTimeout(tick, 160); }, true);
+    setInterval(tick, 800);
   }
   function refreshMenus() {
     ['buildModelMenu', 'renderModelMenu', 'renderModels', 'initModelMenu', 'fillModelMenu', 'updateModelPill', 'syncModelPill'].forEach(function (name) {
@@ -236,6 +334,8 @@
     patchFallback();
     applyDefault();
     refreshMenus();
+    paintLabels(nameOf(currentId()));
+    watch();
   }
   apply();
   document.addEventListener('DOMContentLoaded', apply);
