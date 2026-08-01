@@ -35,7 +35,9 @@
       button.style.pointerEvents = 'none';
       button.style.opacity = '.58';
       button.style.cursor = 'not-allowed';
-      button.textContent = 'Тариф выдаёт администратор';
+      if (button.textContent !== 'Тариф выдаёт администратор') {
+        button.textContent = 'Тариф выдаёт администратор';
+      }
     }
   }
 
@@ -48,15 +50,12 @@
         if (!data || !data.plan) return;
         currentPlan = data.plan;
         lock();
+        setTimeout(lock, 300);
+        setTimeout(lock, 1200);
       })
       .catch(function () {});
   }
 
-  function start() {
-    load();
-    new MutationObserver(lock).observe(document.documentElement, { childList: true, subtree: true });
-    setInterval(lock, 700);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load);
+  else load();
 })();
