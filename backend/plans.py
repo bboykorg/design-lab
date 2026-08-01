@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/plan", tags=["plan"])
 
 # Free ограничивается точными ID моделей, а не провайдером. Иначе через
 # разрешённый OpenRouter можно было бы вручную запросить любую платную модель.
+# Список должен совпадать с frontend/model-free-set.js.
 FREE_MODELS = {
     # OpenRouter free
     "google/gemma-4-31b-it:free",
@@ -31,6 +32,15 @@ FREE_MODELS = {
     "zai-glm-4.7",
     "gpt-oss-120b",
     "gemma-4-31b",
+    # Добавлены в Free по запросу
+    "Qwen3.6-35B-A3B",
+    "glm-4.6",
+    "kiwi::glm-4.6",
+    "mistral-large-latest",
+    "mistral-large",
+    "glm-4.5v",
+    "GLM-4.5V",
+    "zai-glm-4.5v",
 }
 
 PLANS = {
@@ -41,7 +51,7 @@ PLANS = {
         "all_models": False,
         "features": [
             "5 генераций в день",
-            "Модели gpt-oss 120b, gemma3, glm 4.7, nemotron",
+            "Бесплатные модели: Qwen 3.6, GLM-4.6, GLM 4.7, Mistral Large, gpt-oss 120b, Gemma 4",
             "Все 98 шаблонов",
             "Правки страницы в чате",
             "Экспорт HTML одним файлом",
@@ -142,7 +152,7 @@ def ensure_model_allowed(user, provider: str, model: str = "") -> None:
     if PLANS[plan_of(user)]["all_models"]:
         return
     model = (model or "").strip()
-    if model not in FREE_MODELS:
+    if model not in FREE_MODELS and model.lower() not in {name.lower() for name in FREE_MODELS}:
         raise HTTPException(
             status_code=403,
             detail="Эта модель доступна на тарифе Pro.",

@@ -6,7 +6,21 @@
   window.__dlModelAccessLock = true;
 
   var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
-  var state = { signedIn: false, plan: 'guest' };
+  var LOCK_ATTR = 'data-dl-model-locked';
+  var state = { ready: false, signedIn: false, plan: 'guest' };
+  window.dlModelLock = state;
+
+  function style() {
+    if (document.getElementById('dl-model-lock-css')) return;
+    var css = document.createElement('style');
+    css.id = 'dl-model-lock-css';
+    css.textContent =
+      '[' + LOCK_ATTR + '="1"]{filter:grayscale(1) !important;opacity:.42 !important;cursor:not-allowed !important;}' +
+      '[' + LOCK_ATTR + '="1"]:hover{background:transparent !important;}' +
+      '.dl-plan-badge{margin-left:auto;font-size:10px;letter-spacing:.04em;padding:1px 6px;border-radius:999px;' +
+      'border:1px solid rgba(255,255,255,.18);opacity:.75;text-transform:uppercase;}';
+    (document.head || document.documentElement).appendChild(css);
+  }
 
   function map() { try { return typeof MODELS !== 'undefined' ? MODELS : null; } catch (e) { return null; } }
   function token() {
@@ -35,37 +49,49 @@
   /* Row keys come from the markup itself: onclick="pickModel('key')". */
   function rowKey(row) {
     var attr = row.getAttribute('onclick') || '';
-    var found = attr.match(/pickModel\(\s*['\"]([^'\"]+)['\"]/);
+    var found = attr.match(/pickModel\(\s*['"]([^'"]+)['"]/);
     if (found) return found[1];
     return row.getAttribute('data-model') || row.getAttribute('data-model-id') || '';
   }
   function rows() {
-    var found = [], seen = [];
-    var lists = [document.querySelectorAll('.mopt'), document.querySelectorAll('[onclick*="pickModel"]')];
-    lists.forEach(function (list) {
-      Array.prototype.forEach.call(list, function (node) {
-        if (seen.indexOf(node) < 0) { seen.push(node); found.push(node); }
-      });
+    var out = [];
+    ['.mopt', '[onclick*="pickModel"]'].forEach(function (selector) {
+      var list;
+      try { list = document.querySelectorAll(selector); } catch (e) { return; }
+      Array.prototype.forEach.call(list, function (node) { if (out.indexOf(node) < 0) out.push(node); });
     });
-    return found;
+    return out;
   }
   function mark() {
-    if (!map()) return;
+    if (!state.ready || !map()) return;
+    var locked = 0, total = 0;
     rows().forEach(function (row) {
       var key = rowKey(row);
       if (!key) return;
+      total++;
       row.setAttribute('data-dl-model-key', key);
       if (isAllowed(key)) {
-        row.removeAttribute('data-dl-model-locked');
+        row.removeAttribute(LOCK_ATTR);
         row.removeAttribute('title');
-        row.style.filter = row.style.opacity = row.style.cursor = '';
       } else {
-        row.setAttribute('data-dl-model-locked', '1');
+        locked++;
+        row.setAttribute(LOCK_ATTR, '1');
         row.setAttribute('title', message());
-        row.style.filter = 'grayscale(1)';
-        row.style.opacity = '.45';
-        row.style.cursor = 'not-allowed';
       }
+    });
+    state.rows = total;
+    state.locked = locked;
+    badge();
+  }
+  function badge() {
+    var heads = document.querySelectorAll('.mh');
+    Array.prototype.forEach.call(heads, function (head) {
+      if (head.querySelector('.dl-plan-badge')) return;
+      if (String(head.textContent || '').trim().toUpperCase().indexOf('PRO') !== 0) return;
+      var tag = document.createElement('span');
+      tag.className = 'dl-plan-badge';
+      tag.textContent = state.signedIn ? ('ваш тариф: ' + state.plan) : 'без входа';
+      head.appendChild(tag);
     });
   }
   function notice(text) {
@@ -86,30 +112,33 @@
     if (typeof window.pickModel !== 'function' || window.pickModel.__dlGuarded) return;
     var original = window.pickModel;
     window.pickModel = function (key) {
-      if (!isAllowed(key)) { notice(message()); mark(); return; }
+      if (state.ready && !isAllowed(key)) { notice(message()); mark(); return; }
       return original.apply(this, arguments);
     };
     window.pickModel.__dlGuarded = true;
   }
   function loadState() {
     var value = token();
-    if (!value) { mark(); return; }
+    if (!value) { state.ready = true; state.signedIn = false; state.plan = 'guest'; mark(); return; }
     fetch('/api/plan', { headers: { Authorization: 'Bearer ' + value } })
-      .then(function (r) { if (!r.ok) throw new Error('plan'); return r.json(); })
-      .then(function (data) { state = { signedIn: true, plan: data.plan || 'free' }; mark(); })
-      .catch(function () { state = { signedIn: false, plan: 'guest' }; mark(); });
+      .then(function (r) { if (!r.ok) throw new Error('plan ' + r.status); return r.json(); })
+      .then(function (data) {
+        state.ready = true;
+        state.signedIn = true;
+        state.plan = String(data.plan || 'free').toLowerCase();
+        mark();
+      })
+      .catch(function () { state.ready = true; state.signedIn = false; state.plan = 'guest'; mark(); });
   }
   function start() {
+    style();
     guardPick();
     loadState();
-    [400, 1200, 2500].forEach(function (delay) {
-      setTimeout(function () { guardPick(); mark(); }, delay);
-    });
+    setInterval(function () { guardPick(); mark(); }, 700);
     new MutationObserver(function () {
       clearTimeout(start.timer);
-      start.timer = setTimeout(function () { guardPick(); mark(); }, 80);
+      start.timer = setTimeout(function () { guardPick(); mark(); }, 60);
     }).observe(document.documentElement, { childList: true, subtree: true });
-    document.addEventListener('click', function () { setTimeout(mark, 40); }, true);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
