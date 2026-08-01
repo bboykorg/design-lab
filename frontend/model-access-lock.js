@@ -13,9 +13,7 @@
     'openrouter/free': true
   };
 
-  function modelMap() {
-    try { return typeof MODELS !== 'undefined' ? MODELS : null; } catch (e) { return null; }
-  }
+  function modelMap() { try { return typeof MODELS !== 'undefined' ? MODELS : null; } catch (e) { return null; } }
   function token() {
     try { for (var i = 0; i < TOKEN_KEYS.length; i++) { var v = localStorage.getItem(TOKEN_KEYS[i]); if (v && v.length > 10) return v; } } catch (e) {}
     return '';
@@ -26,10 +24,7 @@
     if (!state.signedIn) return false;
     return state.plan !== 'free' || !!(model && FREE_MODEL_IDS[model.model || '']);
   }
-  function rowOf(node) {
-    return node.closest('[data-model],[data-model-id],[data-id],[data-value],[role="option"],[role="menuitem"],li,.model-item,.model-option,.model-row,button') || node.parentElement;
-  }
-  function rowModelId(node) {
+  function idFromText(node) {
     var map = modelMap();
     if (!map) return '';
     var text = String((node && node.textContent) || '').replace(/\s+/g, ' ').trim();
@@ -43,24 +38,22 @@
   function mark() {
     var map = modelMap();
     if (!map) return;
-    var nodes = document.querySelectorAll('button,[role="option"],[role="menuitem"],li,.model-item,.model-option,.model-row,[data-model],[data-model-id]');
-    for (var i = 0; i < nodes.length; i++) {
-      var row = nodes[i], id = rowModelId(row);
+    /* Only actual menu rows are styled. The current-model button remains clickable. */
+    var rows = document.querySelectorAll('[role="option"],[role="menuitem"],li,.model-item,.model-option,.model-row,[data-model],[data-model-id]');
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i], id = idFromText(row);
       if (!id) continue;
-      var locked = !allowed(id);
       row.setAttribute('data-dl-model-id', id);
-      if (!locked) {
+      if (allowed(id)) {
         row.removeAttribute('data-dl-model-locked');
-        row.style.filter = '';
-        row.style.opacity = '';
-        row.style.cursor = '';
-        continue;
+        row.style.filter = row.style.opacity = row.style.cursor = '';
+      } else {
+        row.setAttribute('data-dl-model-locked', '1');
+        row.setAttribute('title', message());
+        row.style.filter = 'grayscale(1)';
+        row.style.opacity = '.42';
+        row.style.cursor = 'not-allowed';
       }
-      row.setAttribute('data-dl-model-locked', '1');
-      row.setAttribute('title', message());
-      row.style.filter = 'grayscale(1)';
-      row.style.opacity = '.42';
-      row.style.cursor = 'not-allowed';
     }
   }
   function notice(text) {
@@ -75,16 +68,6 @@
     clearTimeout(notice.timer);
     notice.timer = setTimeout(function () { box.remove(); }, 2400);
   }
-  function block(id) { if (!allowed(id)) { notice(message()); return true; } return false; }
-  function wrapSelectors() {
-    ['pickModel', 'selectModel', 'setModel', 'chooseModel'].forEach(function (name) {
-      var original = window[name];
-      if (typeof original !== 'function' || original.__dlAccessWrapped) return;
-      function wrapped(id) { if (block(id)) return; return original.apply(this, arguments); }
-      wrapped.__dlAccessWrapped = true;
-      window[name] = wrapped;
-    });
-  }
   function loadState() {
     var value = token();
     if (!value) { mark(); return; }
@@ -94,15 +77,14 @@
       .catch(function () { state = { signedIn: false, plan: 'guest' }; mark(); });
   }
   document.addEventListener('click', function (event) {
-    var row = event.target.closest && rowOf(event.target);
-    var id = row && rowModelId(row);
-    if (!id || allowed(id)) return;
+    var row = event.target.closest && event.target.closest('[data-dl-model-locked]');
+    if (!row) return;
     event.preventDefault(); event.stopImmediatePropagation(); notice(message());
   }, true);
   function start() {
-    loadState(); wrapSelectors();
-    setTimeout(function () { mark(); wrapSelectors(); }, 500);
-    setTimeout(function () { mark(); wrapSelectors(); }, 1600);
+    loadState();
+    setTimeout(mark, 500);
+    setTimeout(mark, 1600);
     new MutationObserver(function () { clearTimeout(start.timer); start.timer = setTimeout(mark, 120); })
       .observe(document.documentElement, { childList: true, subtree: true });
   }
