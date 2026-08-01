@@ -5,6 +5,7 @@
 - адрес апстрима строит сам сервер по модели, затем по provider или host;
   параметр url от клиента используется только чтобы опознать провайдера;
 - тариф решает, какие модели доступны и сколько генераций в сутки;
+- размер тела запроса ограничен MAX_PROXY_BODY (по умолчанию 2 МБ);
 - Gemini — единственный случай с моделью в пути, там разрешены только
   :generateContent и :streamGenerateContent;
 - авторедиректы выключены, чтобы ключ не ушёл на чужой хост.
@@ -25,6 +26,8 @@ from .plans import consume_edit, ensure_model_allowed
 from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["proxy"])
+
+MAX_PROXY_BODY = int(os.getenv("MAX_PROXY_BODY", str(2 * 1024 * 1024)))
 
 _GOOGLE_HOST = "generativelanguage.googleapis.com"
 _GOOGLE_ENV = "GEMINI_API_KEYS,GEMINI_API_KEY"
@@ -114,6 +117,26 @@ def admin_only(x_admin_token: str = Header(None)):
     if not expected or not x_admin_token or not _secrets.compare_digest(x_admin_token, expected):
         raise HTTPException(status_code=404, detail="Not Found")
     return True
+
+
+async def read_limited_body(request: Request) -> bytes:
+    """Читает тело запроса, но не больше MAX_PROXY_BODY байт."""
+    declared = request.headers.get("content-length")
+    if declared:
+        try:
+            length = int(declared)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Некорректный Content-Length")
+        if length > MAX_PROXY_BODY:
+            raise HTTPException(status_code=413, detail="Запрос слишком большой")
+    chunks = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > MAX_PROXY_BODY:
+            raise HTTPException(status_code=413, detail="Запрос слишком большой")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _keys(env_names: str):
@@ -223,7 +246,7 @@ async def proxy(request: Request, user=Depends(require_user)):
     guard("proxy", request, user)
     raw = request.query_params.get("url")
     target = unquote(raw) if raw else ""
-    body = await request.body()
+    body = await read_limited_body(request)
 
     model = _model_of(body)
     target, host, env_names, auth, provider = _resolve(request, target, model)
