@@ -2,7 +2,7 @@
 
 Правила:
 - только для вошедших пользователей — сервер подставляет свои ключи;
-- адрес апстрима строит сам сервер по provider или по модели из тела запроса;
+- адрес апстрима строит сам сервер по модели, затем по provider или host;
   параметр url от клиента используется только чтобы опознать провайдера;
 - тариф решает, какие модели доступны и сколько генераций в сутки;
 - Gemini — единственный случай с моделью в пути, там разрешены только
@@ -179,10 +179,13 @@ def _google_target(target: str):
 
 
 def _resolve(request: Request, target: str, model: str):
-    """Вернуть (url, host, env_names, auth, provider). Адрес строит сервер, не клиент."""
-    name = (request.query_params.get("provider") or "").strip().lower()
+    """Вернуть (url, host, env_names, auth, provider). Модель имеет приоритет."""
+    # Серверная карта модели надёжнее query-параметра от клиента. Например,
+    # claude-opus-4-8 всегда должен идти в GoRouter, даже если query ошибочно
+    # содержит provider=cerebras из старой конфигурации frontend.
+    name = _MODEL_PROVIDER.get(model, "")
     if not name:
-        name = _MODEL_PROVIDER.get(model, "")
+        name = (request.query_params.get("provider") or "").strip().lower()
     if not name and target:
         google = _google_target(target)
         if google:
