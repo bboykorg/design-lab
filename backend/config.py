@@ -17,6 +17,8 @@ PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 # Separate persistent service for users, sessions, subscriptions and usage.
 USER_DB_SERVICE_URL = os.getenv("USER_DB_SERVICE_URL", "").rstrip("/")
 USER_DB_SERVICE_TIMEOUT = float(os.getenv("USER_DB_SERVICE_TIMEOUT", "60"))
+# Сервисный токен того же сервиса — нужен, чтобы менять тариф пользователя.
+SERVICE_API_TOKEN = os.getenv("SERVICE_API_TOKEN", "")
 
 # --- AI provider (OpenAI-compatible: OpenAI, OpenRouter, Groq, Cerebras, Mistral, local…) ---
 AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
@@ -36,6 +38,9 @@ AUTH_TOKEN_TTL = float(os.getenv("AUTH_TOKEN_TTL_DAYS", "30"))
 
 # Admin-only diagnostics (/api/*/check). Empty value disables them completely.
 ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN", "")
+
+# Сколько генераций в сутки даёт бесплатный тариф (0 — без ограничений).
+FREE_DAILY_EDITS = int(os.getenv("FREE_DAILY_EDITS", "5"))
 
 
 def has_ai_key() -> bool:

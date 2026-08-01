@@ -9,6 +9,7 @@ from .ai import router as ai_router
 from .audit import router as audit_router
 from .projects import router as projects_router
 from .auth import router as auth_router
+from .plans import router as plans_router
 from .proxy import router as proxy_router
 from .ocr import router as ocr_router
 
@@ -34,27 +35,26 @@ app.include_router(ai_router)
 app.include_router(audit_router)
 app.include_router(projects_router)
 app.include_router(auth_router)
+app.include_router(plans_router)
 app.include_router(proxy_router)
 app.include_router(ocr_router)
 
 # --- Frontend ---------------------------------------------------------------
-# index.html is one ~700 KB file, so model/OCR fixes ship as companion scripts.
-# The second script also filters menus that are rendered independently from the
-# global MODELS map in the original page.
-_PATCH_TAGS = (
-    '<script src="/models-patch.js"></script>\n'
-    '<script src="/hide-google-models.js"></script>'
-)
+# index.html is one ~700 KB file, so fixes ship as companion scripts:
+# models-patch.js      — model list, saved model, auth header, OCR;
+# hide-google-models.js — menus rendered independently from the MODELS map;
+# plans-patch.js       — pricing cards and one-click plan switch.
+_PATCH_SCRIPTS = ("models-patch.js", "hide-google-models.js", "plans-patch.js")
 _index_cache = None
 
 
 def _build_index() -> str:
     raw = (config.FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
-    missing = []
-    if "models-patch.js" not in raw:
-        missing.append('<script src="/models-patch.js"></script>')
-    if "hide-google-models.js" not in raw:
-        missing.append('<script src="/hide-google-models.js"></script>')
+    missing = [
+        f'<script src="/{name}"></script>'
+        for name in _PATCH_SCRIPTS
+        if name not in raw
+    ]
     if not missing:
         return raw
     patch = "\n".join(missing)
