@@ -1,7 +1,7 @@
 """/api/profile — личный кабинет: смена логина и пароля.
 
-Любое изменение требует текущий пароль: его проверяет сервис пользователей
-обычным входом, так что чужой украденный токен не позволяет угнать аккаунт.
+Любое изменение требует текущий пароль. Новый пароль проходит ту же усиленную
+проверку, что и пароль при регистрации.
 """
 import re
 import sqlite3
@@ -12,12 +12,11 @@ from pydantic import BaseModel, Field
 
 from . import config
 from . import auth as auth_module
-from .auth import require_user
+from .auth import require_user, validate_new_password
 from .ratelimit import guard
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
-# Разные версии сервиса пользователей называют эти маршруты по-разному.
 _PASSWORD_PATHS = (
     "/v1/auth/change-password",
     "/v1/auth/password",
@@ -37,7 +36,7 @@ class UsernameIn(BaseModel):
 
 class PasswordIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
-    new_password: str = Field(min_length=6, max_length=200)
+    new_password: str = Field(min_length=10, max_length=200)
 
 
 def _check_username(username: str) -> str:
@@ -62,7 +61,6 @@ async def _post(url: str, body: dict, authorization: str | None = None):
 
 
 async def _verify_password(username: str, password: str) -> None:
-    """Подтвердить личность обычным входом во внешнем сервисе."""
     url = f"{config.USER_DB_SERVICE_URL}/v1/auth/login"
     response = await _post(url, {"username": username, "password": password})
     if response.status_code in (400, 401, 403):
@@ -75,7 +73,6 @@ async def _verify_password(username: str, password: str) -> None:
 
 
 async def _try_paths(paths, body: dict, authorization: str | None):
-    """Перебрать известные адреса; 404/405 значит «такого маршрута нет»."""
     last = None
     for path in paths:
         response = await _post(config.USER_DB_SERVICE_URL + path, body, authorization)
@@ -96,9 +93,6 @@ def _unsupported() -> HTTPException:
     )
 
 
-# --- Локальный режим (без внешнего сервиса) ---------------------------
-
-
 def _local_set_username(uid: str, username: str) -> None:
     with auth_module._lock, auth_module._db() as connection:
         try:
@@ -116,7 +110,6 @@ def _local_set_password(uid: str, new_password: str) -> None:
             "UPDATE users SET pwhash=?, salt=? WHERE id=?",
             (auth_module._hash(new_password, salt), salt, uid),
         )
-        # После смены пароля все старые сессии недействительны.
         connection.execute("DELETE FROM tokens WHERE uid=?", (uid,))
 
 
@@ -172,6 +165,7 @@ async def change_password(
     authorization: str = Header(None),
 ):
     guard("login", request, user)
+    validate_new_password(body.new_password)
     if body.new_password == body.password:
         raise HTTPException(status_code=400, detail="Новый пароль совпадает со старым")
     current = (user.get("username") or "").strip().lower()
