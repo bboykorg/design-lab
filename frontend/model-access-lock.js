@@ -7,73 +7,62 @@
   var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
   var state = { signedIn: false, plan: 'guest' };
   var FREE_MODEL_IDS = {
-    'zai-glm-4.7': true,
-    'gpt-oss-120b': true,
-    'gemma-4-31b': true,
-    'google/gemma-4-31b-it:free': true,
-    'nvidia/nemotron-3-ultra-550b-a55b:free': true,
-    'openai/gpt-oss-20b:free': true,
-    'cohere/north-mini-code:free': true,
+    'zai-glm-4.7': true, 'gpt-oss-120b': true, 'gemma-4-31b': true,
+    'google/gemma-4-31b-it:free': true, 'nvidia/nemotron-3-ultra-550b-a55b:free': true,
+    'openai/gpt-oss-20b:free': true, 'cohere/north-mini-code:free': true,
     'openrouter/free': true
   };
 
+  function modelMap() {
+    try { return typeof MODELS !== 'undefined' ? MODELS : null; } catch (e) { return null; }
+  }
   function token() {
-    try {
-      for (var i = 0; i < TOKEN_KEYS.length; i++) {
-        var value = localStorage.getItem(TOKEN_KEYS[i]);
-        if (value && value.length > 10) return value;
-      }
-    } catch (e) {}
+    try { for (var i = 0; i < TOKEN_KEYS.length; i++) { var v = localStorage.getItem(TOKEN_KEYS[i]); if (v && v.length > 10) return v; } } catch (e) {}
     return '';
   }
-
-  function message() {
-    return state.signedIn ? 'Эта модель доступна на тарифе Pro' : 'Войдите или зарегистрируйтесь для выбора модели';
-  }
-
+  function message() { return state.signedIn ? 'Эта модель доступна на тарифе Pro' : 'Войдите или зарегистрируйтесь для выбора модели'; }
   function allowed(id) {
+    var map = modelMap(), model = map && map[id];
     if (!state.signedIn) return false;
-    if (state.plan !== 'free') return true;
-    try {
-      var model = window.MODELS && window.MODELS[id];
-      return !!(model && FREE_MODEL_IDS[model.model || '']);
-    } catch (e) { return false; }
+    return state.plan !== 'free' || !!(model && FREE_MODEL_IDS[model.model || '']);
   }
-
   function rowOf(node) {
     return node.closest('[data-model],[data-model-id],[data-id],[data-value],[role="option"],[role="menuitem"],li,.model-item,.model-option,.model-row,button') || node.parentElement;
   }
-
-  function mark() {
-    if (!window.MODELS) return;
-    var ids = Object.keys(window.MODELS);
-    var leaves = document.querySelectorAll('span,div,b,strong,p,button');
+  function rowModelId(node) {
+    var map = modelMap();
+    if (!map) return '';
+    var text = String((node && node.textContent) || '').replace(/\s+/g, ' ').trim();
+    var ids = Object.keys(map).sort(function (a, b) { return String(map[b].name || '').length - String(map[a].name || '').length; });
     for (var i = 0; i < ids.length; i++) {
-      var model = window.MODELS[ids[i]] || {};
-      var name = String(model.name || '').replace(/\s+/g, ' ').trim();
-      if (!name) continue;
-      for (var j = 0; j < leaves.length; j++) {
-        var leaf = leaves[j];
-        if (leaf.children.length || String(leaf.textContent || '').replace(/\s+/g, ' ').trim() !== name) continue;
-        var row = rowOf(leaf);
-        if (!row) continue;
-        var locked = !allowed(ids[i]);
-        row.setAttribute('data-dl-model-id', ids[i]);
-        if (!locked) {
-          row.removeAttribute('data-dl-model-locked');
-          row.style.filter = '';
-          row.style.opacity = '';
-          continue;
-        }
-        row.setAttribute('data-dl-model-locked', '1');
-        row.setAttribute('title', message());
-        row.style.filter = 'grayscale(1)';
-        row.style.opacity = '.42';
-        row.style.cursor = 'not-allowed';
+      var name = String(map[ids[i]].name || '').replace(/\s+/g, ' ').trim();
+      if (name && text.indexOf(name) >= 0) return ids[i];
+    }
+    return '';
+  }
+  function mark() {
+    var map = modelMap();
+    if (!map) return;
+    var nodes = document.querySelectorAll('button,[role="option"],[role="menuitem"],li,.model-item,.model-option,.model-row,[data-model],[data-model-id]');
+    for (var i = 0; i < nodes.length; i++) {
+      var row = nodes[i], id = rowModelId(row);
+      if (!id) continue;
+      var locked = !allowed(id);
+      row.setAttribute('data-dl-model-id', id);
+      if (!locked) {
+        row.removeAttribute('data-dl-model-locked');
+        row.style.filter = '';
+        row.style.opacity = '';
+        row.style.cursor = '';
+        continue;
       }
+      row.setAttribute('data-dl-model-locked', '1');
+      row.setAttribute('title', message());
+      row.style.filter = 'grayscale(1)';
+      row.style.opacity = '.42';
+      row.style.cursor = 'not-allowed';
     }
   }
-
   function notice(text) {
     var box = document.querySelector('[data-dl-model-access-note]');
     if (!box) {
@@ -84,41 +73,38 @@
     }
     box.textContent = text;
     clearTimeout(notice.timer);
-    notice.timer = setTimeout(function () { if (box) box.remove(); }, 2400);
+    notice.timer = setTimeout(function () { box.remove(); }, 2400);
   }
-
+  function block(id) { if (!allowed(id)) { notice(message()); return true; } return false; }
+  function wrapSelectors() {
+    ['pickModel', 'selectModel', 'setModel', 'chooseModel'].forEach(function (name) {
+      var original = window[name];
+      if (typeof original !== 'function' || original.__dlAccessWrapped) return;
+      function wrapped(id) { if (block(id)) return; return original.apply(this, arguments); }
+      wrapped.__dlAccessWrapped = true;
+      window[name] = wrapped;
+    });
+  }
   function loadState() {
     var value = token();
     if (!value) { mark(); return; }
-    var headers = { Authorization: 'Bearer ' + value };
-    fetch('/api/plan', { headers: headers })
-      .then(function (response) {
-        if (!response.ok) throw new Error('not signed in');
-        return response.json();
-      })
-      .then(function (data) {
-        state.signedIn = true;
-        state.plan = data.plan || 'free';
-        mark();
-      })
+    fetch('/api/plan', { headers: { Authorization: 'Bearer ' + value } })
+      .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function (data) { state = { signedIn: true, plan: data.plan || 'free' }; mark(); })
       .catch(function () { state = { signedIn: false, plan: 'guest' }; mark(); });
   }
-
   document.addEventListener('click', function (event) {
-    var row = event.target.closest && event.target.closest('[data-dl-model-locked]');
-    if (!row) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    notice(message());
+    var row = event.target.closest && rowOf(event.target);
+    var id = row && rowModelId(row);
+    if (!id || allowed(id)) return;
+    event.preventDefault(); event.stopImmediatePropagation(); notice(message());
   }, true);
-
   function start() {
-    loadState();
-    setTimeout(mark, 600);
-    setTimeout(mark, 1800);
-    new MutationObserver(function () { clearTimeout(start.timer); start.timer = setTimeout(mark, 180); })
+    loadState(); wrapSelectors();
+    setTimeout(function () { mark(); wrapSelectors(); }, 500);
+    setTimeout(function () { mark(); wrapSelectors(); }, 1600);
+    new MutationObserver(function () { clearTimeout(start.timer); start.timer = setTimeout(mark, 120); })
       .observe(document.documentElement, { childList: true, subtree: true });
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
