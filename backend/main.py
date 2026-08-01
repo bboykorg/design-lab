@@ -65,6 +65,7 @@ _PATCH_SCRIPTS = (
     "profile-patch.js",
     "ui-cleanup.js",
     "proxy-auth-patch.js",
+    "iframe-mode-patch.js",
 )
 _index_cache = None
 
