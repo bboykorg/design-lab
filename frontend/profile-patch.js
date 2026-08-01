@@ -1,7 +1,7 @@
 /* Design Lab — экран профиля.
  * Это слой поверх главной страницы, а не отдельный документ, поэтому фон
  * остаётся родным: анимация и градиент главной видны сквозь панель.
- * Открыть: кнопка «Профиль», адрес с #profile или window.dlProfile().
+ * Открыть: клик по никнейму в шапке, адрес с #profile или window.dlProfile().
  */
 (function () {
   if (window.__dlProfilePatched) return;
@@ -9,6 +9,7 @@
 
   var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
   var overlay = null;
+  var username = '';
 
   function readToken() {
     try {
@@ -34,6 +35,10 @@
     return node;
   }
 
+  function textOf(node) {
+    return (node.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
   var FIELD = 'width:100%;box-sizing:border-box;margin-top:6px;padding:10px 12px;' +
     'border-radius:10px;border:1px solid rgba(255,255,255,.16);' +
     'background:rgba(255,255,255,.06);color:inherit;font:inherit;outline:none;';
@@ -41,6 +46,9 @@
   var BUTTON = 'margin-top:16px;width:100%;padding:11px 14px;border-radius:10px;' +
     'border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.92);' +
     'color:#111;font:inherit;font-weight:600;cursor:pointer;';
+  var GHOST = 'margin-top:18px;width:100%;padding:11px 14px;border-radius:10px;' +
+    'border:1px solid rgba(255,120,120,.35);background:transparent;color:#ff9b9b;' +
+    'font:inherit;font-weight:600;cursor:pointer;';
 
   function field(parent, labelText, type, placeholder) {
     parent.appendChild(el('label', LABEL, labelText));
@@ -81,9 +89,12 @@
 
   function logout() {
     try {
+      fetch('/api/auth/logout', { method: 'POST', headers: headers() }).catch(function () {});
+    } catch (e) {}
+    try {
       for (var i = 0; i < TOKEN_KEYS.length; i++) localStorage.removeItem(TOKEN_KEYS[i]);
     } catch (e) {}
-    location.reload();
+    setTimeout(function () { location.reload(); }, 200);
   }
 
   function build() {
@@ -130,7 +141,9 @@
         function (data, box) {
           say(box, '\u041b\u043e\u0433\u0438\u043d \u0438\u0437\u043c\u0435\u043d\u0451\u043d: ' + data.username);
           namePass.value = '';
-          who.textContent = '\u0410\u043a\u043a\u0430\u0443\u043d\u0442: ' + data.username;
+          username = data.username || username;
+          who.textContent = '\u0410\u043a\u043a\u0430\u0443\u043d\u0442: ' + username;
+          bindNickname();
         });
     });
 
@@ -160,6 +173,15 @@
         });
     });
 
+    // --- Выход ---
+    var exit = el('div',
+      'margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1);');
+    var exitButton = el('button', GHOST, '\u0412\u044b\u0439\u0442\u0438 \u0438\u0437 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430');
+    exitButton.style.marginTop = '0';
+    exitButton.addEventListener('click', logout);
+    exit.appendChild(exitButton);
+    panel.appendChild(exit);
+
     back.appendChild(panel);
     back.addEventListener('click', function (event) {
       if (event.target === back) hide();
@@ -179,7 +201,8 @@
           who.textContent = '\u0412\u043e\u0439\u0434\u0438 \u0432 \u0430\u043a\u043a\u0430\u0443\u043d\u0442, \u0447\u0442\u043e\u0431\u044b \u043c\u0435\u043d\u044f\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435';
           return;
         }
-        who.textContent = '\u0410\u043a\u043a\u0430\u0443\u043d\u0442: ' + (data.username || '\u2014') +
+        username = data.username || username;
+        who.textContent = '\u0410\u043a\u043a\u0430\u0443\u043d\u0442: ' + (username || '\u2014') +
           ' \u00b7 \u0442\u0430\u0440\u0438\u0444 ' + (data.plan || 'free');
       })
       .catch(function () {
@@ -211,23 +234,64 @@
     if (location.hash === '#profile') show();
   });
 
-  function trigger() {
-    if (document.getElementById('dlProfileButton')) return;
+  /* Никнейм в шапке — самый глубокий элемент, чей текст равен логину. */
+  function bindNickname() {
+    if (!username) return;
+    var target = String(username).toLowerCase();
+    var nodes = document.body.querySelectorAll('span, div, a, b, strong, p, li, button');
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (node.closest('[data-dl-profile-panel]')) continue;
+      if (textOf(node).toLowerCase() !== target) continue;
+      var deeper = false;
+      var inner = node.querySelectorAll('*');
+      for (var j = 0; j < inner.length; j++) {
+        if (textOf(inner[j]).toLowerCase() === target) { deeper = true; break; }
+      }
+      if (deeper) continue;
+      if (node.getAttribute('data-dl-profile-trigger')) continue;
+      node.setAttribute('data-dl-profile-trigger', '1');
+      node.style.cursor = 'pointer';
+      node.title = '\u041f\u0440\u043e\u0444\u0438\u043b\u044c';
+      node.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        show();
+      }, true);
+    }
+  }
+
+  function whoAmI() {
     if (!readToken()) return;
-    var button = el('button',
-      'position:fixed;top:14px;right:14px;z-index:9999;padding:7px 13px;border-radius:999px;' +
-      'border:1px solid rgba(255,255,255,.18);background:rgba(20,22,28,.6);color:#fff;' +
-      'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);' +
-      'font:12px/1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;cursor:pointer;',
-      '\u041f\u0440\u043e\u0444\u0438\u043b\u044c');
-    button.id = 'dlProfileButton';
-    button.addEventListener('click', show);
-    document.body.appendChild(button);
+    fetch('/api/profile', { headers: headers() })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        username = data.username || '';
+        bindNickname();
+      })
+      .catch(function () {});
   }
 
   function start() {
-    trigger();
-    setInterval(trigger, 2000);
+    // Старая плавающая кнопка больше не нужна.
+    var stale = document.getElementById('dlProfileButton');
+    if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+
+    whoAmI();
+    setInterval(function () {
+      if (!username) { whoAmI(); return; }
+      bindNickname();
+    }, 1500);
+
+    if (window.MutationObserver) {
+      var pending = null;
+      new MutationObserver(function () {
+        if (pending) return;
+        pending = setTimeout(function () { pending = null; bindNickname(); }, 300);
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    }
+
     if (location.hash === '#profile') show();
   }
 
