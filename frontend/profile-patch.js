@@ -50,6 +50,68 @@
     'border:1px solid rgba(255,120,120,.35);background:transparent;color:#ff9b9b;' +
     'font:inherit;font-weight:600;cursor:pointer;';
 
+  /* --- Курсор-эффект главной -------------------------------------------
+   * Свечение за курсором — отдельный слой со своим z-index.
+   * Панель профиля выше него, поэтому над окном курсор пропадал.
+   * На время показа поднимаем этот слой выше панели и потом возвращаем.
+   */
+  var CURSOR_SELECTORS = [
+    '#cursor', '.cursor', '#custom-cursor', '.custom-cursor',
+    '.cursor-dot', '.cursor-ring', '.cursor-glow', '#cursorGlow',
+    '.mouse-glow', '#glow', '[data-cursor]'
+  ];
+  var lifted = [];
+
+  function cursorLayers() {
+    var found = [];
+    var seen = [];
+
+    function add(node) {
+      if (!node || seen.indexOf(node) >= 0) return;
+      if (overlay && overlay.back && overlay.back.contains(node)) return;
+      seen.push(node);
+      found.push(node);
+    }
+
+    for (var i = 0; i < CURSOR_SELECTORS.length; i++) {
+      var nodes = document.querySelectorAll(CURSOR_SELECTORS[i]);
+      for (var j = 0; j < nodes.length; j++) add(nodes[j]);
+    }
+
+    // Запасной путь: верхнеуровневые слои fixed + pointer-events:none.
+    var kids = document.body ? document.body.children : [];
+    for (var k = 0; k < kids.length; k++) {
+      var child = kids[k];
+      if (overlay && child === overlay.back) continue;
+      var style = getComputedStyle(child);
+      if (style.position !== 'fixed') continue;
+      if (style.pointerEvents !== 'none') continue;
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      add(child);
+    }
+    return found;
+  }
+
+  function liftCursor(on) {
+    var i;
+    if (on) {
+      lifted = cursorLayers();
+      for (i = 0; i < lifted.length; i++) {
+        var node = lifted[i];
+        node.setAttribute('data-dl-z', node.style.zIndex || '');
+        node.style.zIndex = '100001';
+      }
+      return;
+    }
+    for (i = 0; i < lifted.length; i++) {
+      var back = lifted[i];
+      var saved = back.getAttribute('data-dl-z');
+      back.style.zIndex = saved || '';
+      back.removeAttribute('data-dl-z');
+    }
+    lifted = [];
+  }
+
   function field(parent, labelText, type, placeholder) {
     parent.appendChild(el('label', LABEL, labelText));
     var input = el('input', FIELD);
@@ -102,6 +164,7 @@
       'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;' +
       'justify-content:center;padding:24px;background:rgba(6,8,12,.55);' +
       'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);');
+    back.setAttribute('data-dl-profile-panel', '1');
 
     var panel = el('div',
       'position:relative;width:100%;max-width:420px;max-height:86vh;overflow:auto;' +
@@ -214,11 +277,13 @@
     if (!overlay) overlay = build();
     if (!overlay.back.parentNode) document.body.appendChild(overlay.back);
     overlay.back.style.display = 'flex';
+    liftCursor(true);
     load(overlay.who);
   }
 
   function hide() {
     if (overlay && overlay.back.parentNode) overlay.back.style.display = 'none';
+    liftCursor(false);
     if (location.hash === '#profile') {
       history.replaceState(null, '', location.pathname + location.search);
     }
@@ -274,7 +339,6 @@
   }
 
   function start() {
-    // Старая плавающая кнопка больше не нужна.
     var stale = document.getElementById('dlProfileButton');
     if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
 
