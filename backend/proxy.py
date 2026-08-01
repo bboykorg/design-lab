@@ -3,7 +3,7 @@
 Правила:
 - только для вошедших пользователей — сервер подставляет свои ключи;
 - адрес апстрима строит сам сервер по модели, затем по provider или host;
-  параметр url от клиента используется только чтобы опознать провайдера;
+- тело запроса ограничено до чтения в память;
 - тариф решает, какие модели доступны и сколько генераций в сутки;
 - Gemini — единственный случай с моделью в пути, там разрешены только
   :generateContent и :streamGenerateContent;
@@ -25,6 +25,7 @@ from .plans import consume_edit, ensure_model_allowed
 from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["proxy"])
+MAX_PROXY_BODY = int(os.getenv("MAX_PROXY_BODY", str(2 * 1024 * 1024)))
 
 _GOOGLE_HOST = "generativelanguage.googleapis.com"
 _GOOGLE_ENV = "GEMINI_API_KEYS,GEMINI_API_KEY"
@@ -34,10 +35,8 @@ _GOROUTER_ENV = "GOROUTER_API_KEYS,GOROUTER_API_KEY"
 _GOROUTER_BASE = os.getenv("GOROUTER_BASE_URL", "https://gorouter.app/v1").rstrip("/")
 _GOROUTER_ENDPOINT = _GOROUTER_BASE + "/chat/completions"
 _GOROUTER_MODELS = {
-    "claude-opus-4-8",
-    "claude-opus-4-8-thinking",
-    "claude-opus-5",
-    "claude-opus-5-thinking",
+    "claude-opus-4-8", "claude-opus-4-8-thinking",
+    "claude-opus-5", "claude-opus-5-thinking",
 }
 
 _KIWI_ENV = "KIWILLM_API_KEYS,KIWILLM_API_KEY,KIWI_KEY"
@@ -72,7 +71,6 @@ _MISTRAL_ENV = "MISTRAL_API_KEYS,MISTRAL_API_KEY"
 _MISTRAL_BASE = os.getenv("MISTRAL_BASE_URL", "https://api.mistral.ai/v1").rstrip("/")
 _MISTRAL_ENDPOINT = _MISTRAL_BASE + "/chat/completions"
 
-# Единственный список адресов, куда вообще может уйти запрос.
 _PROVIDERS = {
     "gorouter": (_GOROUTER_ENDPOINT, _GOROUTER_ENV, "bearer"),
     "kiwi": (_KIWI_ENDPOINT, _KIWI_ENV, "bearer"),
@@ -94,16 +92,11 @@ for _model in _GOROUTER_MODELS:
 for _model in _CEREBRAS_MODELS:
     _MODEL_PROVIDER[_model] = "cerebras"
 
-# Старый фронтенд всё ещё шлёт ?url=… — из него берётся только имя провайдера.
 _HOST_PROVIDER = {
-    "gorouter.app": "gorouter",
-    "www.gorouter.app": "gorouter",
-    "api.kiwillm.in": "kiwi",
-    "vyceai.com": "vyce",
-    "www.vyceai.com": "vyce",
-    "api.cerebras.ai": "cerebras",
-    "openrouter.ai": "openrouter",
-    "open.bigmodel.cn": "glm",
+    "gorouter.app": "gorouter", "www.gorouter.app": "gorouter",
+    "api.kiwillm.in": "kiwi", "vyceai.com": "vyce",
+    "www.vyceai.com": "vyce", "api.cerebras.ai": "cerebras",
+    "openrouter.ai": "openrouter", "open.bigmodel.cn": "glm",
     "api.mistral.ai": "mistral",
 }
 
@@ -112,11 +105,33 @@ _lock = threading.Lock()
 
 
 def admin_only(x_admin_token: str = Header(None)):
-    """Диагностика видна только с верным X-Admin-Token, иначе эндпоинта как бы нет."""
     expected = config.ADMIN_API_TOKEN
     if not expected or not x_admin_token or not _secrets.compare_digest(x_admin_token, expected):
         raise HTTPException(status_code=404, detail="Not Found")
     return True
+
+
+async def read_limited_body(request: Request) -> bytes:
+    """Read chunked or regular body without ever buffering over the limit."""
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            declared = int(content_length)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Некорректный Content-Length") from exc
+        if declared < 0:
+            raise HTTPException(status_code=400, detail="Некорректный Content-Length")
+        if declared > MAX_PROXY_BODY:
+            raise HTTPException(status_code=413, detail="Запрос слишком большой")
+
+    chunks = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > MAX_PROXY_BODY:
+            raise HTTPException(status_code=413, detail="Запрос слишком большой")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _keys(env_names: str):
@@ -157,7 +172,6 @@ def _rewrite_model(body: bytes, model: str) -> bytes:
 
 
 def _split(target: str):
-    """Отбросить query и fragment клиента, вернуть (url, host, path)."""
     parsed = urlparse(target)
     if parsed.scheme != "https":
         raise HTTPException(status_code=403, detail="разрешён только https")
@@ -168,7 +182,6 @@ def _split(target: str):
 
 
 def _google_target(target: str):
-    """Gemini: модель стоит в пути, поэтому путь берётся из запроса, но строго."""
     clean, host, path = _split(target)
     if host != _GOOGLE_HOST:
         return None
@@ -179,10 +192,6 @@ def _google_target(target: str):
 
 
 def _resolve(request: Request, target: str, model: str):
-    """Вернуть (url, host, env_names, auth, provider). Модель имеет приоритет."""
-    # Серверная карта модели надёжнее query-параметра от клиента. Например,
-    # claude-opus-4-8 всегда должен идти в GoRouter, даже если query ошибочно
-    # содержит provider=cerebras из старой конфигурации frontend.
     name = _MODEL_PROVIDER.get(model, "")
     if not name:
         name = (request.query_params.get("provider") or "").strip().lower()
@@ -232,7 +241,7 @@ async def proxy(request: Request, user=Depends(require_user)):
     guard("proxy", request, user)
     raw = request.query_params.get("url")
     target = unquote(raw) if raw else ""
-    body = await request.body()
+    body = await read_limited_body(request)
 
     model = _model_of(body)
     target, host, env_names, auth, provider = _resolve(request, target, model)
@@ -264,8 +273,7 @@ async def proxy(request: Request, user=Depends(require_user)):
             message += " Обнови адрес провайдера в настройках сервера."
         return Response(
             content=json.dumps({"error": {"message": message}}, ensure_ascii=False),
-            status_code=502,
-            media_type="application/json",
+            status_code=502, media_type="application/json",
         )
 
     content_type = response.headers.get("content-type", "application/json")
@@ -279,8 +287,7 @@ async def proxy(request: Request, user=Depends(require_user)):
             message = f"{host}: вместо ответа API вернулась HTML-страница (код {response.status_code})."
         return Response(
             content=json.dumps({"error": {"message": message}}, ensure_ascii=False),
-            status_code=502,
-            media_type="application/json",
+            status_code=502, media_type="application/json",
         )
 
     if response.status_code >= 400:
@@ -305,10 +312,7 @@ async def _probe(base: str, env_names: str, paths=("models",)):
     if not keys:
         first = env_names.split(",")[0]
         return {
-            "ok": False,
-            "base": base,
-            "keys": 0,
-            "reason": "no_key",
+            "ok": False, "base": base, "keys": 0, "reason": "no_key",
             "message": f"Не задан {first} в переменных окружения.",
         }
     host = (urlparse(base).hostname or "").lower()
@@ -325,8 +329,7 @@ async def _probe(base: str, env_names: str, paths=("models",)):
                 continue
             content_type = response.headers.get("content-type", "")
             entry.update(
-                status=response.status_code,
-                contentType=content_type,
+                status=response.status_code, contentType=content_type,
                 cfRay=response.headers.get("cf-ray"),
             )
             if _is_challenge(content_type, response.content):
