@@ -4,6 +4,9 @@ Two endpoints (только для вошедших пользователей):
 - POST /api/ai         → single JSON response {html, model, say}
 - POST /api/ai/stream  → Server-Sent Events: {"delta": "..."} chunks, then
                           a final {"done": true, "html": "...", "say": "..."}.
+
+Оба эндпоинта расходуют дневной лимит тарифа, как и /api/proxy, иначе Free
+мог бы генерировать без ограничений через встроенную модель.
 """
 import json
 import re
@@ -14,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from . import config
 from .auth import require_user
 from .models import AIRequest, AIResponse
+from .plans import consume_edit
 from .prompts import build_system_prompt, build_user_message
 from .ratelimit import guard
 
@@ -87,6 +91,7 @@ async def generate(req: AIRequest, request: Request, user=Depends(require_user))
     guard("ai", request, user)
     if not config.has_ai_key():
         raise HTTPException(status_code=503, detail="AI_API_KEY не задан на сервере (.env)")
+    consume_edit(user)
 
     url = config.AI_BASE_URL + "/chat/completions"
     try:
@@ -147,6 +152,7 @@ async def generate_stream(req: AIRequest, request: Request, user=Depends(require
     guard("ai", request, user)
     if not config.has_ai_key():
         raise HTTPException(status_code=503, detail="AI_API_KEY не задан на сервере (.env)")
+    consume_edit(user)
 
     url = config.AI_BASE_URL + "/chat/completions"
     payload, headers = _payload(req, True), _headers()
