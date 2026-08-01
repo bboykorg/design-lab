@@ -233,7 +233,7 @@ async def proxy(request: Request, user=Depends(require_user)):
 
     model = _model_of(body)
     target, host, env_names, auth, provider = _resolve(request, target, model)
-    ensure_model_allowed(user, provider)
+    ensure_model_allowed(user, provider, model)
     consume_edit(user)
     body = _rewrite_model(body, model)
 
