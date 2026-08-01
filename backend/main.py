@@ -46,6 +46,7 @@ _PATCH_SCRIPTS = (
     "plans-patch.js",
     "profile-patch.js",
     "ui-cleanup.js",
+    "proxy-auth-patch.js",
 )
 _index_cache = None
 
