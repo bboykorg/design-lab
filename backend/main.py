@@ -46,7 +46,7 @@ app.include_router(admin_router)
 
 _PATCH_SCRIPTS = (
     "models-patch.js", "model-plan-groups.js", "hide-google-models.js", "model-access-lock.js",
-    "plans-patch.js", "plan-lock-ui.js", "profile-patch.js", "profile-id-patch.js",
+    "ai-creative-prompt.js", "plans-patch.js", "plan-lock-ui.js", "profile-patch.js", "profile-id-patch.js",
     "ui-cleanup.js", "iframe-cursor-bridge.js", "design-edit-fix.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
 )
