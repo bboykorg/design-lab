@@ -1,14 +1,16 @@
-"""/api/audit — server-side static security/quality audit (parity with the client)."""
+"""/api/audit — authenticated, size-limited static HTML audit."""
 import re
 
-from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from .auth import require_user
 from .models import AuditResponse
 from .ratelimit import guard
 
 router = APIRouter(prefix="/api", tags=["audit"])
+MAX_AUDIT_BODY = 850_000
 
 KEY_PATTERNS = [
     (r"sk-or-v1-[A-Za-z0-9]{20,}", "OpenRouter"),
@@ -23,6 +25,33 @@ KEY_PATTERNS = [
 
 class AuditRequest(BaseModel):
     html: str = Field("", max_length=800_000)
+
+
+async def read_audit_request(request: Request) -> AuditRequest:
+    """Reject regular and chunked oversized requests before buffering them."""
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            declared = int(content_length)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Некорректный Content-Length") from exc
+        if declared < 0:
+            raise HTTPException(status_code=400, detail="Некорректный Content-Length")
+        if declared > MAX_AUDIT_BODY:
+            raise HTTPException(status_code=413, detail="Запрос слишком большой")
+
+    chunks = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > MAX_AUDIT_BODY:
+            raise HTTPException(status_code=413, detail="Запрос слишком большой")
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+    try:
+        return AuditRequest.model_validate_json(raw or b"{}")
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
 
 
 def audit_html(html: str) -> dict:
@@ -145,8 +174,8 @@ def audit_html(html: str) -> dict:
 
 @router.post("/audit", response_model=AuditResponse)
 def audit(
-    body: AuditRequest,
     request: Request,
+    body: AuditRequest = Depends(read_audit_request),
     user=Depends(require_user),
 ):
     guard("audit", request, user)
