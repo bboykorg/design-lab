@@ -69,6 +69,7 @@ _PATCH_SCRIPTS = (
     "models-patch.js",
     "hide-google-models.js",
     "plans-patch.js",
+    "plan-lock-ui.js",
     "profile-patch.js",
     "ui-cleanup.js",
     "proxy-auth-patch.js",
