@@ -9,10 +9,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      # JSON remains temporary on a free service; writes are now atomic/locked.
-      # Move projects to Postgres or attach a persistent disk before production.
+      # PROJECTS_DATABASE_URL takes priority; JSON is only a safe local fallback.
       - key: STORE
         value: json
+      - key: PROJECTS_DATABASE_URL
+        sync: false
       - key: AUTH_ENABLED
         value: "1"
       - key: CORS_ORIGINS
@@ -27,7 +28,6 @@ services:
         generateValue: true
       - key: USER_DB_SERVICE_URL
         sync: false
-      # Must match SERVICE_API_TOKEN in design-lab-users.
       - key: SERVICE_API_TOKEN
         sync: false
       - key: GOROUTER_API_KEYS
