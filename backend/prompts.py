@@ -89,14 +89,32 @@ PRESERVE_RUNTIME = """НЕПРИКОСНОВЕННЫЙ КОД ДВИЖКОВ И 
 Перед выдачей ответа проверь по списку: canvas на месте, все <script src> на месте, вызов инициализации на месте, id и class не переименованы, движок не перекрыт и виден."""
 
 
-def build_system_prompt(mode: str) -> str:
+def build_system_prompt(mode: str, message: str = "", variant: int = 0) -> str:
     """Собирает системный промпт для любой модели.
 
     DESIGN_LAWS идёт ПЕРВЫМ и в ОБОИХ режимах. Слабые модели сильнее всего
     держатся за начало контекста, а эти 10 законов — база, от которой
     зависит всё остальное. Правка готового шаблона — тоже дизайн-решение,
     поэтому в edit-режиме законы тоже обязательны.
+
+    После законов и правил добавляется ДИЗАЙН-СКИЛЛ из базы: конкретная
+    палитра, шрифты, сетка и план секций. Именно он вытягивает слабые модели:
+    им больше не нужно выдумывать цвета и типографику, только исполнить.
     """
+    return _with_skill(_base_prompt(mode), mode, message, variant)
+
+
+def _with_skill(prompt: str, mode: str, message: str, variant: int) -> str:
+    try:
+        from .design_skills import brief_for
+
+        brief = brief_for(message or "", mode=mode, variant=variant)
+    except Exception:  # база недоступна — работаем как раньше
+        brief = ""
+    return prompt + "\n\n" + brief if brief else prompt
+
+
+def _base_prompt(mode: str) -> str:
     if mode == "scratch":
         return (
             DESIGN_LAWS

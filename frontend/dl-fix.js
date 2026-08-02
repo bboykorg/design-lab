@@ -38,7 +38,11 @@
   var finePointer = !!(window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches);
   /* Настоящий десктоп (мышь + широкое окно) никогда не считаем слабым:
      именно из-за ложного срабатывания пропадала фоновая сетка. */
-  var realDesktop = finePointer && !coarse && innerWidth >= 1000;
+  /* БЫЛО: `finePointer && !coarse && innerWidth >= 1000` — компьютер переставал
+     считаться компьютером, стоило сузить окно браузера до 999px, и включался
+     low-fx: анимации схлопывались в 0.001s. Ширина окна не говорит о мощности
+     машины. Признак компьютера — мышь, а не размер окна. */
+  var realDesktop = finePointer && !coarse;
   var lowFx = (reduce || weakSpecs || (coarse && innerWidth < 700 && cores <= 4)) && !realDesktop;
   if (lowFx) docEl.classList.add('dl-lowfx');
 
@@ -177,7 +181,7 @@
     var send = document.getElementById('heroSendBtn');
     if (!send) return;
     /* класс btn-grad тянет за собой padding/min-height текстовой кнопки,
-       а это иконочная кнопка — ей нужен свой модификатор */
+       а это иконочная ��нопка — ей нужен свой модификатор */
     send.classList.remove('btn-grad');
     send.classList.add('send', 'hero-send');
     send.setAttribute('aria-label', 'Отправить');

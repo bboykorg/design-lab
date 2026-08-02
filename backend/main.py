@@ -14,6 +14,7 @@ from .profile import router as profile_router
 from .proxy import router as proxy_router
 from .ocr import router as ocr_router
 from .admin import router as admin_router
+from .design_api import router as design_router
 
 app = FastAPI(title="Design&Lab API", version="1.0.0", docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
@@ -43,8 +44,13 @@ app.include_router(profile_router)
 app.include_router(proxy_router)
 app.include_router(ocr_router)
 app.include_router(admin_router)
+app.include_router(design_router)
 
 _PATCH_SCRIPTS = (
+    # Движок дизайн-скиллов. Идёт ПЕРВЫМ: он ставит перехват window.fetch
+    # и подмешивает готовую дизайн-систему в system-промпт любой модели,
+    # включая те, что вызываются из браузера мимо backend/prompts.py.
+    "dl-design-skills.js",
     "models-patch.js", "model-free-set.js", "model-plan-groups.js", "hide-google-models.js",
     "model-access-lock.js", "ai-creative-prompt.js", "plans-patch.js", "plan-lock-ui.js",
     "profile-patch.js", "profile-id-patch.js",
@@ -69,6 +75,10 @@ _PATCH_SCRIPTS = (
     # Пересборка герой-композера в настоящий чат. Идёт ПОСЛЕДНИМ:
     # он расставляет узлы поверх всех остальных патчей композера.
     "dl-chat-mobile.js",
+    # Самым последним: десктопный рунтайм. Возвращает фоновые анимации на
+    # компьютере (мобильные слои глушили их и на десктопе) и держит высоту
+    # поля ввода в чате согласованной с текстом.
+    "dl-desktop-chat.js",
 )
 
 # Листы стилей подключаются в конце документа: так они идут после всех
@@ -93,6 +103,10 @@ _PATCH_STYLES = (
     "dl-mobile-fix.css",
     # Последним: перекрывает flex-direction:column из dl-fix.css.
     "dl-chat-mobile.css",
+    # Самым последним: десктопное окно чата (единая шкала кнопок в строке
+    # действий) и восстановление фоновых анимаций на компьютере. Ниже по
+    # каскаду файлов нет, поэтому мобильные слои его уже не перебивают.
+    "dl-desktop-chat.css",
 )
 _index_cache = None
 

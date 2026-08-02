@@ -1,0 +1,310 @@
+/* ============================================================================
+   Design Lab — десктопное окно чата.
+   Подключается ПОСЛЕДНИМ из стилей, поэтому перекрывает все мобильные слои.
+
+   ПРОБЛЕМА (замер DOM на 1440x900 до правки):
+     .composer .row     [29, 805  381x44]
+     .composer .row-l   [29, 809  267x36]   ← 36px
+     #attachBtn         [29, 809   36x36]   ← 36px
+     #micBtn            [73, 809   36x36]   ← 36px
+     #modelPill         [117,810  179x34]   ← 34px, на 1px ниже соседей
+     #sendBtn           [366,805   44x44]   ← 44px, выбивается из строки
+
+   Три разные высоты в одной строке (34 / 36 / 44) — строка визуально
+   «плывёт»: пилюля модели проседает, отправка торчит вверх и вниз.
+   Источник — пять слоёв стилей, которые правили эти кнопки независимо:
+   dl-fix.css задавал send через --ctl-h-lg, а инструменты через --ctl-h,
+   а `@media (pointer:coarse)` из того же файла добавлял ещё и 44px.
+
+   РЕШЕНИЕ — одна шкала на всю строку:
+
+     +-----------------------------------------------+
+     |  поле ввода (растёт под текст, до 168px)       |
+     |                                               |
+     |  [+] [мик] [модель v]                  ( ^ )  |  ← все 36px
+     +-----------------------------------------------+
+              Ctrl+↵ отправить · Ctrl+Z откатить
+
+   Всё в строке — ровно 36px и выровнено по центру. Отправка остаётся
+   единственным белым пятном, то есть главной кнопкой, но больше не ломает
+   ритм строки.
+   ========================================================================= */
+
+/* Мышь + не-телефонная ширина. Телефон не должен получить ни одного правила
+   отсюда: его раскладку задают dl-mobile-chat.css и dl-chat-mobile.css,
+   и она пользователя устраивает. */
+@media (min-width:901px) and (hover:hover) and (pointer:fine){
+
+  /* ---- 1. Колонка чата: композер никогда не обрезается ---------------- */
+  /* Подсказка с горячими клавишами раньше уезжала за нижнюю кромку окна:
+     .msgs c flex:1 забирал всю высоту, а композер не был защищён от сжатия. */
+  html:not(.dl-phone) .editor.on .chat{
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  html:not(.dl-phone) .editor.on .chat .msgs{flex:1 1 auto;min-height:0}
+  html:not(.dl-phone) .editor.on .chat .suggests,
+  html:not(.dl-phone) .editor.on .chat .composer{flex:0 0 auto}
+
+  /* ---- 2. Оболочка композера ------------------------------------------ */
+  html:not(.dl-phone) .composer{
+    padding:12px 16px 14px;
+    border-top:1px solid var(--border);
+    background:var(--bg);
+  }
+  html:not(.dl-phone) .composer .wrap{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    padding:10px 10px 10px 12px;
+    border:1px solid var(--border-2);
+    border-radius:16px;
+    background:var(--surface);
+    transition:border-color .18s var(--ease),box-shadow .18s var(--ease);
+  }
+  html:not(.dl-phone) .composer .wrap:focus-within{
+    border-color:var(--border-3);
+    box-shadow:0 0 0 3px rgba(210,216,240,.06);
+  }
+
+  /* ---- 3. Поле ввода --------------------------------------------------- */
+  html:not(.dl-phone) .composer textarea{
+    display:block;
+    width:100%;
+    margin:0;
+    padding:2px 2px 0;
+    border:0;
+    background:transparent;
+    outline:none;
+    resize:none;
+    color:var(--text);
+    font-family:inherit;
+    font-size:15px;
+    line-height:1.55;
+    min-height:26px;
+    max-height:168px;
+  }
+
+  /* ---- 4. Строка действий: одна высота на все кнопки ------------------- */
+  html:not(.dl-phone) .composer .row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin:0;
+    min-width:0;
+  }
+  html:not(.dl-phone) .composer .row-l{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex:1 1 auto;
+    min-width:0;
+  }
+
+  /* Инструменты «+» и микрофон. */
+  html:not(.dl-phone) .composer .tool-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    flex:0 0 auto;
+    box-sizing:border-box;
+    width:36px;
+    height:36px;
+    min-width:0;
+    min-height:0;
+    padding:0;
+    border-radius:10px;
+    transform:none !important;
+  }
+  html:not(.dl-phone) .composer .tool-btn svg{
+    width:17px;height:17px;display:block;flex:0 0 auto;
+  }
+
+  /* Пилюля выбора модели: та же высота, длинное имя обрезается многоточием,
+     а не растягивает строку и не выдавливает отправку за край. */
+  html:not(.dl-phone) .composer .model-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    box-sizing:border-box;
+    flex:0 1 auto;
+    height:36px;
+    min-height:0;
+    min-width:0;
+    max-width:238px;
+    padding:0 11px;
+    border-radius:10px;
+    font-size:12.5px;
+    line-height:1;
+    overflow:hidden;
+  }
+  html:not(.dl-phone) .composer .model-pill .mav{
+    flex:0 0 auto;
+    width:16px;height:16px;
+    display:inline-flex;align-items:center;justify-content:center;
+  }
+  html:not(.dl-phone) .composer .model-pill .ml{
+    flex:1 1 auto;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    text-align:left;
+  }
+  html:not(.dl-phone) .composer .model-pill .ch{
+    flex:0 0 auto;
+    width:14px;height:14px;
+    transition:transform .2s var(--ease);
+  }
+  html:not(.dl-phone) .composer .model-pill.open .ch{transform:rotate(180deg)}
+
+  /* Кнопка отправки: та же высота 36px, круглая, прижата вправо. */
+  html:not(.dl-phone) .composer .send{
+    display:inline-flex !important;
+    align-items:center;
+    justify-content:center;
+    flex:0 0 auto;
+    box-sizing:border-box;
+    width:36px;
+    height:36px;
+    min-width:0;
+    min-height:0;
+    margin:0 0 0 auto;
+    padding:0 !important;
+    border:0;
+    border-radius:50%;
+    background:#fff;
+    color:#0b0b0d;
+    box-shadow:0 1px 2px rgba(0,0,0,.28);
+    transition:background .15s var(--ease),box-shadow .15s var(--ease);
+    transform:none !important;
+  }
+  html:not(.dl-phone) .composer .send svg{
+    width:16px;height:16px;display:block;margin:0 !important;flex:0 0 auto;
+  }
+  html:not(.dl-phone) .composer .send:hover:not(:disabled){
+    background:#f1f2f6;box-shadow:0 2px 10px rgba(0,0,0,.34);
+  }
+  html:not(.dl-phone) .composer .send:active:not(:disabled){background:#e4e6ec}
+  html:not(.dl-phone) .composer .send:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+
+  /* ---- 5. Полоса прикреплённых файлов --------------------------------- */
+  html:not(.dl-phone) .composer .attach-strip:empty{display:none}
+  html:not(.dl-phone) .composer .attach-strip{
+    display:flex;flex-wrap:wrap;gap:6px;margin:0 0 2px;min-width:0;
+  }
+
+  /* ---- 6. Подсказка горячих клавиш ------------------------------------ */
+  /* Была прижата к самому низу окна и обрезалась. Теперь у неё свой отступ
+     внутри композера, а сам композер защищён от сжатия (пункт 1). */
+  html:not(.dl-phone) .composer .dl-kbd-hint{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:center;
+    gap:6px 14px;
+    padding:9px 2px 0;
+    margin:0;
+    font-size:10.5px;
+    line-height:1.2;
+    color:var(--faint);
+  }
+
+  /* ---- 7. Меню выбора модели над композером --------------------------- */
+  /* Всплывает от нижней кромки строки действий, а не от края экрана. */
+  html:not(.dl-phone) .composer .model-menu{
+    left:16px;
+    right:16px;
+    bottom:calc(100% - 12px);
+    max-height:min(52vh,420px);
+    overflow-y:auto;
+  }
+
+  /* ---- 8. Подсказки-«быстрые правки» над композером -------------------- */
+  html:not(.dl-phone) .suggests{
+    display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 12px;min-width:0;
+  }
+  html:not(.dl-phone) .suggests button{
+    display:inline-flex;align-items:center;
+    min-height:32px;padding:0 12px;border-radius:9px;
+    font-size:12.5px;line-height:1;white-space:nowrap;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;
+  }
+
+  /* ---- 9. Шапка чата: элементы по одной оси ---------------------------- */
+  html:not(.dl-phone) .chat-head{
+    display:flex;align-items:center;gap:11px;min-width:0;
+  }
+  html:not(.dl-phone) .chat-head .ttl{flex:1 1 auto;min-width:0}
+  html:not(.dl-phone) .chat-head .ttl .name,
+  html:not(.dl-phone) .chat-head .ttl .sub{
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  html:not(.dl-phone) .chat-head .icon-btn{flex:0 0 auto}
+  html:not(.dl-phone) .chat-head .live{flex:0 0 auto;white-space:nowrap}
+}
+
+/* ============================================================================
+   Анимации на компьютере — страховочный слой.
+
+   Ниже по каскаду уже нет ни одного файла, поэтому эти объявления выигрывают
+   у любых `animation:none`, которые мобильные слои могли применить к десктопу.
+   Класс dl-desktop ставит dl-desktop-chat.js до первого кадра.
+   ========================================================================= */
+@media (prefers-reduced-motion:no-preference){
+  html.dl-desktop .bg-fx .grid{animation:gridDrift 34s linear infinite !important}
+  html.dl-desktop .bg-fx .halo{animation:haloPulse 9s ease-in-out infinite !important}
+
+  html.dl-desktop .bg-fx .a1{animation:drift1 22s ease-in-out infinite alternate,auroraBreathe 11s ease-in-out infinite !important}
+  html.dl-desktop .bg-fx .a2{animation:drift2 28s ease-in-out infinite alternate,auroraBreathe 14s ease-in-out -4s infinite !important}
+  html.dl-desktop .bg-fx .a3{animation:drift3 32s ease-in-out infinite alternate,auroraBreathe 16s ease-in-out -8s infinite !important}
+  html.dl-desktop .bg-fx .a4{animation:drift1 30s ease-in-out infinite alternate,auroraBreathe 13s ease-in-out -6s infinite !important}
+
+  html.dl-desktop .bg-fx .scanline{animation:scan 11s ease-in-out infinite !important}
+  /* У каждой звезды свои duration и delay в inline-стиле — именно из этого
+     рождается мерцание вразнобой. Здесь нельзя писать сокращённое
+     `animation:` с !important: оно сбросит duration в 0s и все звёзды встанут.
+     Возвращаем только имена и повтор, тайминги остаются за inline. */
+  html.dl-desktop .bg-fx .stars .st{
+    animation-name:twinkle,floaty !important;
+    animation-timing-function:linear,ease-in-out !important;
+    animation-iteration-count:infinite,infinite !important;
+    animation-fill-mode:none !important;
+  }
+
+  html.dl-desktop .bg-fx .current-grid .charge{animation:currentRun 8.8s cubic-bezier(.16,1,.3,1) infinite !important}
+  html.dl-desktop .bg-fx .current-grid .charge.c2{animation-delay:-3.2s !important;animation-duration:10.4s !important}
+  html.dl-desktop .bg-fx .current-grid .charge.c3{animation-delay:-6.1s !important;animation-duration:12.2s !important}
+  html.dl-desktop .bg-fx .current-grid .spark{animation:sparkRide 8.8s cubic-bezier(.16,1,.3,1) infinite !important}
+  html.dl-desktop .bg-fx .current-grid .spark.s2{animation-delay:-3.2s !important;animation-duration:10.4s !important}
+  html.dl-desktop .bg-fx .current-grid .spark.s3{animation-delay:-6.1s !important;animation-duration:12.2s !important}
+
+  html.dl-desktop .bg-fx .comets i{animation:comet 9s linear infinite !important}
+  html.dl-desktop .bg-fx .comets i:nth-child(2){animation-delay:6.4s !important;animation-duration:12s !important}
+  html.dl-desktop .bg-fx .comets i:nth-child(3){animation-delay:10.5s !important;animation-duration:14s !important}
+
+  /* Слои должны существовать: мобильные правила прятали их через display:none. */
+  html.dl-desktop .bg-fx,
+  html.dl-desktop .bg-fx .grid,
+  html.dl-desktop .bg-fx .halo,
+  html.dl-desktop .bg-fx .aurora,
+  html.dl-desktop .bg-fx .stars,
+  html.dl-desktop .bg-fx .comets,
+  html.dl-desktop .bg-fx .scanline,
+  html.dl-desktop .bg-fx .current-grid,
+  html.dl-desktop .bg-fx .noise{display:block !important}
+
+  /* Серебряный перелив в заголовках — тоже часть «живого» ощущения. */
+  html.dl-desktop .sec-title,
+  html.dl-desktop .foot-mark{animation:sheen 7s linear infinite !important}
+  html.dl-desktop .hero h1 .grad{animation:sheen 6s linear infinite,glowPulse 4.5s ease-in-out infinite !important}
+}
+
+/* Системная настройка «меньше движения» остаётся выше всего. */
+@media (prefers-reduced-motion:reduce){
+  html.dl-desktop .bg-fx *,
+  html.dl-desktop .sec-title,
+  html.dl-desktop .foot-mark,
+  html.dl-desktop .hero h1 .grad{animation:none !important}
+}

@@ -82,7 +82,18 @@
 .bg-fx{contain:layout paint style;pointer-events:none}
 .bg-fx,.bg-fx .grid,.bg-fx .halo,.bg-fx .aurora{min-width:0}
 .bg-fx .b,.bg-fx .a4{will-change:auto}
-@media (max-width:1024px),(pointer:coarse){
+/* БЫЛО: `@media (max-width:1024px),(pointer:coarse)` — и это глушило ВСЕ
+   фоновые анимации на обычных компьютерах. Под 1024px попадает окно браузера
+   в половину экрана, ноутбук 1280x800 при масштабе 125% (=1024 CSS-пикселя),
+   любой внешний монитор 1280 при 125%. Правило стоит ПОЗЖЕ, чем
+   dl-ui-kit-desktop.css с его `animation-play-state:running`, а `animation:none`
+   вообще убирает анимацию — восстановить её play-state'ом невозможно.
+   Итог: «с компьютера анимации не работают».
+
+   СТАЛО: экономим ресурсы только там, где это действительно нужно —
+   на узких экранах и на сенсорных устройствах без мыши. Наличие мыши
+   (hover:hover + pointer:fine) — надёжный признак компьютера. */
+@media (max-width:760px),(hover:none) and (pointer:coarse){
   .bg-fx .comets,.bg-fx .a4{display:none !important}
   .bg-fx .b{filter:blur(48px) !important;opacity:.35 !important}
   .bg-fx *{animation:none !important}
@@ -323,7 +334,7 @@ html.dl-lowfx .card:hover{transform:none !important}
 }
 .gh-cta,.btn-solid.gh-cta{height:var(--ctl-h-lg);min-height:var(--ctl-h-lg);width:100%}
 
-/* ══════════════════════════════════════════════════════════════════════════
+/* ═════════════════════════════���════════════════════════════════════════════
    5. ШРИФТЫ: моноширинный — только в коде и терминале
    ══════════════════════════════════════════════════════════════════════════ */
 

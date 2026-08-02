@@ -7,7 +7,7 @@
    «меньше движения».
    ============================================================ */
 
-@media (min-width:901px) and (prefers-reduced-motion:no-preference){
+@media (min-width:761px) and (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){
 
   /* --- 1. Заголовок первого экрана: перелив + мягкое свечение. --- */
   html:not(.dl-phone) .hero h1 .grad{
@@ -87,7 +87,7 @@
 
 /* --- 7. Фоновые слои на десктопе должны дышать. Телефон их не
    получает: там они удалены скриптом ради батареи. --- */
-@media (min-width:901px) and (prefers-reduced-motion:no-preference){
+@media (min-width:761px) and (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){
   html:not(.dl-phone) .bg-fx .aurora,
   html:not(.dl-phone) .bg-fx .grid,
   html:not(.dl-phone) .bg-fx .halo,
@@ -102,7 +102,7 @@
 /* --- 8. Отклик интерфейса на десктопе: карточки, кнопки, поля.
    Кубическая кривая одна на весь сайт, чтобы движение читалось
    как один почерк, а не набор случайных эффектов. --- */
-@media (min-width:901px){
+@media (min-width:761px) and (hover:hover) and (pointer:fine){
   html:not(.dl-phone) .card{
     transition:transform .32s var(--dl-e-soft),border-color .32s var(--dl-e-soft),box-shadow .32s var(--dl-e-soft);
   }
