@@ -1,0 +1,52 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DL Code harness</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--font:'Manrope',sans-serif;--border:rgba(205,208,219,.12);--border-2:rgba(205,208,219,.16);--border-3:rgba(205,208,219,.28);--muted:#9aa0ad}
+  body{margin:0;background:#0b0b0d;color:#e7e9ee;font-family:var(--font)}
+  .di-title{display:flex;align-items:center;height:46px;padding:0 12px;gap:10px;border-bottom:1px solid var(--border)}
+  .di-title-l{display:flex;align-items:center;gap:8px;min-width:0}
+  .di-title-r{display:flex;align-items:center;gap:7px;margin-left:auto}
+  .di-btn{height:29px;padding:0 12px;border-radius:8px;border:1px solid var(--border);background:rgba(205,208,219,.05);color:#d7dae2;font:600 12.5px var(--font);display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+  .di-btn-chrome{background:linear-gradient(135deg,#eceef3,#a9aeba);color:#131318}
+  .di-btn-danger{background:#e5484d;color:#fff}
+  .di-act{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:transparent;color:#d7dae2}
+  .di-side{width:250px;min-width:250px;border-right:1px solid var(--border);padding:10px}
+  .di-side-h{font:700 11px 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .di-tab{height:36px;font-size:13px;font-family:'JetBrains Mono',monospace;display:inline-flex;align-items:center;padding:0 10px}
+  .di-tabs{display:flex;border-bottom:1px solid var(--border)}
+  .di-sres{font:12px 'JetBrains Mono',monospace}
+  .di-crumbs{height:26px;font-size:12px;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;padding:0 12px}
+  .di-code pre,.di-gut pre{font:13px/20px 'JetBrains Mono',monospace;margin:0;padding:8px 12px}
+  .di-st-btn{font:600 11px var(--font);height:20px;padding:0 7px}
+  .di-wrap{display:flex}
+</style>
+</head><body>
+<div class="di-title">
+  <div class="di-title-l"><span>DLCode / Новый сайт с нуля · 1ф.</span></div>
+  <div class="di-title-r">
+    <button class="di-btn" id="bDesign">✒ Дизайн</button>
+    <button class="di-btn di-btn-chrome" id="diDeploy">↑ Деплой</button>
+    <button class="di-btn" id="bBoard">▣ Доска</button>
+    <button class="di-btn di-btn-danger" id="bDel">Удалить</button>
+    <button class="di-act" id="aX">⚙</button>
+  </div>
+</div>
+<div class="di-wrap">
+  <aside class="di-side"><div class="di-side-h">ПРОВОДНИК</div>
+    <div class="di-sres">index.html главная</div></aside>
+  <main style="flex:1;min-width:0">
+    <div class="di-tabs"><div class="di-tab">index.html</div></div>
+    <div class="di-crumbs">Проект / index.html</div>
+    <div class="di-code"><pre>&lt;!DOCTYPE html&gt;
+&lt;html lang="ru"&gt;
+if(window.matchMedia){}
+function start(){}</pre></div>
+    <button class="di-st-btn">Статус</button>
+  </main>
+</div>
+<link rel="stylesheet" href="/dl-ui-kit.css">
+<link rel="stylesheet" href="/dl-fix.css">
+<script src="/dl-fix.js"></script>
+</body></html>

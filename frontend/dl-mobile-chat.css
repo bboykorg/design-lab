@@ -1,0 +1,339 @@
+/* ============================================================================
+   Design Lab — мобильный редактор в формате мессенджера.
+
+   Было: на телефоне редактор оставался десктопной сеткой
+   `minmax(320px,440px) 5px 1fr`, а сверху накидывались вкладки #dlTabs —
+   «Чат» ИЛИ «Превью». Половина функций (тулбар режимов, устройства,
+   шрифты, цвета, доска) физически не помещалась и уезжала за край.
+
+   Стало: одна привычная схема — рабочая область сверху, чат снизу.
+   Строка ввода (выбор модели, скрепка, микрофон, «Отправить») закреплена
+   у низа экрана навсегда, а лента переписки выезжает из-за неё:
+     peek  — только строка ввода, максимум места под превью;
+     half  — переписка на половину экрана;
+     full  — переписка почти на весь экран.
+   Лента тянется пальцем за ручку над строкой ввода.
+
+   Всё, что на десктопе жило в тулбаре превью, остаётся доступным: тулбар
+   становится горизонтальной лентой с прилипанием, ничего не вырезано.
+   Файл подключается ПОСЛЕ dl-fix.css.
+   ========================================================================= */
+
+@media (max-width: 860px) {
+
+  :root {
+    /* Высоты считает JS по реальному DOM — здесь только запасные значения. */
+    --dlm-comp: 92px;   /* высота закреплённой строки ввода */
+    --dlm-top: 52px;    /* высота верхней панели */
+    --dlm-kb: 0px;      /* высота экранной клавиатуры */
+    --dlm-sheet: 62dvh; /* высота ленты переписки */
+    --dlm-y: 100%;      /* 100% = лента убрана за строку ввода */
+    --dlm-ease: cubic-bezier(.22, 1, .36, 1);
+  }
+
+  /* ── 1. Каркас: одна колонка, разделитель не нужен ────────────────── */
+  .editor.on {
+    display: block;
+    grid-template-columns: none;
+    grid-template-rows: none;
+    overflow: hidden;
+  }
+  .editor.on .divider { display: none; }
+
+  /* Старые вкладки «Чат / Превью» отменены самой схемой: видно и то, и другое. */
+  .editor.on #dlTabs { display: none !important; }
+  .editor.dl-mob-pv .chat,
+  .editor.dl-mob-pv .composer { display: flex; }
+
+  /* ── 2. Верхняя панель: назад, название, статус ─────────────────── */
+  .editor.on .dlm-top {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 118;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: calc(6px + env(safe-area-inset-top)) 10px 6px;
+    min-height: 0;
+    background: rgba(9, 9, 11, .92);
+    border-bottom: 1px solid var(--border);
+    border-right: 0;
+  }
+  .editor.on .dlm-top .ttl { min-width: 0; }
+  .editor.on .dlm-top .ttl .name { font-size: 14px; line-height: 1.25; }
+  .editor.on .dlm-top .ttl .sub { font-size: 11px; line-height: 1.25; }
+  .editor.on .dlm-top .live { flex: none; font-size: 10.5px; }
+
+  /* ── 3. Рабочая область: превью / дизайн / код / доска ──────────── */
+  .editor.on .preview {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    /* Низ упирается в строку ввода, а не в край экрана — иначе
+       низ сайта всегда оставался бы под полем ввода. */
+    bottom: calc(var(--dlm-comp) + var(--dlm-kb));
+    display: flex;
+    padding-top: var(--dlm-top);
+    transition: bottom .26s var(--dlm-ease);
+  }
+
+  /* Тулбар режимов — лента с прилипанием: ни одна кнопка не потеряна. */
+  .editor.on .pv-head {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: visible;
+    gap: 6px;
+    padding: 7px 10px;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 18px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 18px), transparent 100%);
+  }
+  .editor.on .pv-head::-webkit-scrollbar { display: none; }
+  .editor.on .pv-head > * { flex: 0 0 auto; scroll-snap-align: start; }
+  .editor.on .pv-head .tb-btn,
+  .editor.on .pv-head .icon-btn { min-height: 38px; }
+  .editor.on .pv-head .seg button { min-height: 36px; padding-inline: 12px; }
+  /* Адрес превью на 390px съедал треть ленты и ничего не сообщал. */
+  .editor.on .pv-head .urlbar { display: none; }
+  /* Выпадающие меню тулбара не должны обрезаться лентой прокрутки. */
+  .editor.on .pv-head .tb-menu {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    top: auto;
+    width: auto;
+    max-height: 52dvh;
+    overflow-y: auto;
+    z-index: 130;
+  }
+
+  .editor.on .pv-stage { flex: 1; min-height: 0; }
+  /* Эмуляторы устройств внутри и без того узкого экрана — матрёшка.
+     Показываем сайт во всю ширину, переключатель устройств остаётся. */
+  .editor.on .pv-stage.mobile,
+  .editor.on .pv-stage.tablet { padding: 0; background: #08080a; }
+  .editor.on .pv-stage.mobile #pvFrame,
+  .editor.on .pv-stage.tablet #pvFrame {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* ── 4. Лента переписки — лист, выезжающий из-за строки ввода ───────
+     Принципиальный момент: ездит только история, а поле ввода стоит на месте.
+     Если бы вниз уезжал весь лист целиком, вместе с ним за край экрана
+     уходила бы и строка ввода — именно так ломаются самодельные шторки. */
+  .editor.on .chat {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--dlm-comp) + var(--dlm-kb));
+    top: auto;
+    z-index: 120;
+    height: var(--dlm-sheet);
+    max-height: calc(100dvh - var(--dlm-top) - var(--dlm-comp) - 8px);
+    border: 1px solid var(--border-2);
+    border-bottom: 0;
+    border-radius: 20px 20px 0 0;
+    background: #0b0b0d;
+    box-shadow: 0 -20px 50px -24px rgba(0, 0, 0, .95);
+    transform: translate3d(0, var(--dlm-y), 0);
+    /* Единственное анимируемое свойство — transform: идёт мимо layout. */
+    transition: transform .3s var(--dlm-ease);
+    will-change: transform;
+    touch-action: pan-y;
+  }
+  /* Во время перетаскивания анимация выключается, лист идёт за пальцем 1:1. */
+  .editor.on .chat.dlm-drag { transition: none; }
+  /* Свёрнутая история не ловит касания и не мешает работе с превью. */
+  .editor[data-dlm='peek'] .chat { pointer-events: none; }
+  /* Шапка переехала наверх экрана; если что-то вернёт её в лист — не дублируем. */
+  .editor.on .chat > .chat-head:not(.dlm-top) { display: none; }
+
+  /* Ручка живёт в строке ввода, поэтому доступна всегда, даже когда чат свёрнут. */
+  .editor.on .dlm-grab {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    margin: 0 -12px;
+    cursor: grab;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .editor.on .dlm-grab::before {
+    content: '';
+    width: 38px;
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, .22);
+    transition: background .18s linear, width .22s var(--dlm-ease);
+  }
+  .editor.on .composer.dlm-drag .dlm-grab::before,
+  .editor.on .dlm-grab:active::before {
+    background: rgba(255, 255, 255, .42);
+    width: 46px;
+  }
+
+  .editor.on .msgs {
+    padding: 12px 14px 14px;
+    gap: 13px;
+    overscroll-behavior: contain;
+  }
+  /* Свёрнутую ленту не рисуем вообще — экономия кадров на слабых телефонах. */
+  .editor[data-dlm='peek'] .msgs,
+  .editor[data-dlm='peek'] .suggests { content-visibility: hidden; }
+
+  /* Подсказки — одна строка с прокруткой, без переносов на три ряда. */
+  .editor.on .suggests {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    padding: 0 14px 10px;
+  }
+  .editor.on .suggests::-webkit-scrollbar { display: none; }
+  .editor.on .suggests button { flex: 0 0 auto; scroll-snap-align: start; white-space: nowrap; }
+
+  /* ── 5. Строка ввода: закреплена внизу, всё в один ряд ──────────── */
+  .editor.on .composer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--dlm-kb);
+    /* Выше ленты переписки: сворачиваясь, она уходит именно за строку ввода. */
+    z-index: 122;
+    flex: none;
+    padding: 0 12px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: #0b0b0d;
+    touch-action: pan-y;
+  }
+  .editor.on .composer .wrap { padding: 8px 10px; border-radius: 16px; }
+  .editor.on .composer textarea {
+    /* 16px обязателен: на меньшем кегле iOS зумит страницу при фокусе. */
+    font-size: 16px;
+    max-height: 104px;
+  }
+  .editor.on .composer .row { margin-top: 7px; gap: 8px; }
+  .editor.on .composer .row-l { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .editor.on .composer .tool-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Название модели ужимается многоточием, а не выталкивает «Отправить». */
+  .editor.on .composer .model-pill {
+    min-width: 0;
+    min-height: 38px;
+    max-width: 44vw;
+    padding: 6px 9px;
+  }
+  .editor.on .composer .model-pill .ml,
+  .editor.on .composer .model-pill span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .editor.on .composer .send {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    flex: none;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .editor.on .attach-strip:empty { display: none; }
+
+  /* Лист выбора модели обязан лежать выше и чата, и строки ввода. */
+  .editor.on #modelMenu,
+  .editor.on .model-menu { z-index: 9000; }
+
+  /* ── 6. Затемнение под раскрытым чатом ─────────────────────── */
+  .editor.on .dlm-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 119;
+    background: rgba(0, 0, 0, .5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .26s var(--dlm-ease);
+  }
+  .editor[data-dlm='full'] .dlm-scrim { opacity: 1; pointer-events: auto; }
+
+  /* ── 7. Кнопка-таблетка над строкой ввода ───────────────────── */
+  .editor.on .dlm-badge {
+    position: absolute;
+    top: -32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-2);
+    background: rgba(12, 12, 14, .94);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s linear, transform .24s var(--dlm-ease);
+  }
+  .editor[data-dlm='full'] .dlm-badge,
+  .editor[data-dlm='half'] .dlm-badge {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── 8. DL Code на телефоне: тот же принцип — код сверху, ИИ-чат снизу ─ */
+  #dlIde .di-title { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; }
+  #dlIde .di-title::-webkit-scrollbar { display: none; }
+  #dlIde .di-title > * { flex: 0 0 auto; }
+  #dlIde .di-cmdbar { display: none; }
+  #dlIde .di-side {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto !important;
+    max-width: none;
+    height: 68dvh;
+    z-index: 60;
+    border-radius: 18px 18px 0 0;
+    border-top: 1px solid var(--border-2);
+    box-shadow: 0 -20px 50px -24px rgba(0, 0, 0, .95);
+  }
+  #dlIde .di-chat-comp textarea { font-size: 16px; }
+  #dlIde .di-chat-hint { display: none; }
+  #diBoard { width: 100% !important; }
+}
+
+/* Системная настройка «меньше движения» отключает выезд, но не функциональность. */
+@media (prefers-reduced-motion: reduce) {
+  .editor.on .chat,
+  .editor.on .preview,
+  .editor.on .dlm-scrim { transition: none; }
+}

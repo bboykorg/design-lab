@@ -56,6 +56,9 @@ _PATCH_SCRIPTS = (
     "dl-mobile-sheet.js",
     "dl-mobile-polish.js",
     "dl-ui-kit.js",
+    "dl-fix.js",
+    # Мобильный редактор-мессенджер: чат нижним листом, рабочая область сверху.
+    "dl-mobile-chat.js",
 )
 
 # Листы стилей подключаются в конце документа: так они идут после всех
@@ -70,6 +73,9 @@ _PATCH_STYLES = (
     "dl-ui-kit.css",
     "dl-ui-kit-mobile.css",
     "dl-ui-kit-desktop.css",
+    "dl-fix.css",
+    # Идёт последним: перекрывает десктопную сетку редактора на телефоне.
+    "dl-mobile-chat.css",
 )
 _index_cache = None
 

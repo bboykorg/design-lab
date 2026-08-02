@@ -1,0 +1,465 @@
+/* ============================================================================
+   Design Lab - FIX LAYER v4
+   Подключается ПОСЛЕДНИМ. Правит:
+     1) производительность (лишние слои, бесконечные анимации);
+     2) "ступеньку" (серый квадрат) под белыми кнопками;
+     3) единую шкалу размеров всех кнопок;
+     4) кнопку "Отправить";
+     5) шрифты UI-хрома (mono -> Manrope);
+     6) мобильную вёрстку без горизонтального выезда.
+   ========================================================================= */
+
+:root{
+  /* Единая шкала контролов */
+  --ctl-h-sm:30px;   /* тулбары DL Code, компактные чипы */
+  --ctl-h:36px;      /* базовая кнопка */
+  --ctl-h-lg:44px;   /* герой / модалки / мобильный тап */
+  --ctl-px-sm:11px;
+  --ctl-px:16px;
+  --ctl-px-lg:20px;
+  --ctl-r:10px;
+  --ctl-r-sm:8px;
+  --ui-font:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --code-font:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1. ПРОИЗВОДИТЕЛЬНОСТЬ
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 1.1 Снимаем принудительную композицию слоёв со всех мелких контролов.
+   index.html:279 вешал isolation:isolate + translateZ(0) на 18 селекторов —
+   это сотни GPU-слоёв на одной странице. */
+.btn-solid,.btn-grad,.btn-line,.btn-ghost,.chip,.hero-icon-btn,.hero-model,
+.model-pill,.send,.card,.plan .pick,.icon-btn,.suggests button,.tool-btn,
+.di-btn,.di-act,.di-side-acts button,.di-st-btn{
+  isolation:auto;
+  transform:none;
+  will-change:auto;
+}
+
+/* 1.2 Убираем specular-sweep: пустой слой на КАЖДОЙ кнопке + анимация на hover. */
+.btn-solid::before,.btn-grad::before,.btn-line::before,.btn-ghost::before,
+.chip::before,.hero-icon-btn::before,.hero-model::before,.model-pill::before,
+.send::before,.card::before,.plan .pick::before,.icon-btn::before,
+.suggests button::before,.tool-btn::before,.di-btn::before,
+.di-side-acts button::before,.di-st-btn::before,
+.btn-solid::after,.btn-grad::after,.btn-line::after,
+.plan .pick::after,.plan .pick.o::after,.plan .pick.g::after,
+.di-btn-chrome::before,.di-btn-chrome::after,
+.dl-gh-login::before,.dl-gh-login::after{
+  content:none !important;
+  display:none !important;
+  animation:none !important;
+}
+
+/* 1.3 Гасим бесконечные CPU-анимации на CTA (ctaBreathe крутился всегда). */
+.btn-solid,.btn-grad,.plan .pick.g,.send,.eyebrow,.foot-mark{
+  animation:none !important;
+}
+
+/* 1.3b Главный источник лагов: ~100 карточек галереи держали
+   will-change:transform ПОСТОЯННО — это сотня живых GPU-слоёв и десятки
+   мегабайт видеопамяти. Поднимаем слой только на время взаимодействия. */
+.card,.card.in,.proj-card,.grid,.stars,.comets,
+.aurora,.aurora.a1,.aurora.a2,.aurora.a3,
+.bn-ex,.bn-ex.e1,.bn-ex.e2,
+.nav,pre{
+  will-change:auto !important;
+}
+.nav{isolation:auto !important}
+@media (hover:hover) and (pointer:fine){
+  .card:hover,.proj-card:hover{will-change:transform}
+}
+
+/* 1.4 Тяжёлые фоновые эффекты — только на мощных экранах, и без mix-blend. */
+.bg-fx{contain:strict;pointer-events:none}
+.bg-fx .b,.bg-fx .a4{will-change:auto}
+@media (max-width:1024px),(pointer:coarse){
+  .bg-fx .comets,.bg-fx .a4{display:none !important}
+  .bg-fx .b{filter:blur(48px) !important;opacity:.35 !important}
+  .bg-fx *{animation:none !important}
+}
+html.dl-lowfx .bg-fx{display:none !important}
+html.dl-lowfx *{animation-duration:.001s !important;animation-iteration-count:1 !important}
+html.dl-lowfx .card:hover{transform:none !important}
+
+/* 1.5 Off-screen секции не рендерятся, пока не нужны. */
+.section,.footer{content-visibility:auto;contain-intrinsic-size:auto 700px}
+
+/* 1.6 Превью проектов и карточек — не декодировать синхронно. */
+.proj-thumb,.card .thumb{contain:layout paint style}
+
+/* 1.7 Скролл-контейнеры кода/логов не должны триггерить перерасчёт всей страницы. */
+.di-code,.di-gut,.di-term-log,#epLogs,.di-tree,.di-tabs{contain:layout paint}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2. КНОПКИ: убираем "ступеньку" и вводим единую шкалу
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 2.1 Главная белая кнопка — самостоятельная, плоская, без серого хвоста. */
+.btn-solid,
+.btn-grad,
+.plan .pick.g,
+.dl-gh-login{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  box-sizing:border-box;
+  height:var(--ctl-h);
+  min-height:var(--ctl-h);
+  padding:0 var(--ctl-px);
+  border:0;
+  border-radius:var(--ctl-r);
+  overflow:hidden;
+  transform-style:flat;
+  perspective:none;
+  font-family:var(--ui-font);
+  font-size:13.5px;
+  font-weight:600;
+  line-height:1;
+  letter-spacing:-.005em;
+  white-space:nowrap;
+  color:#0b0b0d;
+  background:#ffffff;
+  box-shadow:0 1px 2px rgba(0,0,0,.28);
+  transition:background .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+/* transform:none с !important, чтобы перебить инлайновый magnetic-pull из JS */
+.btn-solid,.btn-grad,.plan .pick.g,.dl-gh-login,
+.btn-solid:hover,.btn-grad:hover,.plan .pick.g:hover,.dl-gh-login:hover,
+.btn-solid:active,.btn-grad:active,.plan .pick.g:active,.dl-gh-login:active{
+  transform:none !important;
+}
+.btn-solid:hover,.btn-grad:hover,.plan .pick.g:hover,.dl-gh-login:hover{
+  background:#f1f2f6;
+  box-shadow:0 2px 10px rgba(0,0,0,.34);
+}
+.btn-solid:active,.btn-grad:active,.plan .pick.g:active,.dl-gh-login:active{
+  background:#e4e6ec;
+  box-shadow:0 1px 2px rgba(0,0,0,.28);
+}
+.btn-solid:focus-visible,.btn-grad:focus-visible,.plan .pick.g:focus-visible,
+.btn-line:focus-visible,.btn-ghost:focus-visible,.di-btn:focus-visible{
+  outline:2px solid rgba(205,208,219,.75);
+  outline-offset:2px;
+}
+.btn-solid[disabled],.btn-grad[disabled],.dl-gh-login[disabled]{
+  opacity:.5;cursor:not-allowed;box-shadow:none;
+}
+
+/* 2.2 Контурная кнопка — та же геометрия, без второй "ступеньки". */
+.btn-line,
+.plan .pick.o,
+.btn-ghost{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  box-sizing:border-box;
+  height:var(--ctl-h);
+  min-height:var(--ctl-h);
+  padding:0 var(--ctl-px);
+  border:1px solid var(--border-2);
+  border-radius:var(--ctl-r);
+  overflow:hidden;
+  transform-style:flat;
+  font-family:var(--ui-font);
+  font-size:13.5px;
+  font-weight:600;
+  line-height:1;
+  white-space:nowrap;
+  background:rgba(255,255,255,.035);
+  transition:background .15s ease,border-color .15s ease,color .15s ease;
+}
+.btn-line,.btn-ghost,.plan .pick.o,
+.btn-line:hover,.btn-ghost:hover,.plan .pick.o:hover,
+.btn-line:active,.btn-ghost:active,.plan .pick.o:active{transform:none !important}
+.btn-line:hover,.plan .pick.o:hover,.btn-ghost:hover{
+  background:rgba(255,255,255,.075);border-color:var(--border-3);color:#fff;box-shadow:none;
+}
+.btn-line:active,.plan .pick.o:active,.btn-ghost:active{background:rgba(255,255,255,.05)}
+
+/* 2.3 Шапка: CTA и "Войти" одной высоты с пилюлей навигации. */
+.nav-cta .btn-grad,.nav-cta .btn-solid,.nav-cta .btn-line,.nav-cta .btn-ghost{
+  height:38px;min-height:38px;padding:0 16px;border-radius:999px;
+}
+.nav-cta .btn-ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.nav-cta .btn-ghost:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-links button{min-height:38px;height:38px;padding:0 16px;line-height:1}
+
+/* 2.4 Крупный вариант — только там, где кнопка одна и главная. */
+.prompt-actions .btn-grad,
+.prompt-actions .btn-solid,
+.hero .btn-grad,
+#mdBtn,
+.plan .pick{
+  height:var(--ctl-h-lg);min-height:var(--ctl-h-lg);padding:0 var(--ctl-px-lg);font-size:14px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3. КНОПКА "ОТПРАВИТЬ" (иконочная, круглая)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+#heroSendBtn.hero-send,
+.send{
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  box-sizing:border-box;
+  width:var(--ctl-h-lg);
+  height:var(--ctl-h-lg);
+  min-height:0;
+  min-width:0;
+  padding:0 !important;
+  gap:0;
+  border:0;
+  border-radius:50%;
+  overflow:hidden;
+  background:#ffffff;
+  color:#0b0b0d;
+  box-shadow:0 1px 2px rgba(0,0,0,.28);
+  transition:background .15s ease,box-shadow .15s ease;
+  transform:none !important;
+}
+#heroSendBtn.hero-send:hover,.send:hover{background:#f1f2f6;box-shadow:0 2px 10px rgba(0,0,0,.34)}
+#heroSendBtn.hero-send:active,.send:active{background:#e4e6ec}
+#heroSendBtn.hero-send svg,.send svg{
+  width:17px;height:17px;margin:0 !important;display:block;flex:0 0 auto;transform:none !important;
+}
+#heroSendBtn.hero-send:disabled,.send:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+
+/* Ряд действий в промпт-боксе: ровное выравнивание по базовой линии кнопок. */
+.prompt-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.prompt-actions{display:flex;align-items:center;gap:10px;margin-left:auto;min-width:0}
+
+/* Иконочные кнопки промпт-бокса — одна шкала с send. */
+.hero-icon-btn,.tool-btn,.icon-btn{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  box-sizing:border-box;width:var(--ctl-h);height:var(--ctl-h);min-height:0;padding:0;
+  border-radius:var(--ctl-r);transform:none !important;
+}
+.hero-icon-btn svg,.tool-btn svg,.icon-btn svg{width:17px;height:17px;transform:none !important}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4. DL CODE: единая шкала тулбара (Дизайн / Деплой / Доска и пр.)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.di-btn,
+.di-btn-chrome,
+.di-btn-danger,
+.di-title-r .di-btn,
+.di-cmdbar .di-btn{
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  box-sizing:border-box;
+  height:var(--ctl-h-sm) !important;
+  min-height:var(--ctl-h-sm) !important;
+  padding:0 var(--ctl-px-sm) !important;
+  border-radius:var(--ctl-r-sm) !important;
+  overflow:hidden !important;
+  transform-style:flat !important;
+  transform:none !important;
+  font-family:var(--ui-font) !important;
+  font-size:12.5px !important;
+  font-weight:600 !important;
+  line-height:1 !important;
+  letter-spacing:0 !important;
+  white-space:nowrap;
+  box-shadow:none !important;
+  transition:background .15s ease,border-color .15s ease,color .15s ease;
+}
+.di-btn{border:1px solid var(--border,rgba(205,208,219,.12));background:rgba(205,208,219,.05);color:#d7dae2}
+.di-btn:hover{background:rgba(205,208,219,.12);border-color:rgba(205,208,219,.25);color:#fff}
+.di-btn-chrome{border:1px solid transparent;background:#ffffff;color:#111114}
+.di-btn-chrome:hover{background:#eef0f4}
+.di-btn-chrome:active{background:#e0e2e9}
+.di-btn-danger{border:1px solid transparent;background:#e5484d;color:#fff}
+.di-btn-danger:hover{background:#f2555a}
+.di-btn .di-ico,.di-cmdbar .di-ico{margin:0 !important;width:15px;height:15px;flex:0 0 auto}
+
+/* Иконочные кнопки того же тулбара — квадрат по высоте шкалы. */
+.di-btn:has(> svg:only-child),
+#diChatSend{
+  width:var(--ctl-h-sm) !important;padding:0 !important;gap:0;
+}
+
+/* Боковые действия и статус-бар — согласованы. */
+.di-act{width:32px;height:32px;min-height:0;border-radius:var(--ctl-r-sm);transform:none !important}
+.di-act svg{width:18px;height:18px}
+.di-st-btn{
+  height:22px;padding:0 8px;border-radius:6px;
+  font:600 11px/1 var(--ui-font);transform:none !important;
+}
+.di-side-acts button{width:24px;height:24px;border-radius:6px;transform:none !important}
+
+/* Кнопки в GitHub-модалках — та же базовая шкала. */
+.gh-b{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  box-sizing:border-box;height:var(--ctl-h-sm);padding:0 var(--ctl-px-sm);
+  border-radius:var(--ctl-r-sm);font:600 12.5px/1 var(--ui-font);white-space:nowrap;
+}
+.gh-cta,.btn-solid.gh-cta{height:var(--ctl-h-lg);min-height:var(--ctl-h-lg);width:100%}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5. ШРИФТЫ: моноширинный — только в коде и терминале
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* UI-хром DL Code и эмулятора: читаемый Manrope вместо JetBrains Mono. */
+.di-title,.di-title-l,.di-title-r,
+.di-tab,.di-tabs,.di-tab-x,
+.di-tree,.di-file,.di-folder,.di-sres,
+.di-side-h,.di-side-sub,.di-badge,
+.di-crumbs,.di-crumb-proj,.di-crumb-sep,.di-crumb-file,
+.di-tree-empty,.di-modal-t,
+#diBoard .db-h,
+.ep-tabs .cnt,.ep-dev .rs,.ep-chip .n,
+#emuMeta,#emuHandle .bdg,
+.dl-cats button .n,.dl-diff-head .pill,
+.gh-devcode,
+.di-st-btn{
+  font-family:var(--ui-font) !important;
+  font-variant-ligatures:none;
+}
+
+/* Точечно поправляем метрики там, где mono задавался шорткатом font: */
+.di-sres{font:500 12.5px/1.45 var(--ui-font) !important;letter-spacing:0 !important}
+.di-tab{font:600 13px/1 var(--ui-font) !important;letter-spacing:0 !important}
+.di-file,.di-folder{font-size:13px;letter-spacing:0}
+.di-side-h,.di-side-sub{
+  font:700 11px/1.2 var(--ui-font) !important;letter-spacing:.08em !important;
+}
+#diBoard .db-h{
+  font:700 11px/1 var(--ui-font) !important;letter-spacing:.08em !important;
+}
+.di-crumbs{font:500 12px/1 var(--ui-font) !important;letter-spacing:0 !important}
+.di-badge{font:700 9.5px/1 var(--ui-font) !important;letter-spacing:.04em !important}
+.ep-tabs .cnt,.ep-dev .rs,.ep-chip .n,#emuMeta,#emuHandle .bdg{letter-spacing:.04em !important}
+#emuMeta{font-size:10.5px !important}
+.dl-cats button .n{font:700 11.5px/1 var(--ui-font) !important}
+.dl-diff-head .pill{font:700 10.5px/1 var(--ui-font) !important}
+.gh-devcode{letter-spacing:.16em !important;font-weight:800 !important}
+kbd.dl-k{font:700 10px/1 var(--ui-font) !important;letter-spacing:.02em !important}
+
+/* А вот здесь моноширинный ОСТАЁТСЯ — это настоящий код. */
+.di-code pre,.di-code textarea,.di-gut pre,
+.di-term-log,.di-term-in,
+.code-ed,.code-ed pre,.code-ed textarea,
+.dl-dl,#epLogs,
+pre code,.hl{
+  font-family:var(--code-font) !important;
+  font-variant-ligatures:none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   6. МОБИЛЬНАЯ ВЁРСТКА: ничего не выезжает за экран
+   ══════════════════════════════════════════════════════════════════════════ */
+
+html,body{max-width:100%;overflow-x:clip}
+@supports not (overflow:clip){html,body{overflow-x:hidden}}
+
+*,*::before,*::after{min-width:0}
+img,svg,video,iframe,canvas{max-width:100%}
+
+@media (max-width:900px){
+  /* Ни один блок не шире вьюпорта */
+  .nav,.hero,.section,.footer,.prompt-box,.gallery,.proj-grid,.plans{
+    max-width:100%;box-sizing:border-box;
+  }
+  .gallery,.proj-grid,.plans{grid-template-columns:1fr}
+  .section{padding-left:16px;padding-right:16px}
+  .section-head{flex-direction:column;align-items:stretch;gap:14px}
+  .search{width:100%}
+  .search input{width:100%;min-width:0}
+
+  /* Длинные строки не растягивают контейнер */
+  h1,h2,.sec-title,.hero h1{overflow-wrap:anywhere;hyphens:auto}
+  .proj-meta .pnm,.di-crumbs,.hero-model .ml{min-width:0}
+
+  /* Промпт-бокс: кнопки в колонку, send остаётся круглым */
+  .prompt-box{padding:12px;box-sizing:border-box}
+  .prompt-row{gap:8px}
+  .prompt-actions{width:100%;margin-left:0;justify-content:space-between}
+  .prompt-actions .btn-grad,.prompt-actions .btn-solid{flex:1 1 auto;min-width:0}
+  #heroSendBtn.hero-send{flex:0 0 auto}
+
+  /* Всплывающее меню моделей не должно уезжать вправо */
+  #heroModelMenu{
+    left:0 !important;right:0 !important;width:auto !important;max-width:100% !important;
+  }
+
+  /* Превью проектов масштабируется, а не торчит */
+  .proj-thumb{height:auto;aspect-ratio:16/10}
+  .proj-thumb iframe{width:100%;height:100%;transform:none;border:0}
+
+  /* Модалки и листы — в пределах экрана */
+  .modal .box,.gh-box,.di-modal-box{
+    width:min(100%,var(--modal-w,460px));max-width:calc(100vw - 24px);
+    max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;
+  }
+}
+
+@media (max-width:620px){
+  /* DL Code: сайдбар поверх, а не в потоке */
+  .di-side{width:min(280px,86vw) !important;min-width:0 !important;max-width:86vw}
+  .di-side.wide{width:min(320px,90vw) !important;min-width:0 !important}
+
+  /* Тулбар скроллится горизонтально ВНУТРИ себя, а не тянет страницу */
+  .di-title-r,.di-tabs,.di-cmdbar{
+    overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+    flex-wrap:nowrap;min-width:0;
+  }
+  .di-title-r::-webkit-scrollbar,.di-tabs::-webkit-scrollbar{display:none}
+  .di-title{min-width:0;overflow:hidden}
+  .di-title-l{min-width:0;overflow:hidden}
+  .di-title-l > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* Компактная шкала кнопок, но тап-зона остаётся 44px по вертикали */
+  .di-btn,.di-btn-chrome,.di-btn-danger{
+    height:30px !important;padding:0 10px !important;font-size:12px !important;
+  }
+  .di-btn::after{content:'';position:absolute;inset:-7px 0;pointer-events:auto}
+  .di-btn{position:relative}
+
+  /* Лишнее на телефоне прячем осознанно */
+  .di-chat-hint{display:none}
+  .bg-fx .comets,.bg-fx .a4{display:none}
+
+  /* Главные кнопки — на всю ширину, но не шире контейнера */
+  .prompt-actions{flex-direction:column;align-items:stretch;gap:10px}
+  .prompt-actions .btn-grad,
+  .prompt-actions .btn-solid,
+  .prompt-actions .btn-line{width:100%;max-width:100%}
+  #heroSendBtn.hero-send{align-self:flex-end}
+
+  /* Безопасные зоны iOS */
+  body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  .footer{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+
+  /* Таблицы и код скроллятся сами */
+  table,pre,.dl-dl{max-width:100%;overflow-x:auto;display:block}
+}
+
+/* Тап-цели не меньше 44px там, где это управление */
+@media (pointer:coarse){
+  .btn-solid,.btn-grad,.btn-line,.btn-ghost,.plan .pick{min-height:44px}
+  .hero-icon-btn,.tool-btn,.icon-btn,#heroSendBtn.hero-send,.send{
+    width:44px;height:44px;
+  }
+  .di-act{width:38px;height:38px}
+}
+
+/* Уважение к системной настройке "меньше движения" */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+    scroll-behavior:auto !important;
+  }
+}
