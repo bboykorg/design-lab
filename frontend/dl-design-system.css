@@ -16,8 +16,8 @@
   --border-3:rgba(255,255,255,.38);
 
   --text:#f4f4f4;
-  --muted:rgba(244,244,244,.66);
-  --faint:rgba(244,244,244,.44);
+  --muted:rgba(244,244,244,.78);
+  --faint:rgba(244,244,244,.60);
   --white:#ffffff;
 
   --silver:#c9c9c9;
@@ -435,7 +435,6 @@ html.dl-phone .nav{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)
 /* --- 5.1 Градиентный «хром»-текст → плотный белый.
    Такой текст прозрачен (-webkit-text-fill-color:transparent) и на части
    экранов просто исчезает. #codeTa не трогаем — там это нужно. */
-.brand .logo .lg,
 .brand-name .bn-amp,
 .hero h1 .grad,
 .sec-title,

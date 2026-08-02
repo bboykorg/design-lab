@@ -55,6 +55,7 @@ _PATCH_SCRIPTS = (
     # Закрытие нижнего листа выбора модели: тап по фону, свайп вниз, Escape.
     "dl-mobile-sheet.js",
     "dl-mobile-polish.js",
+    "dl-ui-kit.js",
 )
 
 # Листы стилей подключаются в конце документа: так они идут после всех
@@ -66,6 +67,9 @@ _PATCH_STYLES = (
     # Нижний лист выбора модели — после мобильного слоя.
     "dl-mobile-sheet.css",
     "dl-mobile-polish.css",
+    "dl-ui-kit.css",
+    "dl-ui-kit-mobile.css",
+    "dl-ui-kit-desktop.css",
 )
 _index_cache = None
 

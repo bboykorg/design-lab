@@ -1,0 +1,159 @@
+/* ============================================================================
+   Design Lab — UI Kit 2.0, телефонный слой.
+
+   На 390px в шапке одновременно жили: логотип, GitHub, «Войти»,
+   «Начать бесплатно» (в две строки) и гамбургер — пять элементов на шесть
+   сантиметров. Именно поэтому меню выглядело некрасиво: дело было не в иконке,
+   а в том, что ей не хватало воздуха.
+
+   Решение: в шапке остаются только логотип и гамбургер. Все действия —
+   внизу выдвижного меню, где для них есть место и палец не промахнётся.
+   ========================================================================= */
+
+@media (max-width:900px){
+  .nav{padding:10px 14px!important;column-gap:10px}
+  .nav .brand{gap:8px}
+  .nav-cta{gap:4px}
+  .nav-cta .gh-nav-btn,
+  .nav-cta .gh-nav-user,
+  .nav-cta #authBtn,
+  .nav-cta #ctaBtn,
+  .nav-cta .btn-solid,
+  .nav-cta .btn-grad,
+  .nav-cta .btn-ghost{display:none!important}
+  .nav-cta #dlNavToggle{display:block!important}
+}
+
+/* Логотип: марка + слово, без переносов и обрезки */
+@media (max-width:420px){
+  .nav .brand .bw{font-size:16px;letter-spacing:-.01em}
+}
+
+/* Герой-блок: бейдж не должен упираться в края экрана */
+@media (max-width:760px){
+  .hero .badge{margin-left:16px;margin-right:16px;text-align:center}
+}
+
+/* На узком экране пилюля разделов скрыта — её роль берёт выдвижное меню. */
+@media (max-width:900px){
+  .nav-links{display:none!important}
+}
+
+/* Кнопки в подвале меню — с идентификатором, иначе правила #dlNavSheet button съедают фон. */
+#dlNavSheet .dl-sheet-foot .btn-grad,
+#dlNavSheet .dl-sheet-foot .btn-grad:hover{
+  background:linear-gradient(180deg,#ffffff,#e9ebf1 62%,#dcdee6)!important;
+  color:#0b0b0d!important;
+  border:0!important;
+  font-weight:700;
+}
+#dlNavSheet .dl-sheet-foot .btn-line,
+#dlNavSheet .dl-sheet-foot .btn-line:hover{
+  background:rgba(255,255,255,.05)!important;
+  color:var(--text)!important;
+  border:1px solid var(--border-2)!important;
+}
+
+/* ============================================================
+   МОБИЛЬНАЯ АДАПТАЦИЯ — доводка деталей
+   Правила привязаны к ширине экрана, а не к классу .dl-phone:
+   класс ставится скриптом и на первом кадре его может ещё не быть.
+   ============================================================ */
+
+@media (max-width:760px){
+
+  /* --- 1. Ничто не создаёт горизонтальную прокрутку. --- */
+  html,body{max-width:100%;overflow-x:hidden}
+  img,svg,video,iframe,canvas{max-width:100%}
+  .bg-fx{overflow:hidden}
+
+  /* Длинные слова (названия моделей, пути файлов, ID) ломаются, а не рвут макет. */
+  .msg,.card .meta .t,.card .meta .d,.plan li,.feat p,.step p,.sec-sub,.hero p.sub,.toast{
+    overflow-wrap:anywhere;
+  }
+  /* Флекс-элементы по умолчанию не ужимаются уже своего содержимого. */
+  .nav,.chat-head,.composer .row,.model-pill,.hero-model{min-width:0}
+  .chat-head .tt,.chat-head .st{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* --- 2. Якоря не прячутся под липкой шапкой. --- */
+  #gallery,#how,#features,#pricing,section[id]{scroll-margin-top:72px}
+
+  /* --- 3. Подсказки под чатом — честная лента с прилипанием,
+     а не ряд, который вылезает за край. --- */
+  .suggests{
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    overflow-y:hidden;
+    scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    padding:0 16px 12px;
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);
+    mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);
+  }
+  .suggests::-webkit-scrollbar{display:none}
+  .suggests button{flex:0 0 auto;scroll-snap-align:start;max-width:82vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* --- 4. Поля ввода — 16px, иначе iOS при фокусе зумит всю страницу. --- */
+  input,textarea,select,
+  .chat-input textarea,#heroPrompt,.fld input,.dl-af-field input,.di-search input{
+    font-size:16px!important;
+  }
+
+  /* --- 5. Модалки: по ширине экрана, с внутренней прокруткой
+     и безопасными отступами под чёлку и жестовую полоску. --- */
+  .modal .box{
+    width:calc(100vw - 24px)!important;
+    max-width:calc(100vw - 24px)!important;
+    max-height:calc(100dvh - 32px);
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    margin:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  /* --- 6. Тап-зоны: минимум 44px там, где раньше было 30–36. --- */
+  .icon-btn,.tool-btn,.tb-btn,.di-btn,.modal .close,.dl-af-eye{
+    min-width:44px;
+    min-height:44px;
+  }
+  .di-node{height:34px}
+
+  /* --- 7. Карточки галереи: одна колонка, превью фиксированной пропорции,
+     чтобы лента не «прыгала» при догрузке. --- */
+  .cards{grid-template-columns:1fr!important;gap:14px}
+  .card .shot,.card .thumb{aspect-ratio:16/10;height:auto}
+
+  /* --- 8. Фильтры категорий — такая же лента без обрезки. --- */
+  .cats,.filters{
+    display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+    scroll-snap-type:x proximity;padding-inline:16px;
+  }
+  .cats::-webkit-scrollbar,.filters::-webkit-scrollbar{display:none}
+  .cats>*,.filters>*{flex:0 0 auto;scroll-snap-align:start}
+
+  /* --- 9. Редактор: шапка и низ с учётом безопасных зон. --- */
+  .chat-head{padding-top:calc(10px + env(safe-area-inset-top))}
+  .di-side{width:min(80vw,300px)}
+  .di-tabs{overflow-x:auto;scrollbar-width:none}
+  .di-tabs::-webkit-scrollbar{display:none}
+
+  /* --- 10. Типографика: шаг кегля мельче, междустрочный больше —
+     длинные русские слова читаются тяжелее английских. --- */
+  .hero h1{font-size:clamp(28px,8.6vw,38px);line-height:1.12;letter-spacing:-.025em}
+  .hero p.sub{font-size:15px;line-height:1.55}
+  .sec-title{font-size:23px;line-height:1.2}
+  .sec-sub{font-size:14px;line-height:1.55}
+  .eyebrow{font-size:11px;letter-spacing:.2em}
+
+  /* --- 11. Горизонтальные поля одинаковые у всех секций: 16px.
+     Разнобой в отступах — первое, что выдаёт неаккуратную вёрстку. --- */
+  .wrap,.section,.container{padding-left:16px;padding-right:16px}
+}
+
+/* Узкие экраны (iPhone SE и подобные). */
+@media (max-width:380px){
+  .hero h1{font-size:26px}
+  .plan .pp{font-size:28px}
+  .nav{padding-left:12px;padding-right:12px}
+  .wrap,.section,.container{padding-left:12px;padding-right:12px}
+}

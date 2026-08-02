@@ -1,0 +1,607 @@
+/* ============================================================================
+   Design Lab — UI Kit 2.0
+   Единый слой финального дизайна: кнопки, шапка, гамбургер, кнопка «назад»,
+   форма входа, проводник DL Code.
+
+   Принципы:
+   1. Монохром. Один акцент — серебро/белый. Цвет появляется только там,
+      где несёт смысл (ошибка, изменённый файл, live-индикатор).
+   2. Одна шкала отступов: 4 / 8 / 12 / 16 / 24 / 32 / 48.
+   3. Один радиус-ряд: 10px (контролы) / 14px (карточки) / 999px (пилюли).
+   4. Каждое состояние (hover / active / focus / disabled) описано явно.
+   Подключается последним — переопределяет инлайн-стили index.html.
+   ========================================================================= */
+
+:root{
+  --dl-e-out:cubic-bezier(0,0,.58,1);       /* «нажатие» кнопки */
+  --dl-e-soft:cubic-bezier(.22,1,.36,1);    /* мягкое появление */
+  --dl-r-ctl:10px;
+  --dl-r-card:14px;
+  --dl-ledge:#61646f;                        /* цвет «ступеньки» под кнопкой */
+  --dl-ledge-2:#3a3c44;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. КНОПКИ — объёмная «клавиша» вместо плоского прямоугольника.
+
+   Оригинал (uiverse learn-more) розовый и на 2px-обводке. Здесь тот же приём —
+   ступенька из ::before, на которую кнопка «садится» при нажатии, — но в
+   монохроме сайта и с меньшей амплитудой (.42em вместо .75em): на тёмном фоне
+   крупная ступенька читается как ошибка вёрстки.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* --- Главное действие: белая клавиша на серой ступеньке --- */
+.btn-solid,
+.btn-grad,
+.plan .pick.g,
+.dl-gh-login,
+.di-btn-chrome{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  overflow:visible;
+  transform-style:preserve-3d;
+  padding:12px 20px;
+  min-height:44px;
+  border:0;
+  border-radius:var(--dl-r-ctl);
+  font-size:14px;
+  font-weight:700;
+  letter-spacing:.005em;
+  color:#0b0b0d;
+  background:linear-gradient(180deg,#ffffff,#e9ebf1 62%,#dcdee6);
+  box-shadow:none;
+  transition:transform 150ms var(--dl-e-out),background 150ms var(--dl-e-out);
+}
+.btn-solid::after,
+.btn-grad::after{content:none}          /* убираем старый блик — лишний слой */
+
+.btn-solid::before,
+.btn-grad::before,
+.plan .pick.g::before,
+.dl-gh-login::before,
+.di-btn-chrome::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  border-radius:inherit;
+  background:linear-gradient(180deg,var(--dl-ledge),var(--dl-ledge-2));
+  box-shadow:0 0 0 1px rgba(205,208,219,.22);
+  transform:translate3d(0,.42em,-1em);
+  transition:transform 150ms var(--dl-e-out),box-shadow 150ms var(--dl-e-out);
+  display:block;
+}
+.btn-solid:hover,
+.btn-grad:hover,
+.plan .pick.g:hover,
+.dl-gh-login:hover,
+.di-btn-chrome:hover{
+  background:linear-gradient(180deg,#ffffff,#f3f4f8);
+  transform:translate(0,.2em);
+  box-shadow:none;
+}
+.btn-solid:hover::before,
+.btn-grad:hover::before,
+.plan .pick.g:hover::before,
+.dl-gh-login:hover::before,
+.di-btn-chrome:hover::before{transform:translate3d(0,.22em,-1em)}
+
+.btn-solid:active,
+.btn-grad:active,
+.plan .pick.g:active,
+.dl-gh-login:active,
+.di-btn-chrome:active{transform:translate(0,.42em)}
+.btn-solid:active::before,
+.btn-grad:active::before,
+.plan .pick.g:active::before,
+.dl-gh-login:active::before,
+.di-btn-chrome:active::before{transform:translate3d(0,0,-1em)}
+
+.btn-solid[disabled],.btn-grad[disabled],.dl-gh-login[disabled]{
+  opacity:.55;cursor:progress;transform:none;
+}
+.btn-solid[disabled]::before,.btn-grad[disabled]::before,.dl-gh-login[disabled]::before{
+  transform:translate3d(0,.42em,-1em);
+}
+
+/* --- Второстепенное действие: контурная клавиша с той же механикой --- */
+.btn-line,
+.plan .pick.o,
+.btn-ghost{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  overflow:visible;
+  transform-style:preserve-3d;
+  padding:11px 18px;
+  min-height:44px;
+  border:1px solid var(--border-2);
+  border-radius:var(--dl-r-ctl);
+  font-size:14px;
+  font-weight:600;
+  color:var(--text);
+  background:rgba(255,255,255,.035);
+  transition:transform 150ms var(--dl-e-out),background 150ms var(--dl-e-out),border-color 150ms var(--dl-e-out);
+}
+.btn-line::before{content:none}          /* старый блик не нужен */
+.btn-line::after,
+.plan .pick.o::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  border-radius:inherit;
+  background:rgba(205,208,219,.10);
+  box-shadow:0 0 0 1px var(--border);
+  transform:translate3d(0,.3em,-1em);
+  transition:transform 150ms var(--dl-e-out);
+}
+.btn-line:hover,
+.plan .pick.o:hover,
+.btn-ghost:hover{
+  background:rgba(255,255,255,.075);
+  border-color:var(--border-3);
+  color:#fff;
+  transform:translate(0,.14em);
+  box-shadow:none;
+}
+.btn-line:hover::after,
+.plan .pick.o:hover::after{transform:translate3d(0,.16em,-1em)}
+.btn-line:active,
+.plan .pick.o:active,
+.btn-ghost:active{transform:translate(0,.3em)}
+.btn-line:active::after,
+.plan .pick.o:active::after{transform:translate3d(0,0,-1em)}
+
+/* «Войти» в шапке — текстовая кнопка, без ступеньки: она не главное действие */
+.nav-cta .btn-ghost{
+  border-color:transparent;
+  background:transparent;
+  padding:11px 14px;
+  font-weight:600;
+  color:var(--muted);
+}
+.nav-cta .btn-ghost:hover{background:rgba(255,255,255,.07);color:#fff;transform:none}
+
+/* Мелкие утилитарные кнопки: без объёма, только чёткие состояния */
+.suggests button,.chip,.tb-btn,.di-btn,.tool-btn,.icon-btn{
+  border-radius:var(--dl-r-ctl);
+  transition:background .16s var(--dl-e-soft),border-color .16s var(--dl-e-soft),color .16s var(--dl-e-soft),transform .16s var(--dl-e-soft);
+}
+.suggests button:hover,.chip:hover,.tb-btn:hover,.di-btn:hover{transform:translateY(-1px)}
+.suggests button:active,.chip:active,.tb-btn:active,.di-btn:active{transform:translateY(0) scale(.985)}
+
+/* На телефоне объём выключаем: палец и так даёт обратную связь,
+   а ступенька крадёт 7px высоты в тесной шапке. */
+html.dl-phone .btn-solid::before,
+html.dl-phone .btn-grad::before,
+html.dl-phone .plan .pick.g::before,
+html.dl-phone .btn-line::after,
+html.dl-phone .plan .pick.o::after{display:none}
+html.dl-phone .btn-solid:hover,
+html.dl-phone .btn-grad:hover,
+html.dl-phone .btn-line:hover{transform:none}
+html.dl-phone .btn-solid:active,
+html.dl-phone .btn-grad:active,
+html.dl-phone .btn-line:active{transform:scale(.97)}
+
+@media (prefers-reduced-motion:reduce){
+  .btn-solid,.btn-grad,.btn-line,.plan .pick{transition:none}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. ВЕРХНЯЯ ПАНЕЛЬ — пункты собраны в одну стеклянную «пилюлю».
+
+   На третьем скриншоте пункты висели в пустоте и визуально сливались с
+   контентом. Пилюля даёт им общую границу и явное активное состояние,
+   но без цветного стекла из оригинала: синий бы поспорил с монохромом сайта.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nav{padding:12px 32px;column-gap:24px}
+.nav.scrolled{padding:9px 32px}
+
+.nav-links{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding:4px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.035);
+  backdrop-filter:blur(12px) saturate(140%);
+  -webkit-backdrop-filter:blur(12px) saturate(140%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+}
+.nav-links button{
+  position:relative;
+  padding:9px 16px;
+  min-height:38px;
+  border-radius:999px;
+  font-size:14px;
+  font-weight:600;
+  letter-spacing:-.005em;
+  color:var(--muted);
+  background:transparent;
+  transition:color .18s var(--dl-e-soft),background .18s var(--dl-e-soft);
+}
+.nav-links button::after{content:none}   /* подчёркивание заменено пилюлей */
+.nav-links button:hover{color:#fff;background:rgba(255,255,255,.07)}
+.nav-links button.dl-on{
+  color:#0c0c0e;
+  background:linear-gradient(180deg,#ffffff,#dfe2ea);
+  box-shadow:0 1px 8px rgba(230,234,245,.18);
+}
+.nav-cta{gap:10px}
+
+@media (max-width:1080px){
+  .nav{padding:12px 20px;column-gap:14px}
+  .nav-links button{padding:9px 12px;font-size:13.5px}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. ГАМБУРГЕР — три полосы, складывающиеся в крест от левого края.
+
+   Скриншот с телефона: кнопка была квадратной плашкой с рамкой и терялась
+   рядом с логотипом. Убираем рамку и фон — остаются только линии, как в
+   присланном коде. Тап-зона при этом остаётся 44×44.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#dlNavToggle{
+  position:relative;
+  width:44px;height:44px;
+  padding:0;
+  border:0!important;
+  background:transparent!important;
+  border-radius:12px;
+  flex:none;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .16s var(--dl-e-soft);
+}
+#dlNavToggle:active{background:rgba(255,255,255,.07)!important}
+#dlNavToggle span{
+  position:absolute;
+  left:11px;
+  display:block;
+  width:22px;height:2.5px;
+  margin:0!important;
+  border-radius:9px;
+  background:var(--text);
+  transform-origin:left center;
+  transition:transform .25s var(--dl-e-soft),opacity .18s linear,width .25s var(--dl-e-soft);
+}
+#dlNavToggle span:nth-child(1){top:14px}
+#dlNavToggle span:nth-child(2){top:21px}
+#dlNavToggle span:nth-child(3){top:28px}
+#dlNavToggle[aria-expanded="true"] span:nth-child(1){transform:rotate(45deg) translate(1px,-1px)}
+#dlNavToggle[aria-expanded="true"] span:nth-child(2){width:0;opacity:0}
+#dlNavToggle[aria-expanded="true"] span:nth-child(3){transform:rotate(-45deg) translate(1px,1px)}
+
+/* --- Выдвижное меню: полноценный лист, а не полоска поверх шапки --- */
+#dlNavSheet{
+  top:0;left:0;right:0;
+  padding:calc(70px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom))!important;
+  gap:2px;
+  background:linear-gradient(180deg,#0b0b0d,#08080a)!important;
+  border-bottom:1px solid var(--border-2);
+  box-shadow:0 30px 60px -30px rgba(0,0,0,.9);
+}
+#dlNavSheet button{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  min-height:52px;
+  padding:14px 12px!important;
+  border-radius:12px;
+  font-size:17px!important;
+  font-weight:600;
+  color:var(--text);
+  text-align:left;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+#dlNavSheet button:last-of-type{border-bottom:0}
+#dlNavSheet button::before{
+  content:attr(data-i);
+  min-width:22px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  color:var(--faint);
+}
+#dlNavSheet button::after{
+  content:'';
+  margin-left:auto;
+  width:7px;height:7px;
+  border-right:1.5px solid var(--faint);
+  border-top:1.5px solid var(--faint);
+  transform:rotate(45deg);
+}
+#dlNavSheet button:active{background:rgba(255,255,255,.06)}
+#dlNavSheet .dl-sheet-foot{
+  display:flex;
+  gap:10px;
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid var(--border);
+}
+#dlNavSheet .dl-sheet-foot button{
+  flex:1;
+  justify-content:center;
+  min-height:48px;
+  border-bottom:0;
+  font-size:15px!important;
+  text-align:center;
+}
+#dlNavSheet .dl-sheet-foot button::before,
+#dlNavSheet .dl-sheet-foot button::after{content:none}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. КНОПКА «НАЗАД» — кольцо со скользящей стрелкой.
+
+   Механика из присланного кода сохранена (две стрелки в ленте, лента едет
+   влево, кольцо схлопывается и сменяется акцентным), но диаметр уменьшен с
+   76px до 44px: в шапке редактора рядом с названием шаблона 76px — это
+   половина высоты панели.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dl-back{
+  position:relative;
+  display:block;
+  width:44px;height:44px;
+  padding:0;
+  overflow:hidden;
+  border:0!important;
+  background:transparent!important;
+  flex:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.dl-back::before,
+.dl-back::after{
+  content:'';
+  position:absolute;
+  inset:3px;
+  border-radius:50%;
+}
+.dl-back::before{
+  border:1.6px solid var(--border-3);
+  transition:opacity .4s cubic-bezier(.77,0,.175,1) 80ms,
+             transform .5s cubic-bezier(.455,.03,.515,.955) 80ms;
+}
+.dl-back::after{
+  border:2px solid #ffffff;
+  opacity:0;
+  transform:scale(1.3);
+  transition:opacity .4s cubic-bezier(.165,.84,.44,1),
+             transform .5s cubic-bezier(.25,.46,.45,.94);
+}
+.dl-back:hover::before,.dl-back:focus-visible::before{
+  opacity:0;transform:scale(.7);
+  transition:opacity .4s cubic-bezier(.165,.84,.44,1),
+             transform .5s cubic-bezier(.25,.46,.45,.94);
+}
+.dl-back:hover::after,.dl-back:focus-visible::after{
+  opacity:1;transform:scale(1);
+  transition:opacity .4s cubic-bezier(.77,0,.175,1) 80ms,
+             transform .5s cubic-bezier(.455,.03,.515,.955) 80ms;
+}
+.dl-back-box{
+  position:absolute;
+  top:0;left:0;
+  display:flex;
+  transition:transform .4s var(--dl-e-soft);
+}
+.dl-back-el{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;height:18px;
+  margin:13px 13px 0 13px;
+  flex:none;
+  color:var(--text);
+}
+.dl-back-el svg{width:18px;height:18px;fill:currentColor}
+.dl-back:hover .dl-back-box,
+.dl-back:focus-visible .dl-back-box{transform:translateX(-44px)}
+.dl-back:hover .dl-back-el,
+.dl-back:focus-visible .dl-back-el{color:#fff}
+.dl-back:active{transform:scale(.94)}
+@media (prefers-reduced-motion:reduce){
+  .dl-back-box,.dl-back::before,.dl-back::after{transition:none}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. ВХОД / РЕГИСТРАЦИЯ.
+
+   От присланной формы взята суть: тёмная карточка, поля с внутренней тенью и
+   иконкой, действия в ряд. Изменено осознанно:
+   • hover-масштаб карточки убран — модалка не должна прыгать под курсором;
+   • «Login / Sign Up» превращены в переключатель режима: две кнопки-сабмита
+     рядом заставляли гадать, какая из них нужна;
+   • «Forgot password» больше не красный: красный = ошибка, а не действие.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#modal .box:has(.dl-af){max-width:400px;padding:24px}
+.dl-af{display:flex;flex-direction:column;gap:12px;text-align:left}
+
+.dl-af-tabs{
+  display:flex;
+  gap:4px;
+  padding:4px;
+  margin-bottom:4px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(0,0,0,.35);
+}
+.dl-af-tabs button{
+  flex:1;
+  min-height:40px;
+  border:0;
+  border-radius:999px;
+  font-size:14px;
+  font-weight:600;
+  color:var(--muted);
+  background:transparent;
+  transition:background .18s var(--dl-e-soft),color .18s var(--dl-e-soft);
+}
+.dl-af-tabs button:hover{color:#fff}
+.dl-af-tabs button[aria-selected="true"]{
+  color:#0c0c0e;
+  background:linear-gradient(180deg,#ffffff,#dfe2ea);
+}
+
+.dl-af-field{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:0 14px;
+  min-height:48px;
+  border:1px solid transparent;
+  border-radius:12px;
+  background:#121214;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.75);
+  transition:border-color .18s var(--dl-e-soft),box-shadow .18s var(--dl-e-soft);
+}
+.dl-af-field:focus-within{
+  border-color:var(--border-3);
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.75),0 0 0 3px rgba(205,208,219,.08);
+}
+.dl-af-field svg{width:16px;height:16px;flex:none;fill:var(--faint)}
+.dl-af-field:focus-within svg{fill:var(--text)}
+.dl-af-field input{
+  width:100%;
+  min-height:46px;
+  border:0;
+  outline:none;
+  background:none;
+  color:var(--text);
+  font-size:15px;
+}
+.dl-af-field input::placeholder{color:var(--faint)}
+.dl-af-field.err{border-color:rgba(229,100,88,.7)}
+.dl-af-eye{
+  width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  border:0;border-radius:8px;
+  background:transparent;
+  color:var(--faint);
+  cursor:pointer;
+  flex:none;
+}
+.dl-af-eye:hover{background:rgba(255,255,255,.07);color:var(--text)}
+
+.dl-af-hint{font-size:12.5px;color:var(--faint);line-height:1.45;margin:-4px 2px 0}
+.dl-af-hint.err{color:#f08b81}
+.dl-af-submit{width:100%;margin-top:6px}
+.dl-af-alt{
+  align-self:center;
+  min-height:40px;
+  padding:8px 12px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:var(--faint);
+  font-size:13px;
+  cursor:pointer;
+  transition:color .16s var(--dl-e-soft),background .16s var(--dl-e-soft);
+}
+.dl-af-alt:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.dl-gh-login{width:100%;margin:0}
+.dl-auth-or{margin:2px 0}
+.dl-auth-or span{background:#141416}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. ПРОВОДНИК DL Code — дерево с направляющими линиями.
+
+   Присланный компонент светлый; здесь он переведён в чёрную тему редактора.
+   Ключевое из оригинала: вертикальная линия уровня, короткий «усик» к каждому
+   узлу, иконка папки, меняющаяся при раскрытии, и выделение активного файла.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.di-side{background:#08080a}
+.di-tree{padding:6px 8px 16px}
+.di-tree-empty{padding:16px 12px;color:#6f7380;font-size:12.5px}
+
+.di-node{
+  height:30px;
+  gap:8px;
+  border-radius:8px;
+  font-size:13px;
+  color:#b9bdc8;
+  transition:background .14s var(--dl-e-soft),color .14s var(--dl-e-soft);
+}
+.di-node:hover{background:rgba(205,208,219,.06);color:#e9ebf0}
+.di-node.act{background:rgba(205,208,219,.11);color:#fff;font-weight:600}
+.di-node.act::after{
+  content:'';
+  position:absolute;
+  left:0;top:6px;bottom:6px;
+  width:2px;border-radius:2px;
+  background:linear-gradient(180deg,#ffffff,#9ea3b0);
+}
+
+/* направляющая линия уровня + усик к узлу */
+.di-node::before{
+  content:'';
+  position:absolute;
+  left:calc(var(--dl-guide,0px) + 15px);
+  top:0;bottom:0;
+  width:1px;
+  background:rgba(205,208,219,.13);
+  pointer-events:none;
+}
+.di-node[data-depth="0"]::before{display:none}
+
+.di-arrow{
+  width:12px;
+  color:#7c8090;
+  font-size:0;
+  position:relative;
+  flex:none;
+}
+.di-arrow::before{
+  content:'';
+  position:absolute;
+  left:2px;top:50%;
+  width:5px;height:5px;
+  border-right:1.4px solid currentColor;
+  border-bottom:1.4px solid currentColor;
+  transform:translateY(-50%) rotate(-45deg);
+  transition:transform .2s var(--dl-e-soft);
+}
+.di-dir.open>.di-arrow::before{transform:translateY(-60%) rotate(45deg)}
+.di-dir:hover .di-arrow{color:#d7dae2}
+
+.di-dir-ico{display:inline-flex;align-items:center;color:#8d92a0;filter:none;opacity:1}
+.di-dir-ico svg{width:15px;height:15px;display:block}
+.di-dir.open>.di-dir-ico{color:#e2e4ea}
+
+.di-fdot{width:6px;height:6px;border-radius:2px;opacity:.9}
+.di-badge{
+  background:rgba(205,208,219,.14);
+  color:#e7e9ee;
+  font-weight:700;
+  letter-spacing:.06em;
+  padding:2px 7px;
+}
+.di-chg{color:#e8b34b;font-size:10.5px}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7. ТИПОГРАФИКА И ЧИСТКА
+   Один шрифтовой ряд: Unbounded — только заголовки, Manrope — весь текст,
+   JetBrains Mono — код. Минимальный кегль интерфейса — 12.5px.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sec-title,.modal .box h3,.plan .pn,.hero h1{font-family:var(--display)}
+.eyebrow{letter-spacing:.14em;font-size:11.5px;color:var(--faint)}
+.modal .box{border-radius:var(--dl-r-card)}
+.modal .box h3{font-size:20px;letter-spacing:-.02em}
+.modal .box p{font-size:14px}
+
+/* Убираем декоративный шум, который спорит с содержанием */
+.bg-fx .scanline{display:none}
+.plan .badge-hot{letter-spacing:.1em}

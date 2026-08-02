@@ -263,22 +263,13 @@ html.dl-phone .sec-sub { font-size: 15px; line-height: 1.6; }
    No mobile guard: the defect is identical on phone, tablet and desktop.
    Selectors match the original specificity (0,3,0) and win by cascade order. */
 
-.brand .logo .lg.d {
-  top: 12px;
-  left: 8px;
-  font-size: 42px;
-}
+/* УСТАРЕЛО: буквы D / & / L больше не позиционируются вручную.
+   Логотип собран как векторная монограмма (.brand .logo .mark),
+   поэтому пересечения глифов невозможны в принципе — правки не нужны. */
 
-.brand .logo .lg.l {
-  bottom: 12px;
-  right: 8px;
-  font-size: 42px;
-}
-
-.brand .logo .lg.amp {
-  bottom: 14px;
-  left: 12px;
-  font-size: 20px;
+.brand .logo .mark {
+  /* монограмма всегда идеально вписана в плитку 118x118 */
+  overflow: visible;
 }
 
 /* 10. Тач-цели по ширине, а не только по высоте.

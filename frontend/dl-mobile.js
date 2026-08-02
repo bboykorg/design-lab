@@ -66,7 +66,9 @@
     var style = document.createElement('style');
     style.id = 'dlNavStyle';
     style.textContent = [
-      '#dlNavToggle{display:none;align-items:center;justify-content:center;width:44px;height:44px;',
+      /* flex-direction:column обязателен: без него три полоски выстраиваются в РЯД
+         и сливаются в одну черту вместо иконки гамбургера. */
+      '#dlNavToggle{display:none;flex-direction:column;align-items:center;justify-content:center;width:44px;height:44px;',
       'border:1px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);',
       'cursor:pointer;flex:none;transition:border-color .16s var(--ease),background .16s var(--ease)}',
       '#dlNavToggle:active{background:var(--surface-3)}',
@@ -93,7 +95,7 @@
          .nav-links скрываются уже с max-width:900px, а гамбургер раньше появлялся
          только с 760px. В диапазоне 761-900px (это ровно iPad в портрете, 768px)
          навигации по разделам не было вообще: ни пунктов, ни кнопки меню. */
-      '@media(max-width:' + NAV_MAX + 'px){#dlNavToggle{display:flex}#dlNavSheet{display:flex}#dlNavScrim{display:block}}',
+      '@media(max-width:' + NAV_MAX + 'px){#dlNavToggle{display:flex;flex-direction:column}#dlNavSheet{display:flex}#dlNavScrim{display:block}}',
       // display:flex/block выше перебивает user-agent-правило [hidden]{display:none},
       // из-за чего закрытый скрим накрывал весь экран и съедал все нажатия.
       '#dlNavSheet[hidden],#dlNavScrim[hidden],#dlNavToggle[hidden]{display:none!important}',

@@ -1,0 +1,125 @@
+/* ============================================================
+   Design Lab — оживление анимаций на десктопе
+   Правки в dl-design-system.css гасили анимации у серебряных
+   заголовков для всех экранов, хотя нужны они были только для
+   телефона. Здесь движение возвращается, но лишь там, где есть
+   мышь и достаточная ширина, и всегда с уважением к настройке
+   «меньше движения».
+   ============================================================ */
+
+@media (min-width:901px) and (prefers-reduced-motion:no-preference){
+
+  /* --- 1. Заголовок первого экрана: перелив + мягкое свечение. --- */
+  html:not(.dl-phone) .hero h1 .grad{
+    background:var(--chrome-h)!important;
+    background-size:240% auto!important;
+    -webkit-background-clip:text!important;
+    background-clip:text!important;
+    -webkit-text-fill-color:transparent!important;
+    color:transparent!important;
+    filter:drop-shadow(0 0 16px rgba(214,220,240,.45))!important;
+    animation:sheen 6s linear infinite,glowPulse 4.5s ease-in-out infinite!important;
+  }
+
+  /* --- 2. Заголовки секций. --- */
+  html:not(.dl-phone) .sec-title{
+    background-image:var(--chrome-h)!important;
+    background-size:220% auto!important;
+    -webkit-background-clip:text!important;
+    background-clip:text!important;
+    -webkit-text-fill-color:transparent!important;
+    color:transparent!important;
+    filter:drop-shadow(0 0 12px rgba(210,216,238,.3))!important;
+    animation:sheen 7s linear infinite!important;
+  }
+
+  /* --- 3. Акцентный серебряный текст и марка в подвале. --- */
+  html:not(.dl-phone) .silver-glow{
+    background:linear-gradient(110deg,#eef0f6 0%,#c8cbd4 24%,#ffffff 50%,#aeb2bf 74%,#eef0f6 100%)!important;
+    background-size:220% auto!important;
+    -webkit-background-clip:text!important;
+    background-clip:text!important;
+    -webkit-text-fill-color:transparent!important;
+    color:transparent!important;
+    filter:drop-shadow(0 0 10px rgba(214,220,240,.45))!important;
+    animation:sheen 5s linear infinite,glowPulse 4s ease-in-out infinite!important;
+  }
+  html:not(.dl-phone) .foot-mark{
+    background:var(--chrome-h)!important;
+    background-size:220% auto!important;
+    -webkit-background-clip:text!important;
+    background-clip:text!important;
+    -webkit-text-fill-color:transparent!important;
+    color:transparent!important;
+    filter:drop-shadow(0 0 10px rgba(214,220,240,.3))!important;
+    animation:sheen 6s linear infinite!important;
+  }
+
+  /* --- 4. Цена в тарифах. --- */
+  html:not(.dl-phone) .plan .pp{
+    background:var(--chrome-h)!important;
+    background-size:220% auto!important;
+    -webkit-background-clip:text!important;
+    background-clip:text!important;
+    -webkit-text-fill-color:transparent!important;
+    color:transparent!important;
+    filter:drop-shadow(0 0 10px rgba(214,220,240,.22))!important;
+    animation:sheen 7s linear infinite!important;
+  }
+  /* Подпись под ценой остаётся плотным текстом — мелкий кегль важнее блеска. */
+  html:not(.dl-phone) .plan .pp span{
+    -webkit-text-fill-color:var(--muted)!important;
+    color:var(--muted)!important;
+  }
+
+  /* --- 5. Амперсанд в логотипе играет только при наведении. --- */
+  html:not(.dl-phone) .brand:hover .brand-name .bn-amp{
+    animation:sheen 2.6s linear infinite!important;
+  }
+
+  /* --- 6. Надзаголовки: без градиента (мелкий кегль), но с живым
+     проявлением при попадании в экран — движение без потери чтения. --- */
+  html:not(.dl-phone) .eyebrow{
+    color:var(--faint)!important;
+    -webkit-text-fill-color:var(--faint)!important;
+  }
+}
+
+/* --- 7. Фоновые слои на десктопе должны дышать. Телефон их не
+   получает: там они удалены скриптом ради батареи. --- */
+@media (min-width:901px) and (prefers-reduced-motion:no-preference){
+  html:not(.dl-phone) .bg-fx .aurora,
+  html:not(.dl-phone) .bg-fx .grid,
+  html:not(.dl-phone) .bg-fx .halo,
+  html:not(.dl-phone) .bg-fx .comets i,
+  html:not(.dl-phone) .bg-fx .stars .st,
+  html:not(.dl-phone) .bg-fx .current-grid .charge,
+  html:not(.dl-phone) .bg-fx .current-grid .spark{
+    animation-play-state:running!important;
+  }
+}
+
+/* --- 8. Отклик интерфейса на десктопе: карточки, кнопки, поля.
+   Кубическая кривая одна на весь сайт, чтобы движение читалось
+   как один почерк, а не набор случайных эффектов. --- */
+@media (min-width:901px){
+  html:not(.dl-phone) .card{
+    transition:transform .32s var(--dl-e-soft),border-color .32s var(--dl-e-soft),box-shadow .32s var(--dl-e-soft);
+  }
+  html:not(.dl-phone) .card:hover{
+    transform:translateY(-4px);
+    border-color:var(--border-2);
+    box-shadow:0 18px 44px rgba(0,0,0,.5);
+  }
+  html:not(.dl-phone) .nav-links button{
+    transition:color .2s var(--dl-e-soft),background .2s var(--dl-e-soft);
+  }
+  html:not(.dl-phone) .plan{
+    transition:transform .32s var(--dl-e-soft),border-color .32s var(--dl-e-soft);
+  }
+  html:not(.dl-phone) .plan:hover{transform:translateY(-3px);border-color:var(--border-2)}
+  html:not(.dl-phone) .feat{
+    transition:transform .32s var(--dl-e-soft),border-color .32s var(--dl-e-soft);
+  }
+  html:not(.dl-phone) .feat:hover{transform:translateY(-3px);border-color:var(--border-2)}
+}

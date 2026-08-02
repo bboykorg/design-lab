@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Design Lab — Красивые сайты с ИИ</title>
 <meta name="description" content="Design Lab — выбери премиум-шаблон или начни с нуля, опиши идею — и ИИ перепишет дизайн на глазах." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ffffff'/%3E%3Cstop offset='.45' stop-color='%23d9dce5'/%3E%3Cstop offset='.72' stop-color='%23989ba6'/%3E%3Cstop offset='1' stop-color='%23f1f2f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='%230a0a0c'/%3E%3Crect x='1' y='1' width='62' height='62' rx='14' fill='none' stroke='%233c3c45' stroke-width='1.5'/%3E%3Cg font-family='Georgia,serif' fill='url(%23g)'%3E%3Ctext x='10' y='37' font-size='36'%3ED%3C/text%3E%3Ctext x='29' y='57' font-size='36'%3EL%3C/text%3E%3Ctext x='14' y='58' font-size='16' font-style='italic'%3E%26amp%3B%3C/text%3E%3C/g%3E%3C/svg%3E" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ffffff'/%3E%3Cstop offset='.4' stop-color='%23f2f4f9'/%3E%3Cstop offset='.68' stop-color='%238f929d'/%3E%3Cstop offset='1' stop-color='%23f8f9fd'/%3E%3C/linearGradient%3E%3ClinearGradient id='b' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2326262c'/%3E%3Cstop offset='.45' stop-color='%23131316'/%3E%3Cstop offset='1' stop-color='%231c1c22'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23b)'/%3E%3Crect x='1.25' y='1.25' width='61.5' height='61.5' rx='13' fill='none' stroke='%234a4a55' stroke-width='1.4'/%3E%3Cg font-family='Georgia,%20Times New Roman,serif' fill='url(%23g)' text-anchor='middle'%3E%3Ctext x='15' y='41' font-size='25' font-weight='600'%3ED%3C/text%3E%3Ctext x='32' y='40' font-size='15' font-style='italic'%3E%26amp%3B%3C/text%3E%3Ctext x='49.5' y='41' font-size='25' font-weight='600'%3EL%3C/text%3E%3C/g%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ffffff'/%3E%3Cstop offset='.68' stop-color='%238f929d'/%3E%3Cstop offset='1' stop-color='%23f8f9fd'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%23131316'/%3E%3Cg font-family='Georgia,serif' fill='url(%23g)' text-anchor='middle'%3E%3Ctext x='15' y='41' font-size='25' font-weight='600'%3ED%3C/text%3E%3Ctext x='32' y='40' font-size='15' font-style='italic'%3E%26amp%3B%3C/text%3E%3Ctext x='49.5' y='41' font-size='25' font-weight='600'%3EL%3C/text%3E%3C/g%3E%3C/svg%3E" />
+<meta name="theme-color" content="#09090a" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://s.wordpress.com" />
@@ -15,7 +17,7 @@
   --bg:#09090a;--bg-2:#0d0d0f;
   --surface:rgba(255,255,255,.024);--surface-2:rgba(255,255,255,.05);--surface-3:rgba(255,255,255,.08);
   --border:rgba(205,208,219,.12);--border-2:rgba(205,208,219,.20);--border-3:rgba(205,208,219,.34);
-  --text:#f1f2f4;--muted:rgba(241,242,244,.56);--faint:rgba(241,242,244,.34);
+  --text:#f1f2f4;--muted:rgba(241,242,244,.70);--faint:rgba(241,242,244,.52);
   --white:#fafafa;
   --silver:#c8cbd4;--silver-dim:#9396a1;--silver-bright:#eef0f5;
   --chrome:linear-gradient(180deg,#ffffff,#e3e6ee 38%,#aeb2bf 74%,#eef0f6);
@@ -62,19 +64,26 @@ body.cursor-down #cursorDot{width:12px;height:12px}
   html.cursor-on #cursorDot,html.cursor-on #cursorRing,html.cursor-on #cursorGlow{display:block}
 }
 
-.nav{position:sticky;top:0;z-index:50;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:16px 32px;background:rgba(9,9,10,.72);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);border-bottom:1px solid var(--border)}
+.nav{position:sticky;top:0;z-index:900;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:16px 32px;background:rgba(9,9,10,.82);backdrop-filter:blur(18px) saturate(1.25);-webkit-backdrop-filter:blur(18px) saturate(1.25);border-bottom:1px solid var(--border);isolation:isolate;transition:background .28s var(--ease),border-color .28s var(--ease),box-shadow .28s var(--ease),padding .28s var(--ease)}
+/* непрозрачная подложка: шапка никогда не сливается с контентом при скролле */
+.nav::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(6,6,8,.96) 0%,rgba(8,8,10,.92) 70%,rgba(9,9,11,.86) 100%);opacity:0;transition:opacity .28s var(--ease);pointer-events:none}
+.nav.scrolled{background:rgba(7,7,9,.94);border-bottom-color:var(--border-2);box-shadow:0 10px 30px -18px rgba(0,0,0,.95),0 1px 0 rgba(255,255,255,.04) inset;padding:11px 32px}
+.nav.scrolled::before{opacity:1}
+.nav>*{position:relative;z-index:1}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.nav{background:rgba(7,7,9,.98)}}
 .brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;letter-spacing:-.01em;justify-self:start}
 /* ===== brand logo — exact copy of the Design&Lab logo spec (118px art, scaled to 38px) ===== */
 .brand .logo-fit{position:relative;width:38px;height:38px;flex:none}
 .brand .logo{position:absolute;top:0;left:0;width:118px;height:118px;border-radius:26px;transform:scale(.32203);transform-origin:0 0;background:linear-gradient(150deg,#26262c 0%,#131316 40%,#08080a 66%,#1c1c22 100%);box-shadow:inset 0 2px 1px rgba(255,255,255,.22),inset 0 -2px 2px rgba(255,255,255,.05),inset 2px 0 2px rgba(255,255,255,.07),0 8px 26px rgba(0,0,0,.7),0 0 44px rgba(200,210,240,.10);font-family:'Playfair Display',Georgia,'Times New Roman',serif;transition:transform .55s cubic-bezier(.22,1,.36,1),box-shadow .55s cubic-bezier(.22,1,.36,1);animation:dlLgBreathe 6s ease-in-out infinite}
 @keyframes dlLgBreathe{0%,100%{box-shadow:inset 0 2px 1px rgba(255,255,255,.20),inset 0 -2px 2px rgba(255,255,255,.05),0 8px 26px rgba(0,0,0,.7),0 0 30px rgba(200,210,240,.10)}50%{box-shadow:inset 0 2px 1px rgba(255,255,255,.26),inset 0 -2px 2px rgba(255,255,255,.06),0 8px 26px rgba(0,0,0,.7),0 0 50px rgba(214,220,240,.34)}}
 .brand:hover .logo{transform:scale(.32203) rotate(-4deg) scale(1.07);animation:none;box-shadow:inset 0 2px 1px rgba(255,255,255,.3),0 10px 30px rgba(0,0,0,.75),0 0 60px rgba(214,220,240,.5)}
-.brand .logo .lg{position:absolute;line-height:1;background:linear-gradient(168deg,#ffffff 6%,#eef0f5 28%,#8a8d97 56%,#f6f7fb 96%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 2px 3px rgba(0,0,0,.75));transition:transform .55s cubic-bezier(.22,1,.36,1)}
-.brand .logo .lg.d{top:14px;left:20px;font-size:62px;font-weight:600;z-index:1}
-.brand .logo .lg.l{bottom:14px;right:22px;font-size:62px;font-weight:600;z-index:2}
-.brand .logo .lg.amp{bottom:26px;left:30px;font-size:26px;font-weight:500;z-index:3;font-style:italic;filter:drop-shadow(0 0 8px rgba(214,220,240,.35)) drop-shadow(0 1px 2px rgba(0,0,0,.8))}
-.brand:hover .logo .lg.d{transform:translate(-1.5px,-1.5px)}
-.brand:hover .logo .lg.l{transform:translate(1.5px,1.5px)}
+/* Монограмма D&L — векторная, строго по центру, без рассынания букв */
+.brand .logo .mark{position:absolute;inset:0;width:100%;height:100%;z-index:3;overflow:visible;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.72))}
+.brand .logo .mark text{font-family:'Playfair Display',Georgia,'Times New Roman',serif;text-anchor:middle;dominant-baseline:alphabetic;fill:url(#lgMarkGrad);paint-order:stroke fill}
+.brand .logo .mark .mk-l1,.brand .logo .mark .mk-l2{font-size:46px;font-weight:600;letter-spacing:0}
+.brand .logo .mark .mk-amp{font-size:27px;font-weight:500;font-style:italic;opacity:.95}
+.brand .logo .mark .mk-g{transform-origin:59px 59px;transition:transform .55s cubic-bezier(.22,1,.36,1)}
+.brand:hover .logo .mark .mk-g{transform:scale(1.045)}
 .brand .logo .shine{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none;z-index:4}
 .brand .logo .shine::before{content:"";position:absolute;inset:-45%;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.20) 48%,rgba(255,255,255,.05) 53%,transparent 64%);transform:translateX(-90%) skewX(-8deg);animation:dlLgSheen 7s cubic-bezier(.45,.05,.55,.95) infinite}
 @keyframes dlLgSheen{0%,58%{transform:translateX(-90%) skewX(-8deg)}100%{transform:translateX(90%) skewX(-8deg)}}
@@ -151,7 +160,7 @@ body.cursor-down #cursorDot{width:12px;height:12px}
 .card::before{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;background:linear-gradient(120deg,transparent 40%,rgba(232,234,240,.1) 50%,transparent 60%);transform:translateX(-130%);opacity:0;transition:transform .75s var(--ease),opacity .3s var(--ease)}
 .card:hover::before{transform:translateX(130%);opacity:1}
 .card .ph{position:relative;aspect-ratio:16/10;background:linear-gradient(140deg,#151517,#0d0d0f);display:flex;align-items:center;justify-content:center;overflow:hidden}
-.card .num{font-family:var(--display);font-size:24px;font-weight:600;color:rgba(210,213,225,.13);letter-spacing:-.02em}
+.card .num{font-family:var(--display);font-size:24px;font-weight:600;color:rgba(214,218,232,.46);letter-spacing:-.02em}
 .card .load{position:absolute;bottom:12px;left:12px;display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--faint)}
 .card .sp{width:11px;height:11px;border:2px solid rgba(200,203,216,.22);border-top-color:rgba(200,203,216,.7);border-radius:50%;animation:spin 1s linear infinite}
 .card .thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;opacity:0;transition:opacity .5s var(--ease),transform .6s var(--ease)}
@@ -390,7 +399,17 @@ body.cursor-down #cursorDot{width:12px;height:12px}
 .modal .box p{color:var(--muted);font-size:14px;margin-bottom:18px;line-height:1.55}
 .modal .box .fld{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px 14px;color:var(--text);font-size:14px;outline:none;margin-bottom:12px}
 .modal .box .fld:focus{border-color:var(--border-3)}
-.modal .close{position:absolute;top:16px;right:16px;color:var(--muted)}
+/* Кнопка «Войти через GitHub» в модалке входа */
+.dl-gh-login{display:flex;width:100%;align-items:center;justify-content:center;gap:9px;padding:12px 14px;margin-bottom:14px;border-radius:11px;font-size:14px;font-weight:600;letter-spacing:-.01em;color:#0d0d10;background:linear-gradient(180deg,#ffffff,#e7e9f0 62%,#d3d6e0);border:1px solid rgba(255,255,255,.5);box-shadow:0 6px 20px -8px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.7);transition:transform .18s var(--ease),box-shadow .18s var(--ease),filter .18s var(--ease)}
+.dl-gh-login:hover{transform:translateY(-1px);box-shadow:0 10px 26px -8px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,255,255,.8)}
+.dl-gh-login:active{transform:translateY(0)}
+.dl-gh-login[disabled]{opacity:.6;cursor:progress;transform:none}
+.dl-gh-login svg{flex:none}
+.dl-auth-or{position:relative;text-align:center;margin:0 0 14px}
+.dl-auth-or::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border)}
+.dl-auth-or span{position:relative;padding:0 10px;background:#141416;color:var(--faint);font-size:12px;letter-spacing:.01em}
+.modal .close{position:absolute;top:10px;right:10px;width:44px;height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;border-radius:10px;color:var(--text);background:none;border:0;cursor:pointer;font-size:20px;line-height:1;transition:background .16s var(--ease),color .16s var(--ease)}
+.modal .close:hover{background:rgba(255,255,255,.08);color:#fff}
 .modal .close:hover{color:var(--text)}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);z-index:300;background:#141416;border:1px solid var(--border-2);padding:11px 18px;border-radius:11px;font-size:13.5px;color:var(--text);opacity:0;transition:.3s var(--ease);pointer-events:none}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -424,9 +443,7 @@ body.cursor-down #cursorDot{width:12px;height:12px}
     <div class="brand">
       <span class="logo-fit" aria-hidden="true"><span class="logo">
         <svg class="trace" viewBox="0 0 118 118" preserveAspectRatio="none"><defs><linearGradient id="lgTraceGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#d3d6e2"/><stop offset="1" stop-color="#9a9da8"/></linearGradient></defs><rect class="tr-base" x="2" y="2" width="114" height="114" rx="24" pathLength="456"/><rect class="tr-run" x="2" y="2" width="114" height="114" rx="24" pathLength="456"/></svg>
-        <span class="lg d">D</span>
-        <span class="lg amp">&amp;</span>
-        <span class="lg l">L</span>
+        <svg class="mark" viewBox="0 0 118 118" aria-hidden="true"><defs><linearGradient id="lgMarkGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".38" stop-color="#f2f4f9"/><stop offset=".66" stop-color="#8f929d"/><stop offset="1" stop-color="#f8f9fd"/></linearGradient></defs><g class="mk-g"><text class="mk-l1" x="27" y="75">D</text><text class="mk-amp" x="59" y="73">&amp;</text><text class="mk-l2" x="91" y="75">L</text></g></svg>
         <i class="shine"></i>
       </span></span>
       <div class="brand-name" aria-label="Design&amp;Lab"><span class="bn-ch">D</span><span class="bn-ex e1"><span>esign</span></span><span class="bn-amp">&amp;</span><span class="bn-ch bn-l">L</span><span class="bn-ex e2"><span>ab</span></span></div>
@@ -439,7 +456,7 @@ body.cursor-down #cursorDot{width:12px;height:12px}
     </div>
     <div class="nav-cta">
       <button class="btn-ghost" id="authBtn" onclick="openAuth()">Войти</button>
-      <button class="btn-solid" onclick="scrollTo2('gallery')">Начать бесплатно</button>
+      <button class="btn-solid" id="ctaBtn" onclick="scrollTo2('gallery')">Начать бесплатно</button>
     </div>
   </nav>
   <header class="hero">
@@ -467,7 +484,7 @@ body.cursor-down #cursorDot{width:12px;height:12px}
     <h2 class="sec-title">Как это работает</h2>
     <p class="sec-sub" style="margin-bottom:24px">Design Lab — это библиотека из 98 премиум-шаблонов + ИИ-редактор. Ты не начинаешь с пустого листа и не получаешь «ИИ-слоп» — берёшь готовый красивый дизайн и подгоняешь его под себя словами.</p>
     <div class="steps">
-      <div class="step"><div class="n">1</div><h3>Выбери основу</h3><p>Возьми один из 98 шаблонов — или просто опиши идею в строке на главном экране и начни с чистого холста.</p></div>
+      <div class="step"><div class="n">1</div><h3>Выбери основу</h3><p>Возьми один из 98 шаблонов — или просто опиши идею в строке на главном экране и начни с чи����того холста.</p></div>
       <div class="step"><div class="n">2</div><h3>Опиши идею</h3><p>В чате напиши, что менять: текст, цвета, шрифты, разделы, тон. Можно шаг за шагом.</p></div>
       <div class="step"><div class="n">3</div><h3>Смотри и скачивай</h3><p>ИИ переписывает дизайн на глазах в правом окне. Понравилось — скачай готовый HTML одним файлом.</p></div>
     </div>
@@ -591,7 +608,7 @@ const FALLBACK_ORDER=['or-nemotron','or-gemma4','or-gpt-oss','or-north-code','or
 let currentModel=localStorage.getItem('dl_model')||'or-gemma4';
 if(!MODELS[currentModel])currentModel='or-gemma4';
 const NAMES={1:"INK",2:"Axisform",3:"NEXUS Arcade",4:"Vektor",5:"Nexus Defense",6:"Novi",7:"BIRKA",8:"Nexura",9:"Vectra",10:"Novi Alt",11:"Suzuki Moto",12:"VELOS",13:"Auralis",14:"Asterix",15:"simple.ai",16:"Cadence",17:"MenoMorph",18:"Velvet",19:"RI Consulting",20:"Aero",21:"SignalOS",22:"VALER",23:"ioty",24:"ATLAS",25:"Nexora",26:"Nexus Mind",27:"NODEX",28:"Luminous",29:"PitchwithAI",30:"Signalis",31:"DesignFlow",32:"HubFit",33:"Fire Hero",34:"Sonic",35:"Runlyx",36:"KORTEX",37:"Jupiter Volta",38:"BuildAI",39:"Cyber Monday",40:"NEXUS Mobile",41:"Drive X Store",42:"Neon Oiran",43:"AURA VR",44:"GENESIS",45:"Exoflora",46:"MERIDIAN",47:"Offgrid",48:"Apex",49:"Aura Intro",50:"FoilWrap Praha",51:"Auralis Global",52:"KÁVA & Co.",53:"SERENE",54:"Soma",55:"Auden FX",56:"AEX Alpine",57:"MONOLITH",58:"Ankush Mehra",59:"Positiv+",60:"Danlpet",61:"TravelAI",62:"Fluxora",63:"Forge",64:"Aura Canvas",65:"Rhythm-Style",66:"RoysCompany",67:"Kabovelo",68:"Sequra",69:"RAFF.STUDIO",70:"Lunar Rhythm",71:"Revolt",72:"Lumière Films",73:"CharisLooks",74:"MarineElite",75:"The Estate",76:"Dinevo",77:"Estetico Café",78:"PLANET FOOD",79:"Prosperity Island",80:"Modak",81:"Velvet Origin",82:"Madge",83:"Sangria Raipur",84:"ØDE Atelier",85:"AETHERIS",86:"Nature's Beauty",87:"CIRON C1",88:"LumaLoop",89:"NOVAFALL: IRIS",90:"NeuroSync",91:"Substance Lab",92:"Bloom",93:"AQUARIA",94:"Музей Египта",95:"AEON",96:"Koisei",97:"CoinCompass",98:"Ла Мартина"};
-const DESC={1:"WebGL-флюид: живые чернила тянутся за курсором",2:"Независимая дизайн-студия: строгая сетка, крупная типографика",3:"«Аркада идей»: дерзкие заголовки и неоновая динамика",4:"ИИ-инфраструктура: «системы, что думают быстрее тебя»",5:"Sci-fi «оборонная сеть» с HUD-эстетикой и глитчем",6:"Автоматизация соцсетей: разговоры превращаются в рост",7:"Премиум-агентство outdoor-продаж, уверенный тон",8:"Рекламные креативы с фокусом на конверсию и рост",9:"Digital-агентство: «мы проектируем ускорение»",10:"Альтернативная версия платформы Novi",11:"Драйвовый промо мотоцикла: характер, скорость, эмоция",12:"«Межзвёздная логистика»: тёмный космический sci-fi",13:"Креативные экосистемы глобального масштаба",14:"Студия веб-опыта: «строим веб завтрашнего дня»",15:"Агентный ИИ-маркетинг и автономный рост",16:"Revenue-платформа: аналитика выручки в одном экране",17:"Health-tech: трекинг данных организма и изменений",18:"Минималистичная бархатная заставка-приветствие",19:"ИИ-автоматизация бизнеса: умные системы, больший возврат",20:"Визуальная веб-разработка: лёгкая воздушная подача",21:"Live-сигналы, мгновенно превращённые в действия",22:"Капитал: «растить безжалостно, защищать абсолютно»",23:"Витрина глобальных IoT-стартапов и прорывов",24:"Коучинг руководителей: от оператора к владельцу",25:"Digital-продукты, которые приносят результат",26:"Образовательный лендинг «расширь сознание»",27:"Операционная система для корпоративного ИИ",28:"SEO-эксперты: заметность в поиске",29:"Продажи на автопилоте: ИИ-оркестрация сделок",30:"Observability: найди сигнал сквозь шум вовремя",31:"Дизайн → production-код автоматически",32:"Платформа для коучей: будущее тренерского бизнеса",33:"Огненный hero-экран: «зажги творческий потенциал»",34:"ИИ-генерация музыкальных стемов по промпту",35:"Dev-инструмент: решай быстрее, релизь умнее",36:"Нейро-киберпанк: «нейронная ткань кибер-реальности»",37:"Энергосеть будущего: бесконечная мощность, ноль задержек",38:"ИИ собирает продукт целиком — от фронта до бэка",39:"Хакерский промо «SYSTEM COMPROMISED» для распродажи",40:"Маркетплейс мобильных устройств без границ",41:"Премиум-маркетплейс цифровых ассетов",42:"Кибергейша: неоновый лендинг action-RPG",43:"Студия VR-игр и виртуальных миров",44:"«Интеллект, выращенный» — арт-манифест ИИ",45:"Парфюм «аромат из другого мира», инопланетная флора",46:"Кураторские путешествия к краям карты",47:"Бруталистское креативное агентство, жёсткий гротеск",48:"Growth-студия: «раскрой потенциал» с плюс-эстетикой",49:"Концепт-заставка «контекст прежде холста»",50:"Оклейка авто плёнкой: чешский премиум-детейлинг",51:"Глобальный нексус — расширенная версия Auralis",52:"Кофейня: «новая эра кофе», уют и крафт",53:"Частный остров: «нигде, доведённое до совершенства»",54:"Бутик-студия йоги: искусство тишины",55:"Индикатор ACRCandel: трейдинг и менторство",56:"Альпийское снаряжение: «покори неизведанное»",57:"Архитектурная студия: определяем цифровую форму",58:"Портфолио разработчика ИИ и голосовых агентов",59:"Бесшовный digital: liquid-эффекты и плавность",60:"Агентство «мы создаём цифровую радость»",61:"ИИ-консьерж: маршруты путешествий по запросу",62:"Applied intelligence: продуманный дизайн, доставленный рост",63:"Премиум-фитнес: «куй свои пределы»",64:"Карты идей как измеримая система",65:"Инфлюенсер-маркетинг: «мы сводим бренды и людей»",66:"ИИ-системы: глобальная инженерная подача",67:"Кинопродакшн: визуал, который резонирует",68:"Финансовая аналитика: «ясность — наш медиум»",69:"Hero-концепт студии с гигантской типографикой",70:"Практики в ритме луны: мягкость и движение",71:"Социальная digital-инициатива: «мы — импакторы»",72:"Люксовые свадебные фильмы и фотография",73:"Бьюти-студия: «мастерство и сердце»",74:"Яхт-центр: роскошь, приключения, незабываемые моменты",75:"Винодельня: «где вино встречает сезоны»",76:"Ресторан: элегантность встречает вкус",77:"Кафе: свежая еда, тёпл��е моменты",78:"Фастфуд с 2009 года: дерзко и аппетитно",79:"Ресторан островной кухни Prosperity Island",80:"Кафе-ресторан: «good food — good life»",81:"Сенсорный чайный хаб: «глотни тишину»",82:"Кухня с нуля: «почувствуй вкус момента»",83:"Руфтоп-бар: вкусы встречают горизонт",84:"Архитектура сдержанности: монохромный минимализм",85:"Блокчейн L1 и DAG-протокол: «бесконечность»",86:"Цветочная эстетика: «цвети элегантно»",87:"Велосипед C1: спроектирован ради скорости",88:"Промпт-музыка: ядро генерации стемов",89:"Игровой синематик: «революция начинается»",90:"Когнитивный ИИ: думай умнее, работай лучше",91:"Дизайн-студия: материя, свет и смелая типографика",92:"Премиальная галерея цветов: воздух и нежность",93:"«Последняя поверхность»: глубоководный sci-fi",94:"Кинематографичный скролл по залам Древнего Египта",95:"Темпоральная обсерватория: время как интерфейс",96:"Koisei: река, которая хранит память цв��тения",97:"Криптогид: курсы, портфели и сигналы рынка",98:"Кабанья в Сабанагранде: роскошь среди природы"};
+const DESC={1:"WebGL-флюид: живые чернила тянутся за курсором",2:"Независимая дизайн-студия: строгая сетка, крупная типографика",3:"«Аркада идей»: дерзкие з��головки и неоновая динамика",4:"ИИ-инфраструктура: «системы, что думают быстрее тебя»",5:"Sci-fi «оборонная сеть» с HUD-эстетикой и глитчем",6:"Автоматизация соцсетей: разговоры превращаются в рост",7:"Премиум-агентство outdoor-продаж, уверенный тон",8:"Рекламные креативы с фокусом на конверсию и рост",9:"Digital-агентство: «мы проектируем ускорение»",10:"Альтернативная версия платформы Novi",11:"Драйвовый промо мотоцикла: характер, скорость, эмоция",12:"«Межзвёздная логистика»: тёмный космический sci-fi",13:"Креативные экосистемы глобального масштаба",14:"Студия веб-опыта: «строим веб завтрашнего дня»",15:"Агентный ИИ-маркетинг и автономный рост",16:"Revenue-платформа: аналитика выручки в одном экране",17:"Health-tech: трекинг данных организма и изменений",18:"Минималистичная бархатная заставка-приветствие",19:"ИИ-автоматизация бизнеса: умные системы, больший возврат",20:"Визуальная веб-разработка: лёгкая воздушная подача",21:"Live-сигналы, мгновенно превращённые в действия",22:"Капитал: «растить безжалостно, защищать абсолютно»",23:"Витрина глобальных IoT-стартапов и прорывов",24:"Коучинг руководителей: от оператора к владельцу",25:"Digital-продукты, которые приносят результат",26:"Образовательный лендинг «расширь сознание»",27:"Операционная система для корпоративного ИИ",28:"SEO-эксперты: заметность в поиске",29:"Продажи на автопилоте: ИИ-оркестрация сделок",30:"Observability: найди сигнал сквозь шум вовремя",31:"Дизайн → production-код автоматически",32:"Платформа для коучей: будущее тренерского бизнеса",33:"Огненный hero-экран: «зажги творческий потенциал»",34:"ИИ-генерация музыкальных стемов по промпту",35:"Dev-инструмент: решай быстрее, релизь умнее",36:"Нейро-киберпанк: «нейронная ткань кибер-реальности»",37:"Энергосеть будущего: бесконечная мощность, ноль задержек",38:"ИИ собирает продукт целиком — от фронта до бэка",39:"Хакерский промо «SYSTEM COMPROMISED» для распродажи",40:"Марке��плейс мобильных устройств без границ",41:"Премиум-маркетплейс цифровых ассетов",42:"Кибергейша: неоновый лендинг action-RPG",43:"Студия VR-игр и виртуальных миров",44:"«Интеллект, выращенный» — арт-манифест ИИ",45:"Парфюм «аромат из другого мира», инопланетная флора",46:"Кураторские путешествия к краям карты",47:"Бруталистское креативное агентство, жёсткий гротеск",48:"Growth-студия: «раскрой потенциал» с плюс-эстетикой",49:"Концепт-заставка «контекст прежде холста»",50:"Оклейка авто плёнкой: чешский премиум-детейлинг",51:"Глобальный нексус — расширенная версия Auralis",52:"Кофейня: «новая эра кофе», уют и крафт",53:"Частный остров: «нигде, доведённое до совершенства»",54:"Бутик-студия йоги: искусство тишины",55:"Индикатор ACRCandel: трейдинг и менторство",56:"Альпийское снаряжение: «покори неизведанное»",57:"Архитектурная студия: определяем цифровую форму",58:"Портфолио разработчика ИИ и голосовых агентов",59:"Бесшовный digital: liquid-эффекты и плавность",60:"Агентство «мы создаём цифровую радость»",61:"ИИ-консьерж: маршруты путешествий по запросу",62:"Applied intelligence: продуманный дизайн, доставленный рост",63:"Премиум-фитнес: «куй свои пределы»",64:"Карты идей как измеримая система",65:"Инфлюенсер-маркетинг: «мы сводим бренды и людей»",66:"ИИ-системы: глобальная инженерная подача",67:"Кинопродакшн: визуал, кото��ый резонирует",68:"Финансовая аналитика: «ясность — наш медиум»",69:"Hero-концепт студии с гигантской типографикой",70:"Практики в ритме луны: ��ягкость и движение",71:"Социальная digital-инициатива: «мы — импакторы»",72:"Люксовые свадебные фильмы и фотография",73:"Бьюти-студия: «мастерство и сердце»",74:"Яхт-центр: роскошь, приключения, незабываемые моменты",75:"Винодельня: «где вино встречает сезоны»",76:"Ресторан: элегантность встречает вкус",77:"Кафе: свежая еда, тёпл��е моменты",78:"Фастфуд с 2009 года: дерзко и аппетитно",79:"Ресторан островной кухни Prosperity Island",80:"Кафе-ресторан: «good food — good life»",81:"Сенсорный чайный хаб: «глотни тишину»",82:"Кухня с нуля: «почувствуй вкус моме��т��»",83:"Руфтоп-бар: вкусы встречают горизонт",84:"Архитектура сдержанности: монохромный минимализм",85:"Блокчейн L1 и DAG-протокол: «бесконечность»",86:"Цветочная эстетика: «цвети элегантно»",87:"Велосипед C1: спроектирован ради скорости",88:"Промпт-музыка: ядро генерации стемов",89:"Игровой синематик: «революция начинается»",90:"Когнитивный ИИ: думай умнее, работай лучше",91:"Дизайн-студия: материя, свет и смелая типографика",92:"Премиальная галерея цветов: воздух и нежность",93:"«Последняя поверхность»: глубоководный sci-fi",94:"Кинематографичный скролл по залам Древнего Египта",95:"Темпоральная обсерватория: время как интерфейс",96:"Koisei: река, которая хранит памят�� цв��тения",97:"Криптогид: курсы, портфели и сигналы рынка",98:"Кабанья в Сабанагранде: роскошь среди природы"};
 function tplDesc(n){return DESC[n]||'Премиум-шаблон лендинга';}
 const TAGS=['\u043b\u0435\u043d\u0434\u0438\u043d\u0433','\u0442\u0451\u043c\u043d\u044b\u0439','\u043c\u0438\u043d\u0438\u043c\u0430\u043b\u0438\u0437\u043c','\u043f\u0440\u043e\u0434\u0443\u043a\u0442','\u0430\u0433\u0435\u043d\u0442\u0441\u0442\u0432\u043e','\u043f\u043e\u0440\u0442\u0444\u043e\u043b\u0438\u043e','SaaS','\u0441\u0442\u0430\u0440\u0442\u0430\u043f'];
 const FEATURES=[['\u25a3','98 \u043f\u0440\u0435\u043c\u0438\u0443\u043c-\u0448\u0430\u0431\u043b\u043e\u043d\u043e\u0432','\u0413\u043e\u0442\u043e\u0432\u044b\u0435 \u043a\u0440\u0430\u0441\u0438\u0432\u044b\u0435 \u0434\u0438\u0437\u0430\u0439\u043d\u044b \u2014 \u043d\u0438\u043a\u0430\u043a\u043e\u0433\u043e \u00ab\u0418\u0418-\u0441\u043b\u043e\u043f\u0430\u00bb.'],['\u2726','\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u0441\u043b\u043e\u0432\u0430\u043c\u0438','\u041e\u043f\u0438\u0448\u0438 \u0438\u0434\u0435\u044e \u2014 \u0418\u0418 \u0441\u0430\u043c \u043f\u0435\u0440\u0435\u043f\u0438\u0448\u0435\u0442 \u043a\u043e\u0434.'],['\u25d0','Live-\u043f\u0440\u0435\u0432\u044c\u044e','\u0421\u043c\u043e\u0442\u0440\u0438, \u043a\u0430\u043a \u0432\u0441\u0451 \u043c\u0435\u043d\u044f\u0435\u0442\u0441\u044f \u043d\u0430 \u0433\u043b\u0430\u0437\u0430\u0445.'],['\u21f2','\u0414\u0435\u0441\u043a\u0442\u043e\u043f \u0438 \u043c\u043e\u0431\u0430\u0439\u043b','\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u0439 \u0434\u0438\u0437\u0430\u0439\u043d \u043d\u0430 \u043b\u044e\u0431\u043e\u043c \u044d\u043a\u0440\u0430\u043d\u0435.'],['\u2699','2 \u043f\u0440\u043e\u0432\u0430\u0439\u0434\u0435\u0440\u0430 \u0418\u0418','GLM \u0438 Mistral \u2014 \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0439 \u0432 \u043e\u0434\u0438\u043d \u043a\u043b\u0438\u043a.'],['\u2193','\u042d\u043a\u0441\u043f\u043e\u0440\u0442 \u0432 1 \u0444\u0430\u0439\u043b','\u0421\u043a\u0430\u0447\u0430\u0439 \u0433\u043e\u0442\u043e\u0432\u044b\u0439 index.html.']];
@@ -759,8 +776,8 @@ var DL_AI_SYS_BASE=[
 '• Микро-детали: hover, :focus-visible, переходы 150–250ms; появление секций через IntersectionObserver (fade/slide 300–500ms).',
 '• Контент никогда не исчезает: НЕ задавай элементам opacity:0 в CSS по умолчанию — скрывай только классом, который добавляет JS перед анимацией (без JS всё должно быть видно).',
 '• Семантика и доступность: header/nav/main/section/footer, один h1, alt у картинок, <meta name=viewport>, lang="ru", контраст ≥ AA, @media (prefers-reduced-motion: reduce) отключает анимации, адаптив под мобильные.',
-'• ОХРАНЯЙ фирменные эффекты шаблона: WebGL, canvas, кастомный курсор, сложные анимации и их скрипты НЕ трогай, если запрос их не касается. Перекраска = замена цветов/CSS-переменных, а не удаление кода. Никогда не сокращай и не «упрощай» работающие скрипты.',
-'• Если сообщение пользователя — не запрос на создание или изменение сайта (приветствие, вопрос, болтовня) — НЕ возвращай HTML: ответь одной короткой дружелюбной фразой по-русски.',
+'• ОХРАН��Й фирменные эффекты шаблона: WebGL, canvas, кастомный курсор, сложные анимации и их скрипты НЕ трогай, если запрос их не касается. Перекраска = замена цветов/CSS-переменных, а не удаление кода. Никогда не сокращай и не «упрощай» работающие скрипты.',
+'• Если сообщение пользователя — не запрос на создание или изм��нение сайта (приветствие, вопрос, болтовня) — НЕ возвращай HTML: ответь одной короткой дружелюбной фразой по-русски.',
 '',
 'ФОРМАТ: верни ТОЛЬКО один цельный HTML-документ (<!DOCTYPE html> … </html>) со встроенными <style> и <script>. Без markdown, без ```, без пояснений.'
 ].join('\n');
@@ -1002,7 +1019,7 @@ document.getElementById('modal').addEventListener('click',function(e){if(e.targe
 /* italic-caps eyebrows with silver shimmer */
 .eyebrow{display:flex;align-items:center;gap:12px;font-family:var(--ital);font-style:italic;text-transform:uppercase;letter-spacing:.24em;font-size:12.5px;margin-bottom:12px;color:var(--silver)}
 .eyebrow::before{content:"";width:30px;height:1px;background:linear-gradient(90deg,transparent,var(--silver));flex:0 0 auto}
-.eyebrow{background:linear-gradient(110deg,#8e919c 0%,#ffffff 40%,#c8cbd4 58%,#8e919c 100%);background-size:220% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:sheen 6.5s linear infinite}
+.eyebrow{background:linear-gradient(110deg,#b6b9c4 0%,#ffffff 40%,#dfe2ea 58%,#b6b9c4 100%);background-size:220% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:sheen 6.5s linear infinite}
 .eyebrow::before{-webkit-text-fill-color:initial}
 
 /* hero italic-caps word */
@@ -1420,7 +1437,7 @@ async function sendMessage(){
     }else if(html&&html.length>60){
       current.html=baseHtml;renderHtml(baseHtml);
       th.fail('Ответ оборвался');
-      addAI('\u26a0\ufe0f Ответ ИИ оборвался на середине (лимит длины у модели) — незакрытый документ оставил бы «пустоту», поэтому я вернул прежнюю версию сайта. Что помогает: попроси более точечную правку (одну секцию за раз) или переключись на Nemotron 550B / Gemma 4 31B — у них более длинный выход.',true);
+      addAI('\u26a0\ufe0f Ответ ИИ оборвался на середине (лимит длины у модели) — незакрыт��й документ оставил бы «пустоту», поэтому я вернул прежнюю версию сайта. Что помогает: попроси более точечную правку (одну секцию за раз) или переключись на Nemotron 550B / Gemma 4 31B — у них более длинный выход.',true);
     }else{
       th.fail('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u0432\u0435\u0440\u043d\u0443\u043b\u0430 HTML');
       addAI(escapeHtml(out||'').slice(0,600)||'\u041c\u043e\u0434\u0435\u043b\u044c \u0432\u0435\u0440\u043d\u0443\u043b\u0430 \u043f\u0443\u0441\u0442\u043e\u0439 \u043e\u0442\u0432\u0435\u0442. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u0441\u0444\u043e\u0440\u043c\u0443\u043b\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0442\u043e\u0447\u043d\u0435\u0435.');
@@ -1682,7 +1699,7 @@ async function sendMessage(){
       var uh=htmls[htmls.length-1];
       th.line('Читаю файл «'+uh.name+'» ('+Math.max(1,Math.round(String(uh.data).length/1024))+' КБ)\u2026','act','\u21ea');
       await sleep(350);
-      th.line('Разворачиваю твой шаблон на холсте\u2026','act','\u25b6');
+      th.line('Развора��иваю твой шаблон на холсте\u2026','act','\u25b6');
       /* КЛЮЧЕВОЙ ФИКС: выходим из режима «с нуля», работаем именно с файлом юзера */
       deployUserHtml(uh.name,uh.data);
       await sleep(450);
@@ -1701,7 +1718,7 @@ async function sendMessage(){
     }
     if(!text){
       th.done('Готово');
-      addAI('Файлы получил \u2713 Напиши, что с ними сделать — например, «сделай сайт в стиле этих фото».');
+      addAI('Файлы получил \u2713 Напиши, что с ними сделать — напр��мер, «сделай сайт в стиле этих фото».');
       return;
     }
     var baseHtml=current.html||(current.id?await tryFetch(current.id):starterHtml());
@@ -1720,7 +1737,7 @@ async function sendMessage(){
       }
     },flushThink);
     var html=extractHtml(out);
-    /* защита активного пути: обрыв (нет </html>) или подозрительное усыхание документа → возвращаем прежнюю версию */
+    /* защита активного пути: обрыв (нет </html>) или подоз��ительное усыхание документа → возвращаем прежнюю версию */
     var closed=/<\/html>\s*$/i.test(html)||/<\/body>/i.test(html);
     var shrunk=!scratchMode&&(baseHtml||'').length>20000&&html&&html.length<(baseHtml||'').length*0.3;
     if(html&&html.length>60&&closed&&!shrunk){
@@ -1730,7 +1747,7 @@ async function sendMessage(){
       current.html=baseHtml;renderHtml(baseHtml);
       th.fail(closed?'Ответ подозрительно короткий':'Ответ оборвался');
       addAI('\u26a0\ufe0f '+(closed
-        ?'ИИ вернул сильно укороченную версию сайта ('+Math.round(html.length/1000)+'К вместо '+Math.round((baseHtml||'').length/1000)+'К символов) — скорее всего, он потерял часть шаблона. Я откатил к прежней версии. Попробуй точечную правку («поменяй только цвета/секцию…») или другую модель.'
+        ?'ИИ вернул сильно укороченную версию сайта ('+Math.round(html.length/1000)+'К вместо '+Math.round((baseHtml||'').length/1000)+'К символов) — скорее всего, он потерял часть шаблона. Я откатил к прежне�� версии. Попробуй точечную правку («поменяй только цвета/секцию…») или другую модель.'
         :'Ответ ИИ оборвался на середине (лимит длины у модели) — незакрытый документ оставил бы «пустоту», поэтому я вернул прежнюю версию сайта. Попробуй более точечную правку или модель с длинным ответом.'),true);
     }else{
       th.fail('Модель не вернула HTML');
@@ -1746,7 +1763,7 @@ async function sendMessage(){
       var demo=demoTransform(text||'',base2);
       if(demo){
         liveBadge(true,'Применяю локально\u2026');
-        th.line('Применяю изменения на холсте в прямом эфире\u2026','act','\u26a1');
+        th.line('Прим��няю изменения на холсте в прямом эфире\u2026','act','\u26a1');
         await sleep(500);current.html=demo;renderHtml(demo);
         th.line('Изменения на холсте \u2713','act','\u2713');
       }
@@ -1789,7 +1806,7 @@ function heroHandle(list){
   Array.prototype.forEach.call(list,function(f){
     var isHtml=/\.html?$/i.test(f.name)||f.type==='text/html';
     var isImg=(f.type||'').indexOf('image/')===0;
-    if(!isHtml&&!isImg){toast('Можно прикреплять HTML, фото или ZIP-проект. Целая папка — через «+» → Открыть папку');return;}
+    if(!isHtml&&!isImg){toast('Мож��о прикреплять HTML, фото или ZIP-проект. Целая папка — через «+» → Открыть папку');return;}
     var r=new FileReader();
     r.onload=function(){heroAtts.push({kind:isHtml?'html':'image',name:f.name,data:r.result});renderHeroStrip();heroSync();};
     if(isHtml)r.readAsText(f);else r.readAsDataURL(f);
@@ -2430,7 +2447,7 @@ body.dl-rz iframe{pointer-events:none!important}
 #cpDrag::after{content:'';position:absolute;top:0;bottom:0;left:4px;width:2px;background:transparent;transition:background .2s}
 #cpDrag:hover::after,body.dl-rz #cpDrag::after{background:#58a6ff}
 /* animated rotating hint inside the hero prompt */
-#heroPh{position:absolute;pointer-events:none;color:#6f7787;overflow:hidden;z-index:5;max-height:3.2em}
+#heroPh{position:absolute;pointer-events:none;color:#949cae;overflow:hidden;z-index:5;max-height:3.2em}
 #heroPh .ph-line{display:block;transition:opacity .55s cubic-bezier(.22,.61,.36,1),transform .55s cubic-bezier(.22,.61,.36,1),filter .55s cubic-bezier(.22,.61,.36,1);opacity:1;transform:none;filter:none}
 #heroPh.ph-out .ph-line{opacity:0;transform:translateY(-14px);filter:blur(6px)}
 #heroPh.ph-pre .ph-line{transition:none;opacity:0;transform:translateY(14px);filter:blur(6px)}
@@ -3426,7 +3443,7 @@ select.gh-inp option{background:#141419;color:var(--text)}
             + '<div class="gh-row" style="justify-content:center">'
             + '<button class="btn-ghost gh-b" onclick="ghCopyDevCode()">Скопировать код</button>'
             + '<a class="btn-solid gh-cta" style="margin:0" href="' + escapeHtml(wiz.device.verification_uri || 'https://github.com/login/device') + '" target="_blank" rel="noopener">Открыть github.com/login/device →</a></div>'
-            + '<div class="gh-wait"><span class="spinner"></span>Ожидаю подтверждения на GitHub…</div>'
+            + '<div class="gh-wait"><span class="spinner"></span>Ожидаю подтвержде��и�� на GitHub…</div>'
             + '<div class="gh-err" id="ghWizErr"></div>';
         } else {
           h += '<ol class="gh-ol">'
@@ -3437,7 +3454,7 @@ select.gh-inp option{background:#141419;color:var(--text)}
             + '<div class="gh-row"><input class="gh-inp" id="ghCidInp" placeholder="Iv1… / Ov23…" value="' + escapeHtml(cid) + '" spellcheck="false">'
             + '<button class="btn-solid" onclick="ghWizDeviceStart()">Получить код</button></div>'
             + '<div class="gh-err" id="ghWizErr"></div>'
-            + (proxy ? '' : '<div class="gh-note">⚠ Для этого способа нужен backend-прокси (задаётся в меню модели в чате) — GitHub не принимает эти запросы напрямую из браузера. Без прокси используй вкладку «Токен доступа».</div>');
+            + (proxy ? '' : '<div class="gh-note">⚠ Для этого способа нужен backend-прокси (задаётся в меню модели в чате) — GitHub не принимает эти запросы напрямую из браузера. Без прокси используй вкладку «Токен доступа��.</div>');
         }
       }
     } else {
@@ -3864,7 +3881,7 @@ select.gh-inp option{background:#141419;color:var(--text)}
     th.line('Точка входа: ' + window.currentProject.entry, 'act', '◩');
     th.line('Стили, скрипты и картинки подключены локально', 'act', '✓');
     th.done('Проект развёрнут');
-    addAI('Развернул проект <b>' + escapeHtml(name) + '</b> (' + res.files.length + ' файлов) на доске ✓ Опиши, что изменить, или нажми «Деплой», чтобы опубликовать его на GitHub.');
+    addAI('Развернул проект <b>' + escapeHtml(name) + '</b> (' + res.files.length + ' файлов) на доске ✓ Опиши, что изменить, или нажми «Деплой», чтобы опубликовать его н�� GitHub.');
   }
 
   window.ghPickProject = function (ctx) {
@@ -4012,7 +4029,7 @@ select.gh-inp option{background:#141419;color:var(--text)}
       var doneHtml = '<div class="gh-done">✓ Задеплоено: ' + ruFiles(r.count) + ' в <b>' + escapeHtml(fullName) + '</b> (' + escapeHtml(branch) + ')</div>'
         + '<div class="gh-links"><a class="gh-b lnk2" href="' + escapeHtml(r.commitUrl) + '" target="_blank" rel="noopener">Коммит →</a>'
         + '<a class="gh-b lnk2" href="https://github.com/' + escapeHtml(fullName) + '" target="_blank" rel="noopener">Репозиторий →</a>'
-        + (pagesUrl ? '<a class="gh-b lnk2 pg" href="' + escapeHtml(pagesUrl) + '" target="_blank" rel="noopener">Открыть сайт →</a>' : '')
+        + (pagesUrl ? '<a class="gh-b lnk2 pg" href="' + escapeHtml(pagesUrl) + '" target="_blank" rel="noopener">��ткрыть сайт →</a>' : '')
         + '</div>' + (pagesUrl ? '<div class="gh-note">Pages обновляется обычно за 1–2 минуты после деплоя.</div>' : '');
       document.getElementById('ghDeployBody').innerHTML = doneHtml + '<button class="btn-solid gh-cta" onclick="ghCloseDeploy()">Готово</button>';
       if (window.currentProject) window.currentProject.repo = { fullName: fullName, defaultBranch: branch };
@@ -4189,7 +4206,7 @@ select.gh-inp option{background:#141419;color:var(--text)}
     m.innerHTML =
       '<div class="gh-modal" id="ghAuthModal"><div class="gh-box">'
       + '<button class="gh-x" onclick="ghCloseAuth()" aria-label="Закрыть">✕</button>'
-      + '<div class="gh-head">' + OCTO + '<div><h3>Подключение GitHub</h3><p>Два шага: код доступа → подтверждение подключения</p></div></div>'
+      + '<div class="gh-head">' + OCTO + '<div><h3>Подключение GitHub</h3><p>Два шага: код доступа → подтверждение под��лючения</p></div></div>'
       + '<div id="ghAuthBody"></div></div></div>'
       + '<div class="gh-modal" id="ghDeployModal"><div class="gh-box">'
       + '<button class="gh-x" onclick="ghCloseDeploy()" aria-label="Закрыть">✕</button>'
@@ -4310,7 +4327,7 @@ select.gh-inp option{background:#141419;color:var(--text)}
 
 </script>
 <style>
-/* ===== unified start menu («+») ===== */
+/* ===== unified start menu (��+») ===== */
 .dl-start{position:fixed;z-index:130;width:302px;background:#141416;border:1px solid var(--border-2);border-radius:14px;padding:6px;box-shadow:0 4px 12px rgba(0,0,0,.4),0 30px 70px -24px rgba(0,0,0,.9);display:none}
 .dl-start.on{display:block;animation:fadeUp .18s var(--ease) both}
 .dl-start.up.on{animation:dlFadeDn .18s var(--ease) both}
@@ -5056,7 +5073,7 @@ body.di-lock{overflow:hidden}
         return ok(dim('папка создана: ') + cy(esc(n) + '/'));
       },
       touch: function (a) {
-        if (!a[0]) return err('touch: укажи имя файла');
+        if (!a[0]) return err('touch: укажи им�� файла');
         var n = IDE.join(cwd, a[0]);
         if (fileRec(a[0])) return ok(dim('файл уже существует: ' + esc(n)));
         env.write(n, '');
@@ -5290,7 +5307,7 @@ body.di-lock{overflow:hidden}
 
   /* =============== монтирование и предпросмотр =============== */
   // Улучшенный алгоритм разворачивания: кроме картинок/CSS/JS монтируем
-  // И все HTML-страницы (в два прохода), чтобы ссылки между страницами работали.
+  // И все HTML-страницы (в два прохода), чтобы ссылки между страницами ��аботали.
   function remountAll () {
     var pr = proj(); if (!pr) return;
     var byPath = {};
@@ -5343,7 +5360,7 @@ body.di-lock{overflow:hidden}
   function serveNow () {
     remountAll();
     previewRefresh();
-    return '<span class="t-ok">✓ проект развёрнут на доске</span>\n<span class="t-dim">закрой IDE (или кнопка «Доска» сверху), чтобы увидеть живое превью</span>';
+    return '<span class="t-ok">✓ проект развёрнут на доске</span>\n<span class="t-dim">закрой IDE (или кнопка «Доска» сверху), чтобы увидеть ��ивое превью</span>';
   }
 
   /* =============== вкладки =============== */
@@ -5975,7 +5992,7 @@ body.di-lock{overflow:hidden}
           '<button class="di-act" data-view="git" title="Изменения и GitHub"><svg viewBox="0 0 24 24"><circle cx="7" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="7" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="12" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 8.2v7.6M9 17l6-4" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button>' +
           '<button class="di-act" data-view="chat" title="ИИ-чат"><svg viewBox="0 0 24 24"><path d="M4 5.5h16v10.5H9.5L4 20z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>' +
           '<div class="di-acts-sp"></div>' +
-          '<button class="di-act act" id="diActTerm" title="Терминал (Ctrl+`)"><svg viewBox="0 0 24 24"><path d="M5 7l5 5-5 5M12 17h7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>' +
+          '<button class="di-act act" id="diActTerm" title="Терм��нал (Ctrl+`)"><svg viewBox="0 0 24 24"><path d="M5 7l5 5-5 5M12 17h7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>' +
         '</div>' +
         '<div class="di-side" id="diSide">' +
           '<div class="di-side-view" data-sv="files">' +
@@ -6195,7 +6212,7 @@ body.di-lock{overflow:hidden}
     return d;
   }
   function chatSeedMsg () {
-    chatMsg('ai', 'Привет! Я ИИ-помощник DL Code. Открой файл, опиши изменение — я перепишу код, и правки сразу появятся в редакторе и на доске.');
+    chatMsg('ai', 'Привет! Я ��И-помощник DL Code. Открой файл, опиши изменение — я перепишу код, и правки сразу появятся в редакторе и на доске.');
   }
   function chatTarget () {
     if (S.active && IDE.isTextExt(S.active) && !IDE.isImagePath(S.active)) return S.active;
@@ -6252,7 +6269,7 @@ body.di-lock{overflow:hidden}
         if (S.active === path && ta) { ta.value = next; ta.dispatchEvent(new Event('input')); }
         st.textContent = '✓ Готово — обновил ' + path + '. Изменения уже в редакторе и применены к проекту.';
       } else {
-        st.textContent = (out || 'Модель вернула пустой ответ — попробуй сформулировать точнее.').slice(0, 1500);
+        st.textContent = (out || 'Модель вернула п��стой ответ — попробуй сформулировать точнее.').slice(0, 1500);
       }
     } catch (err) {
       st.classList.add('err');
@@ -6504,7 +6521,7 @@ body.sf-panel-on .preview #emuPanel{right:324px}
 .ep-chip{padding:4px 9px;font-size:11px;font-weight:600;border-radius:7px;border:1px solid var(--border);color:var(--muted);background:var(--surface);transition:.15s var(--ease);display:flex;align-items:center;gap:5px}
 .ep-chip:hover{color:var(--silver-bright)}
 .ep-chip.on{background:var(--surface-3);color:var(--text);border-color:var(--border-3)}
-.ep-chip .n{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--faint)}
+.ep-chip .n{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:rgba(241,242,244,.62)}
 .ep-chip.c-err.on,.ep-chip.c-err .n{color:#f0958b}
 #epNote{margin:2px 12px 8px;padding:10px 12px;border:1px solid var(--border-2);border-radius:10px;font-size:12px;line-height:1.5;color:var(--muted);background:var(--surface);display:none}
 #epNote.on{display:block}
@@ -6656,7 +6673,7 @@ panel.innerHTML=
     '<button type="button" id="epTabDev" class="on" role="tab">'+CAT_ICON.mobile+'Устройства</button>'+
     '<button type="button" id="epTabCon" role="tab">'+SVG.term+'Консоль<span class="cnt" id="epCnt">0</span></button>'+
   '</div>'+
-  '<button type="button" class="ep-ic" id="epClose" title="Скрыть панель">'+SVG.x+'</button>'+
+  '<button type="button" class="ep-ic" id="epClose" title="��крыть панель">'+SVG.x+'</button>'+
 '</div>'+
 '<section class="ep-sec on" id="epSecDev">'+
   '<div class="ep-cat" id="epCat">'+
@@ -6713,11 +6730,17 @@ function schedHoverClose(){clearTimeout(hoverCloseT);hoverCloseT=setTimeout(func
   closePanel();
 },280);}
 function cancelHoverClose(){clearTimeout(hoverCloseT);}
-handle.addEventListener('mouseenter',function(){cancelHoverClose();openPanel();});
-handle.addEventListener('mouseleave',schedHoverClose);
-panel.addEventListener('mouseenter',cancelHoverClose);
-panel.addEventListener('mouseleave',schedHoverClose);
-handle.addEventListener('click',openPanel);
+/* Панель адаптива открывается ТОЛЬКО по клику (не по наведению) */
+function togglePanel(){if(preview.classList.contains('emu-open'))closePanel();else openPanel();}
+handle.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();cancelHoverClose();togglePanel();});
+handle.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();togglePanel();}});
+panel.addEventListener('click',function(e){e.stopPropagation();});
+document.addEventListener('click',function(e){
+  if(!preview.classList.contains('emu-open'))return;
+  var t=e.target;
+  if(t===panel||t===handle||(panel.contains&&panel.contains(t))||(handle.contains&&handle.contains(t)))return;
+  closePanel();
+});
 $('epClose').addEventListener('click',closePanel);
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&preview.classList.contains('emu-open'))closePanel();});
 
@@ -7015,7 +7038,7 @@ else if(window.MutationObserver){
 </script>
 
 
-<!-- ============ DL FEATURE PACK: история, diff, сравнение, инлайн, секции, перевод, галерея, тур, PWA, мобильные вкладки ============ -->
+<!-- ============ DL FEATURE PACK: история, diff, сравнение, инлайн, секции, ��еревод, галерея, тур, PWA, мобильные вкладки ============ -->
 <style id="dlFpCss">
 /* ---- toolbar icon buttons ---- */
 .dl-ic{width:30px;height:30px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted);transition:color .2s var(--ease),border-color .2s var(--ease),background .2s var(--ease),box-shadow .25s var(--ease);position:relative}
@@ -7123,7 +7146,7 @@ else if(window.MutationObserver){
 .dl-cats button{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--muted);border:1px solid var(--border);background:var(--surface);padding:7px 13px;border-radius:999px;transition:.2s var(--ease);position:relative}
 .dl-cats button:hover{color:var(--text);border-color:var(--border-3);transform:translateY(-1px)}
 .dl-cats button.on{color:#0a0a0c;background:linear-gradient(180deg,#ffffff,#d5d8e2);border-color:transparent;box-shadow:0 6px 20px -6px rgba(210,216,240,.45),inset 0 1px 0 rgba(255,255,255,.9)}
-.dl-cats button .n{font-size:10px;font-weight:700;opacity:.55;font-family:'JetBrains Mono',monospace}
+.dl-cats button .n{font-size:11.5px;font-weight:700;opacity:.82;font-family:'JetBrains Mono',monospace}
 .dl-cats button.fav svg{width:12px;height:12px}
 .dl-cats button.fav.on svg{fill:#e5564a;stroke:#e5564a}
 .dl-nores{display:none;padding:44px 20px;text-align:center;color:var(--faint);font-size:14px;border:1px dashed var(--border-2);border-radius:14px;grid-column:1/-1}
@@ -7525,7 +7548,7 @@ function dlSecName(el,i){
 	if(el.tagName==='HEADER'||/\bnav|navbar|header\b/.test(probe))return 'Шапка';
 	if(el.tagName==='FOOTER'||/\bfooter\b/.test(probe))return 'Подвал';
 	if(/hero|главная|banner/.test(probe))return 'Hero';
-	if(/pric|тариф|цены|plan/.test(probe))return 'Цены';
+	if(/pric|та��иф|цены|plan/.test(probe))return 'Цены';
 	if(/feature|возможност|преимущ/.test(probe))return 'Фичи';
 	if(/testimonial|review|отзыв/.test(probe))return 'Отзывы';
 	if(/about|о нас|обо мне/.test(probe))return 'О нас';
@@ -7706,7 +7729,7 @@ renderHtml=function(h){_dlRenderHtml(h);if(DL_GEN.on&&DL_GEN.step<2)dlSetStage(2
 var DL_SUGG={
 	'Ресторан':['Добавь секцию меню с ценами','Сделай тёплую уютную палитру','Добавь форму брони столика','Галерея блюд с фото','Добавь часы работы и карту'],
 	'Портфолио':['Добавь секцию кейсов с результатами','Сделай крупную выразительную типографику','Добавь блок «Обо мне» и контакты','Тёмная галерея работ с эффектом при наведении','Добавь отзывы клиентов'],
-	'SaaS и ИИ':['Добавь блок тарифов с переключателем месяц/год','Секция интеграций с логотипами','Добавь отзывы клиентов с аватарами','Первый экран с продуктовым скриншотом','Добавь вопросы и ответы про безопасность данных'],
+	'SaaS и ИИ':['Добавь блок тарифов с переключателем месяц/год','Секция интеграций с логотипами','Добавь отзывы клиентов с аватарами','Первый экран с продуктовым скриншотом','Добавь вопросы и ��тветы про безопасность данных'],
 	'Web3 и игры':['Усиль неоновые акценты и свечение','Добавь дорожную карту по кварталам','Счётчики статистики с анимацией','Глитч-эффект в главном заголовке','Добавь блок команды проекта'],
 	'Магазин':['Добавь карточки товаров с ценами','Секция преимуществ доставки','Добавь баннер скидки недели','Блок отзывов покупателей с рейтингом','Добавь таблицу размеров'],
 	'Креатив':['Смелее типографика на первом экране','Добавь параллакс при прокрутке','Чёрно-белая палитра с одним акцентом','Добавь горизонтальную галерею','Анимируй появление секций'],
@@ -7956,7 +7979,7 @@ function dlSetTab(t){
 var DL_TOUR={on:false,step:0,el:null};
 var DL_TOUR_STEPS=[
 	{sel:'.chat',tab:'chat',t:'Чат с ИИ',d:'Опиши правку обычными словами — ИИ перепишет код сайта и сразу применит изменения.'},
-	{sel:'#pvStage',tab:'pv',t:'Живое превью',d:'Здесь сайт обновляется в реальном времени. Включи режим «Текст» — и правь любую надпись кликом.'},
+	{sel:'#pvStage',tab:'pv',t:'Живое превью',d:'Здесь сайт ��бновляется в реальном времени. Включи режим «Текст» — и правь любую надпись кликом.'},
 	{sel:'#modeSeg',tab:'pv',t:'Режимы и инструменты',d:'Превью, дизайн и код. Рядом — правка текста, секции, перевод, история версий и сравнение до/после.'},
 	{sel:'.composer',tab:'chat',t:'Попробуй написать…',d:'Например: «Сделай тёмную тему и крупный заголовок». Ctrl+Enter — отправить, Ctrl+Z — откатить.'}
 ];
@@ -8066,7 +8089,7 @@ document.addEventListener('keydown',function(e){
 	if(k==='z'&&!e.shiftKey&&!inField){e.preventDefault();dlRollback();return;}
 	if(((k==='z'&&e.shiftKey)||k==='y')&&!inField){e.preventDefault();dlRedo();return;}
 });
-/* подсказка под композером */
+/* подсказк�� под композером */
 (function(){
 	var comp=document.querySelector('.composer');if(!comp)return;
 	comp.appendChild(dlEl('<div class="dl-kbd-hint"><span><kbd class="dl-k">Ctrl</kbd>+<kbd class="dl-k">↵</kbd> отправить</span><span><kbd class="dl-k">Ctrl</kbd>+<kbd class="dl-k">Z</kbd> откатить</span><span><kbd class="dl-k">Ctrl</kbd>+<kbd class="dl-k">S</kbd> скачать</span></div>'));
@@ -8296,7 +8319,7 @@ document.addEventListener('keydown',function(e){
 			fields: [
 				{ key: 'sticky', label: 'Всегда сверху', type: 'checkbox' },
 				{ key: 'backgroundColor', label: 'Фон', type: 'color' },
-				{ key: 'padding', label: 'Отступы', type: 'text' },
+				{ key: 'padding', label: '��тступы', type: 'text' },
 				{ key: 'gap', label: 'Отступ между', type: 'number' }
 			]
 		},
@@ -8320,7 +8343,7 @@ document.addEventListener('keydown',function(e){
 			]
 		},
 		nav: {
-			label: 'Меню', group: 'Навигация', kids: false,
+			label: 'Меню', group: 'На��игация', kids: false,
 			defaults: { links: [{ label: 'Главная', href: '/' }], orientation: 'horizontal', gap: 24 },
 			fields: [
 				{ key: 'links', label: 'Ссылки', type: 'links' },
@@ -8341,7 +8364,7 @@ document.addEventListener('keydown',function(e){
 		},
 		search: {
 			label: 'Поиск по сайту', group: 'Интерактив', kids: false,
-			defaults: { placeholder: 'Поиск…' },
+			defaults: { placeholder: 'Поиск���' },
 			fields: [
 				{ key: 'placeholder', label: 'Подсказка', type: 'text' },
 				{ key: 'accent', label: 'Акцент', type: 'color' }
@@ -8417,7 +8440,7 @@ document.addEventListener('keydown',function(e){
 		if (!probe) throw new Error('Нет родителя ' + parentId);
 		var inside = false; var src = findNode(schema, id);
 		if (src) walk(src.node, function (n) { if (n.id === parentId) { inside = true; return false; } });
-		if (inside) throw new Error('Нельзя переместить блок внутрь себя');
+		if (inside) throw new Error('Нельзя п��реместить блок внутрь себя');
 		var n = removeNode(schema, id);
 		addTo(schema, parentId, n, index);
 		return n;
@@ -8606,7 +8629,7 @@ document.addEventListener('keydown',function(e){
 		return [
 			'(function(){',
 			'function route(hh){var h=(typeof hh==="string"?hh:location.hash).replace(/^#/,"")||"/";var ps=document.querySelectorAll(".sf-page");var hit=null;ps.forEach(function(p){if(p.dataset.path===h)hit=p});if(!hit&&h!=="/"){var hs=h.replace(/["\\\\]/g,"");var t=document.querySelector(".sf-page.on [data-sf-anchor=\'"+hs.replace(/\'/g,"")+"\']")||document.getElementById(hs);if(t){t.scrollIntoView({behavior:"smooth",block:"start"});obs();setTimeout(updHs,60);return}}if(!hit)hit=ps[0];ps.forEach(function(p){p.classList.toggle("on",p===hit)});if(hit)window.scrollTo(0,0);obs();setTimeout(updHs,60)}',
-			/* #-ссылки ведём сами: в srcdoc-превью базовый URL — родительская страница, и без этого клик по якорю грузит во фрейм само приложение */
+			/* #-ссылки ведём сами: в srcdoc-превью базовый URL — родительская с��раница, и без этого клик по якорю грузит во фрейм само приложение */
 			'document.addEventListener("click",function(e){var t=e.target;while(t&&t!==document.body&&!(t.tagName==="A"&&t.getAttribute("href")))t=t.parentElement;var h=t&&t.tagName==="A"?t.getAttribute("href"):null;if(!h||h.charAt(0)!=="#")return;e.preventDefault();try{if(location.hash!==h)location.hash=h;else route(h)}catch(x){route(h)}},true);',
 			'var io=null;',
 			'function obs(){if(io)io.disconnect();io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("sf-anim--active");io.unobserve(e.target)}})},{threshold:.18});document.querySelectorAll(".sf-page.on .sf-anim[data-trigger=onScroll]").forEach(function(el){io.observe(el)})}',
@@ -8669,7 +8692,7 @@ document.addEventListener('keydown',function(e){
 <script>
 /* ============================================================
  * SFAI — протокол «ИИ редактирует схему».
- * ИИ получает JSON-схему сайта и возвращает список операций,
+ * ИИ получает JSON-схе��у сайта и возвращает список операций,
  * а не готовый HTML — точечные правки без переписывания сайта.
  * ============================================================ */
 (function (root, factory) {
@@ -8678,7 +8701,7 @@ document.addEventListener('keydown',function(e){
 })(typeof self !== 'undefined' ? self : this, function (SF) {
 	'use strict';
 
-	/* ---------- системный промпт ---------- */
+	/* ---------- си��темный промпт ---------- */
 	function componentSpec() {
 		return Object.keys(SF.REGISTRY).map(function (t) {
 			var d = SF.REGISTRY[t];
@@ -8690,7 +8713,7 @@ document.addEventListener('keydown',function(e){
 		opts = opts || {};
 		return [
 			'Ты — старший арт-директор и веб-дизайнер уровня студий Vercel / Linear / Stripe, редактируешь сайт в визуальном конструкторе.',
-			'Сайт описан JSON-схемой: проект → pages[] → root (дерево узлов {id,type,props,children}). Ты меняешь сайт ТОЛЬКО списком операций ops — точечно, не трогая то, что менять не просили.',
+			'Сайт описан JSON-��хемой: проект → pages[] → root (дерево узлов {id,type,props,children}). Ты меняешь сайт ТОЛЬКО списком операций ops — точечно, не трогая то, что менять не просили.',
 			'',
 			'ДОСТУПНЫЕ ТИПЫ БЛОКОВ:',
 			componentSpec(),
@@ -8709,7 +8732,7 @@ document.addEventListener('keydown',function(e){
 			'- {"op":"setTheme","theme":{"preset":"…",…переопределения}} · {"op":"renameProject","name":"…"}',
 			'',
 			'КОГДА ЧТО ИСПОЛЬЗОВАТЬ:',
-			'- «Создай сайт/лендинг про…» → renameProject + setTheme + replacePage для «/» и ещё 1–3 replacePage для внутренних страниц (см. МНОГОСТРАНИЧНОСТЬ). Старое содержимое исчезает — это правильно.',
+			'- «Создай сайт/лендинг про…» → renameProject + setTheme + replacePage для «/�� и ещё 1–3 replacePage для внутренних страниц (см. МНОГОСТРАНИЧНОСТЬ). Старое содержимое исчезает — это правильно.',
 			'- Точечная просьба («поменяй текст», «добавь секцию», «другая тема») → updateProps/addNode/setTheme по id из схемы, остальное не трогай.',
 			'',
 			'МНОГОСТРАНИЧНОСТЬ — сайт должен «тыкаться» в превью:',
@@ -8731,7 +8754,7 @@ document.addEventListener('keydown',function(e){
 			'- Секция-полоса: frame {padding:"0 24px", alignItems:"center", anchor:"…"} → внутри frame {maxWidth:"1100px", width:"100%", padding:"96px 0", gap:24} (у hero — "120px 0").',
 			'- Надзаголовок секции (eyebrow): короткий paragraph 14px, color "var(--sf-accent)", fontWeight 600 — ставь над заголовком секции.',
 			'- Карточки: frame direction "row" + wrap true, gap 16; каждая карточка — frame {backgroundColor:"var(--sf-surface)" (на surface-полосе — "var(--sf-bg)"), borderRadius:14, padding:24, gap:12}: крупная цифра/факт 28–32px цветом accent + пояснение 16px muted, или заголовок 22/600 + текст. 3–4 штуки.',
-			'- Чередуй полосы: обычный фон → var(--sf-surface) → обычный. Вторичный текст всегда color "var(--sf-muted)". Не зашивай другие цвета без нужды — пустое значение берётся из темы.',
+			'- Чередуй полосы: обычный фон → var(--sf-surface) → обычный. Вторичный ��екст всегда color "var(--sf-muted)". Не зашивай другие цвета без нужды — пустое значение берётся из темы.',
 			'- Кнопки: главная solid + вторичная outline, в ряд с gap 12. Текст кнопки = глагол + выгода («Забронировать стол», «Получить расчёт»), не «Отправить» и не «Подробнее».',
 			'- Анимации: hero — slide-up onLoad 450ms; секции — slide-up/fade-in onScroll 400–500ms с delay каскадом 0/120/240. Ничего больше без запроса.',
 			'',
@@ -8744,8 +8767,8 @@ document.addEventListener('keydown',function(e){
 			'ССЫЛКИ — ВСЁ КЛИКАБЕЛЬНО (пользователь проверяет в превью):',
 			'- У каждой секции-полосы props.anchor латиницей ("features", "menu", "cta"…). У КАЖДОЙ кнопки href: "#якорь" / "/страница" / "https://…" (+ openInNewTab true). Ссылки nav — на якоря секций.',
 			'',
-			'ПРИМЕР ЭТАЛОННОГО ОТВЕТА — копируй формат и уровень детализации, но контент ВСЕГДА сочиняй свой под запрос:',
-			'{"say":"Собрал сайт пекарни: главная с меню-якорями и страница заказа, куда ведут кнопки.","ops":[{"op":"renameProject","name":"Пекарня «Мука»"},{"op":"setTheme","theme":{"preset":"editorial"}},{"op":"replacePage","path":"/","name":"Главная","children":[{"type":"header","props":{"sticky":true,"padding":"16px 32px"},"children":[{"type":"paragraph","props":{"text":"Мука","fontSize":20,"fontWeight":700,"href":"/"}},{"type":"nav","props":{"links":[{"label":"Почему мы","href":"#why"},{"label":"Заказ","href":"/order"}]}}]},{"type":"frame","props":{"padding":"0 24px","alignItems":"center","anchor":"hero"},"children":[{"type":"frame","props":{"maxWidth":"1100px","width":"100%","padding":"120px 0","gap":24},"children":[{"type":"animation","props":{"variant":"slide-up","trigger":"onLoad","duration":450},"children":[{"type":"paragraph","props":{"text":"Хлеб на закваске — каждое утро к 8:00","fontSize":64,"fontWeight":600,"lineHeight":1.1,"maxWidth":"760px"}}]},{"type":"paragraph","props":{"text":"Печём 14 сортов из муки жернового помола. Закажи вечером — заберёшь тёплым по дороге на работу.","fontSize":19,"color":"var(--sf-muted)","maxWidth":"640px"}},{"type":"frame","props":{"direction":"row","gap":12,"padding":0},"children":[{"type":"button","props":{"label":"Заказать к утру","href":"/order"}},{"type":"button","props":{"label":"Почему нас разбирают","variant":"outline","href":"#why"}}]}]}]},{"type":"frame","props":{"padding":"0 24px","alignItems":"center","anchor":"why","backgroundColor":"var(--sf-surface)"},"children":[{"type":"frame","props":{"maxWidth":"1100px","width":"100%","padding":"96px 0","gap":24},"children":[{"type":"paragraph","props":{"text":"Наш секрет","fontSize":14,"fontWeight":600,"color":"var(--sf-accent)"}},{"type":"paragraph","props":{"text":"Почему нас разбирают до полудня","fontSize":40,"fontWeight":600}},{"type":"frame","props":{"direction":"row","gap":16,"padding":0,"wrap":true},"children":[{"type":"animation","props":{"variant":"slide-up","trigger":"onScroll","duration":450},"children":[{"type":"frame","props":{"backgroundColor":"var(--sf-bg)","borderRadius":14,"padding":24,"gap":12},"children":[{"type":"paragraph","props":{"text":"18 часов","fontSize":30,"fontWeight":600,"color":"var(--sf-accent)"}},{"type":"paragraph","props":{"text":"зреет тесто на живой закваске — отсюда кислинка и хруст","fontSize":16,"color":"var(--sf-muted)"}}]}]},{"type":"animation","props":{"variant":"slide-up","trigger":"onScroll","duration":450,"delay":120},"children":[{"type":"frame","props":{"backgroundColor":"var(--sf-bg)","borderRadius":14,"padding":24,"gap":12},"children":[{"type":"paragraph","props":{"text":"5:30","fontSize":30,"fontWeight":600,"color":"var(--sf-accent)"}},{"type":"paragraph","props":{"text":"первая выпечка уходит в печь ещё до рассвета","fontSize":16,"color":"var(--sf-muted)"}}]}]}]}]}]},{"type":"footer","props":{"padding":"28px 32px"},"children":[{"type":"paragraph","props":{"text":"© 2026 Пекарня «Мука» · Лесная, 12","fontSize":14,"color":"var(--sf-muted)"}},{"type":"nav","props":{"links":[{"label":"Заказ","href":"/order"},{"label":"Наверх","href":"#hero"}]}}]}]},{"op":"replacePage","path":"/order","name":"Заказ","children":[{"type":"header","props":{"sticky":true,"padding":"16px 32px"},"children":[{"type":"paragraph","props":{"text":"Мука","fontSize":20,"fontWeight":700,"href":"/"}},{"type":"nav","props":{"links":[{"label":"На главную","href":"/"}]}}]},{"type":"frame","props":{"padding":"0 24px","alignItems":"center","anchor":"order"},"children":[{"type":"frame","props":{"maxWidth":"760px","width":"100%","padding":"96px 0","gap":24},"children":[{"type":"paragraph","props":{"text":"Заказ к утру","fontSize":48,"fontWeight":600,"lineHeight":1.1}},{"type":"paragraph","props":{"text":"1. Выбери хлеб из 14 сортов. 2. Напиши нам до 22:00. 3. Забери тёплым с 8:00 — Лесная, 12.","fontSize":18,"color":"var(--sf-muted)"}},{"type":"frame","props":{"direction":"row","gap":12,"padding":0},"children":[{"type":"button","props":{"label":"Написать в Telegram","href":"https://t.me/muka_bakery","openInNewTab":true}},{"type":"button","props":{"label":"На главную","variant":"outline","href":"/"}}]}]}]}]},{"op":"setActivePage","path":"/"}]}',
+			'ПРИМЕР ЭТАЛОННОГО ОТВЕТА — копируй формат и уровень детализации, но к��нтент ВСЕГДА сочиняй свой под запрос:',
+			'{"say":"Собрал сайт пекарни: главная с меню-якорями и страница заказа, куда ведут кнопки.","ops":[{"op":"renameProject","name":"Пекарня «Мука»"},{"op":"setTheme","theme":{"preset":"editorial"}},{"op":"replacePage","path":"/","name":"Главная","children":[{"type":"header","props":{"sticky":true,"padding":"16px 32px"},"children":[{"type":"paragraph","props":{"text":"Мука","fontSize":20,"fontWeight":700,"href":"/"}},{"type":"nav","props":{"links":[{"label":"Почему мы","href":"#why"},{"label":"Заказ","href":"/order"}]}}]},{"type":"frame","props":{"padding":"0 24px","alignItems":"center","anchor":"hero"},"children":[{"type":"frame","props":{"maxWidth":"1100px","width":"100%","padding":"120px 0","gap":24},"children":[{"type":"animation","props":{"variant":"slide-up","trigger":"onLoad","duration":450},"children":[{"type":"paragraph","props":{"text":"Хлеб на закваске — каждое утро к 8:00","fontSize":64,"fontWeight":600,"lineHeight":1.1,"maxWidth":"760px"}}]},{"type":"paragraph","props":{"text":"Печём 14 сортов из муки жернового помола. Закаж�� вечером — заберёшь тёплым по дороге на работу.","fontSize":19,"color":"var(--sf-muted)","maxWidth":"640px"}},{"type":"frame","props":{"direction":"row","gap":12,"padding":0},"children":[{"type":"button","props":{"label":"Заказать к утру","href":"/order"}},{"type":"button","props":{"label":"Почему ��ас разбирают","variant":"outline","href":"#why"}}]}]}]},{"type":"frame","props":{"padding":"0 24px","alignItems":"center","anchor":"why","backgroundColor":"var(--sf-surface)"},"children":[{"type":"frame","props":{"maxWidth":"1100px","width":"100%","padding":"96px 0","gap":24},"children":[{"type":"paragraph","props":{"text":"Наш секрет","fontSize":14,"fontWeight":600,"color":"var(--sf-accent)"}},{"type":"paragraph","props":{"text":"Почему нас разбирают до полудня","fontSize":40,"fontWeight":600}},{"type":"frame","props":{"direction":"row","gap":16,"padding":0,"wrap":true},"children":[{"type":"animation","props":{"variant":"slide-up","trigger":"onScroll","duration":450},"children":[{"type":"frame","props":{"backgroundColor":"var(--sf-bg)","borderRadius":14,"padding":24,"gap":12},"children":[{"type":"paragraph","props":{"text":"18 часов","fontSize":30,"fontWeight":600,"color":"var(--sf-accent)"}},{"type":"paragraph","props":{"text":"зреет тесто на живой закваске — отсюда кислинка и хруст","fontSize":16,"color":"var(--sf-muted)"}}]}]},{"type":"animation","props":{"variant":"slide-up","trigger":"onScroll","duration":450,"delay":120},"children":[{"type":"frame","props":{"backgroundColor":"var(--sf-bg)","borderRadius":14,"padding":24,"gap":12},"children":[{"type":"paragraph","props":{"text":"5:30","fontSize":30,"fontWeight":600,"color":"var(--sf-accent)"}},{"type":"paragraph","props":{"text":"первая выпечка уходит в печь ещё до рассвета","fontSize":16,"color":"var(--sf-muted)"}}]}]}]}]}]},{"type":"footer","props":{"padding":"28px 32px"},"children":[{"type":"paragraph","props":{"text":"© 2026 Пекарня «Мука» · Лесная, 12","fontSize":14,"color":"var(--sf-muted)"}},{"type":"nav","props":{"links":[{"label":"Заказ","href":"/order"},{"label":"Наверх","href":"#hero"}]}}]}]},{"op":"replacePage","path":"/order","name":"Заказ","children":[{"type":"header","props":{"sticky":true,"padding":"16px 32px"},"children":[{"type":"paragraph","props":{"text":"Мука","fontSize":20,"fontWeight":700,"href":"/"}},{"type":"nav","props":{"links":[{"label":"На главную","href":"/"}]}}]},{"type":"frame","props":{"padding":"0 24px","alignItems":"center","anchor":"order"},"children":[{"type":"frame","props":{"maxWidth":"760px","width":"100%","padding":"96px 0","gap":24},"children":[{"type":"paragraph","props":{"text":"Заказ к утру","fontSize":48,"fontWeight":600,"lineHeight":1.1}},{"type":"paragraph","props":{"text":"1. Выбери хлеб из 14 сортов. 2. Напиши нам до 22:00. 3. Забери тёплым с 8:00 — Лесная, 12.","fontSize":18,"color":"var(--sf-muted)"}},{"type":"frame","props":{"direction":"row","gap":12,"padding":0},"children":[{"type":"button","props":{"label":"Написать в Telegram","href":"https://t.me/muka_bakery","openInNewTab":true}},{"type":"button","props":{"label":"На главную","variant":"outline","href":"/"}}]}]}]}]},{"op":"setActivePage","path":"/"}]}',
 			opts.starter ? '\nВАЖНО: сейчас на холсте — стартовая демо-заглушка конструктора (сайт «VarCorp»). К запросу пользователя она отношения не имеет: при первой просьбе что-то создать полностью замени её через replacePage, не оставляя текстов про VarCorp.\n' : '',
 			'КОНТРОЛЬ ПЕРЕД ОТВЕТОМ: 1) ровно один JSON-объект, без ``` и комментариев; 2) у каждой кнопки есть href, у каждой секции — anchor; 3) тексты конкретные, без клише; 4) размеры и отступы из дизайн-системы; 5) новый сайт = 2–4 страницы через replacePage (главная + страница-исход для CTA), в конце setActivePage "/"; правка = точечные операции.',
 			'',
@@ -8825,7 +8848,7 @@ document.addEventListener('keydown',function(e){
 						break;
 					}
 					case 'replacePage': {
-						/* полная пересборка страницы; если страницы с таким path нет — создаём (многостраничные сайты одним ответом) */
+						/* полная пересборка страницы; если страницы с таким path нет — создаём (многостр��ничные сайты одним ответом) */
 						var pgR = o.path ? next.pages.find(function (p) { return p.path === o.path || p.id === o.path; }) : SF.activePage(next);
 						if (!Array.isArray(o.children) || !o.children.length) throw new Error('replacePage требует непустой children');
 						if (!pgR) {
@@ -8917,7 +8940,7 @@ document.addEventListener('keydown',function(e){
  * SF-EMBED — визуальный конструктор внутри Design Lab.
  * Активируется в режиме «Создать с нуля». Сайт живёт как
  * JSON-схема (формат VarCorpSiteForge), ИИ правит схему операциями,
- * а генератор SF собирает из неё автономный HTML.
+ * а ��енератор SF собирает из н��ё автономный HTML.
  * Требует глобальных SF и SFAI (подключаются выше).
  * ============================================================ */
 (function () {
@@ -8936,7 +8959,7 @@ document.addEventListener('keydown',function(e){
 		function band(props, children) { return SF.makeNode('frame', Object.assign({ padding: '0 24px', alignItems: 'center', gap: 0 }, props), [SF.makeNode('frame', { maxWidth: '1100px', width: '100%', padding: '72px 0', gap: 24 }, children)]); }
 		SF.addTo(pr, rootId, SF.makeNode('header', { padding: '16px 32px', sticky: true }, [
 			SF.makeNode('paragraph', { text: 'VarCorp', fontSize: 20, fontWeight: 700, fontFamily: 'тема' }),
-			SF.makeNode('nav', { links: [{ label: 'Главная', href: '/' }, { label: 'О студии', href: '/about' }], gap: 24 })
+			SF.makeNode('nav', { links: [{ label: 'Главная', href: '/' }, { label: 'О с��удии', href: '/about' }], gap: 24 })
 		]));
 		SF.addTo(pr, rootId, band({}, [
 			SF.makeNode('animation', { variant: 'slide-up', trigger: 'onLoad', duration: 500 }, [
@@ -9091,7 +9114,7 @@ document.addEventListener('keydown',function(e){
 			'document.addEventListener("pointerdown",function(e){if(e.button!==0)return;if(e.pointerType&&e.pointerType!=="mouse")return;if(e.target.closest&&e.target.closest("#sfRs"))return;var el=pick(e.target);if(!el)return;var abs=getComputedStyle(el).position==="absolute";var rel=getComputedStyle(el).position==="relative";drag={el:el,pg:el.closest(".sf-page"),r0:el.getBoundingClientRect(),sx:e.clientX,sy:e.clientY,on:false,abs:abs,rel:rel,ox:parseFloat(el.style.left)||0,oy:parseFloat(el.style.top)||0,fx:0,fy:0,free:false,ref:null,pos:null}});',
 			'document.addEventListener("pointermove",function(e){if(!drag)return;var dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;if(!drag.on){if(Math.abs(dx)<6&&Math.abs(dy)<6)return;drag.on=true;document.body.classList.add("sf-dragging");drag.el.setAttribute("data-sf-drag","1")}e.preventDefault();if(drag.abs){drag.el.style.left=Math.max(0,Math.round(drag.ox+dx))+"px";drag.el.style.top=Math.max(0,Math.round(drag.oy+dy))+"px";posRs();return}if(!e.altKey){clearDrop();drag.ref=null;drag.pos=null;drag.free=true;drag.fx=dx;drag.fy=dy;drag.el.style.transform="translate("+dx+"px,"+dy+"px)";drag.el.style.zIndex="900";return}if(drag.free){drag.free=false;drag.el.style.transform="";drag.el.style.zIndex=""}var els=document.elementsFromPoint(e.clientX,e.clientY);var t=null;for(var i=0;i<els.length;i++){var c=pick(els[i]);if(c&&c!==drag.el&&!drag.el.contains(c)){t=c;break}}clearDrop();drag.ref=null;drag.pos=null;if(t){var r=t.getBoundingClientRect();var relY=(e.clientY-r.top)/Math.max(1,r.height);if(CONT.test(t.id)&&relY>.3&&relY<.7){drag.ref=t.id;drag.pos="into";t.setAttribute("data-sf-drop","1")}else{var before=relY<.5;drag.ref=t.id;drag.pos=before?"before":"after";showLine(r,before)}}else{var pg=null;for(var j=0;j<els.length;j++){if(els[j].classList&&els[j].classList.contains("sf-page")){pg=els[j];break}}if(pg){drag.ref=pg.getAttribute("data-page-id");drag.pos="page";pg.setAttribute("data-sf-drop","1")}}});',
 			'document.addEventListener("pointerup",function(){if(!drag)return;var d=drag;drag=null;if(!d.on)return;justDragged=true;document.body.classList.remove("sf-dragging");d.el.removeAttribute("data-sf-drag");clearDrop();if(d.abs){parent.postMessage({sf:"props",id:d.el.id,props:{x:parseFloat(d.el.style.left)||0,y:parseFloat(d.el.style.top)||0}},"*");return}if(d.free){d.el.style.transform="";d.el.style.zIndex="";var nsx=Math.round((d.rel?d.ox:0)+d.fx),nsy=Math.round((d.rel?d.oy:0)+d.fy);parent.postMessage({sf:"props",id:d.el.id,props:{shiftX:(nsx===0?null:nsx),shiftY:(nsy===0?null:nsy)}},"*");return}if(d.ref&&d.pos)parent.postMessage({sf:"move",id:d.el.id,ref:d.ref,pos:d.pos},"*")});',
-			/* растягивание: 8 ручек на выбранном блоке (мин 40×24, Shift — пропорции картинок, как в VarCorp) */
+			/* растягивание: 8 ручек на выбранном блоке (м��н 40×24, Shift — пропорции картинок, как в VarCorp) */
 			'var rs=null,rsEl=null;',
 			'function mkRs(){rs=document.createElement("div");rs.id="sfRs";["nw","n","ne","e","se","s","sw","w"].forEach(function(k){var h=document.createElement("span");h.className="sf-rsh sf-rsh-"+k;h.setAttribute("data-dir",k);rs.appendChild(h)});document.body.appendChild(rs);rs.addEventListener("pointerdown",startRs)}',
 			'function posRs(){if(!rs||!rsEl)return;var r=rsEl.getBoundingClientRect();rs.style.display="block";rs.style.left=r.left+"px";rs.style.top=r.top+"px";rs.style.width=r.width+"px";rs.style.height=r.height+"px";var abs=getComputedStyle(rsEl).position==="absolute";rs.querySelectorAll(".sf-rsh").forEach(function(h){var d=h.getAttribute("data-dir");h.style.display=(abs||d==="e"||d==="s"||d==="se")?"block":"none"})}',
@@ -9244,7 +9267,7 @@ document.addEventListener('keydown',function(e){
 	var SF_OPT_RU = {
 		/* вид кнопки */ 'solid': 'Заливка', 'outline': 'Контур', 'ghost': 'Прозрачная',
 		/* выравнивание текста */ 'left': 'Слева', 'center': 'По центру', 'right': 'Справа',
-		/* заполнение картинки */ 'cover': 'Заполнить', 'contain': 'Вписать', 'fill': 'Растянуть',
+		/* заполнение картин��и */ 'cover': 'Заполнить', 'contain': 'Вписать', 'fill': 'Растянуть',
 		/* направление фрейма */ 'column': 'Колонкой', 'row': 'В ряд',
 		/* выравнивание/распределение */ 'stretch': 'Растянуть', 'flex-start': 'В начало', 'flex-end': 'В конец', 'space-between': 'По краям',
 		/* ориентация меню */ 'horizontal': 'Горизонтально', 'vertical': 'Вертикально',
@@ -9272,7 +9295,7 @@ document.addEventListener('keydown',function(e){
 		var def = SF.REGISTRY[t.node.type];
 		var isRoot = SF.activePage(S.schema).root.id === S.sel;
 		body.innerHTML = '<h4>' + esc(def.label) + '</h4>' + def.fields.map(function (f) { return '<label>' + esc(f.label) + '</label>' + fieldInput(f, t.node.props[f.key]); }).join('') +
-			(isRoot ? '' : '<div class="sf-acts"><button data-act="up">↑</button><button data-act="down">↓</button><button data-act="dup">⧉</button><button data-act="del" class="danger">✕</button></div>');
+			(isRoot ? '' : '<div class="sf-acts"><button data-act="up">↑</button><button data-act="down">��</button><button data-act="dup">⧉</button><button data-act="del" class="danger">✕</button></div>');
 		function apply(k, v) { mutate(function (next) { var patch = {}; patch[k] = (v === '' ? null : v); SF.updateProps(next, S.sel, patch); }); }
 		body.querySelectorAll('[data-k]').forEach(function (el) {
 			el.onchange = function () {
@@ -9317,7 +9340,7 @@ document.addEventListener('keydown',function(e){
 			'<label>Акцент (пусто = из темы)</label><input id="sfAccent" value="' + esc(typeof th === 'object' && th.accent ? th.accent : '') + '" placeholder="#…">' +
 			'<h4>Страницы</h4>' + S.schema.pages.map(function (p) { return '<div class="sf-row' + (p.id === S.schema.activePageId ? ' on' : '') + '" data-pg="' + p.id + '"><span>' + esc(p.name) + '</span><span class="t">' + esc(p.path) + '</span>' + (S.schema.pages.length > 1 ? '<span class="t" data-pgdel="' + p.id + '" style="margin-left:auto;cursor:pointer">✕</span>' : '') + '</div>'; }).join('') +
 			'<div class="sf-acts"><button id="sfAddPage">+ Страница</button></div>' +
-			'<h4>Импорт своего сайта</h4><div class="sf-acts"><button id="sfImpSite">📂 Файл (HTML / ZIP)</button><button id="sfImpDir">🗂 Папка</button></div><input type="file" id="sfImpSiteFile" accept=".html,.htm,.zip" style="display:none"><input type="file" id="sfImpDirFile" webkitdirectory multiple style="display:none"><div class="sf-note">Закинь index.html, ZIP-архив или папку сайта — он превратится в блоки, которые можно двигать и растягивать как свои.</div>' +
+			'<h4>Импорт своего сайта</h4><div class="sf-acts"><button id="sfImpSite">📂 Файл (HTML / ZIP)</button><button id="sfImpDir">🗂 Папка</button></div><input type="file" id="sfImpSiteFile" accept=".html,.htm,.zip" style="display:none"><input type="file" id="sfImpDirFile" webkitdirectory multiple style="display:none"><div class="sf-note">Закинь index.html, ZIP-архив или папку сайта — он превратитс�� в блоки, которые можно двигать и растягивать как свои.</div>' +
 			'<h4>Схема (VarCorp SiteForge)</h4><div class="sf-acts"><button id="sfExp">⤓ Экспорт JSON</button><button id="sfImp">⤒ Импорт</button></div><input type="file" id="sfImpFile" accept=".json" style="display:none">' +
 			'<div class="sf-acts"><button id="sfReset" class="danger">Сбросить проект</button><button id="sfExit">Выйти в HTML-режим</button></div>' +
 			'<div class="sf-note">Экспортированную схему можно открыть в VarCorpSiteForge (React-редактор) и наоборот.</div>';
@@ -9527,12 +9550,25 @@ document.addEventListener('keydown',function(e){
 <script>
 /* ===== ВХОД / РЕГИСТРАЦИЯ (бэкенд /api/auth) ===== */
 function authToken(){return localStorage.getItem('dl_token')||'';}
+/* ===== шапка: плотный фон при скролле (фикс слияния с контентом) ===== */
+(function(){
+  var nav=document.querySelector('.nav');if(!nav)return;
+  var ticking=false;
+  function upd(){nav.classList.toggle('scrolled',(window.pageYOffset||document.documentElement.scrollTop||0)>8);ticking=false;}
+  addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(upd);}},{passive:true});
+  upd();
+})();
+
 function openAuth(){
   document.getElementById('mdTitle').textContent='Вход в Design Lab';
-  document.getElementById('mdText').textContent='Войди или зарегистрируйся, чтобы сохранять проекты и историю правок.';
+  document.getElementById('mdText').textContent='В��йди или зарегистрируйся, чтобы сохранять проекты и историю правок.';
   var f=document.getElementById('mdForm');
   f.style.display='block';
-  f.innerHTML='<input class="fld" id="authUser" placeholder="Логин (3–40 символов)" autocomplete="username"><input class="fld" id="authPass" type="password" placeholder="Пароль (мин. 6)" autocomplete="current-password"><div style="display:flex;gap:8px;margin-top:2px"><button class="btn-line" style="flex:1" onclick="doAuth(false)">Войти</button><button class="btn-grad" style="flex:1" onclick="doAuth(true)">Регистрация</button></div>';
+  f.innerHTML='<button class="dl-gh-login" id="ghLoginBtn" type="button" onclick="doGithubAuth()">'
+    +'<svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>'
+    +'<span>Войти через GitHub</span></button>'
+    +'<div class="dl-auth-or"><span>или по логину и паролю</span></div>'
+    +'<input class="fld" id="authUser" placeholder="Логин (3–40 символов)" autocomplete="username"><input class="fld" id="authPass" type="password" placeholder="Пароль (мин. 6)" autocomplete="current-password"><div style="display:flex;gap:8px;margin-top:2px"><button class="btn-line" style="flex:1" onclick="doAuth(false)">Войти</button><button class="btn-grad" style="flex:1" onclick="doAuth(true)">Регистрация</button></div>';
   var b=document.getElementById('mdBtn');if(b)b.style.display='none';
   document.getElementById('modal').classList.add('on');
   setTimeout(function(){var u=document.getElementById('authUser');if(u)u.focus();},60);
@@ -9549,18 +9585,86 @@ async function doAuth(reg){
     closeModal();refreshAuthUI();toast('Привет, '+j.username+'!');
   }catch(e){toast(''+(e&&e.message||'Не удалось войти'));}
 }
+/* ===== ВХОД ЧЕРЕЗ GITHUB — отдельный способ входа =====
+   Не путать с кнопкой «Подключить GitHub» в шапке — та отвечает за репозитории
+   и деплой, и остаётся на месте. Здесь — именно вход в аккаунт Design Lab. */
+function ghAccessToken(){try{return localStorage.getItem('dl_gh_token')||'';}catch(e){return '';}}
+
+async function ghExchangeForSession(){
+  var ghTok=ghAccessToken();
+  if(!ghTok)throw new Error('Нет токена GitHub');
+  var r=await fetch('/api/auth/github',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:ghTok})});
+  if(!r.ok){var d='';try{d=(await r.json()).detail||'';}catch(e){}throw new Error(d||('HTTP '+r.status));}
+  var j=await r.json();
+  localStorage.setItem('dl_token',j.token);
+  return j;
+}
+
+async function doGithubAuth(){
+  var btn=document.getElementById('ghLoginBtn');
+  function busy(on,label){if(!btn)return;btn.disabled=on;var s=btn.querySelector('span');if(s)s.textContent=label;}
+
+  /* GitHub уже подключён — входим сразу, без второго шага */
+  if(ghAccessToken()){
+    busy(true,'Вхожу…');
+    try{
+      var j=await ghExchangeForSession();
+      closeModal();refreshAuthUI();toast('Привет, '+j.username+'!');
+      return;
+    }catch(e){
+      busy(false,'Войти через GitHub');
+      toast(''+(e&&e.message||'Не удалось войти через GitHub'));
+      return;
+    }
+  }
+
+  /* GitHub ещё не подключён — открываем привязку и ждём токен */
+  if(typeof window.ghOpenAuth!=='function'){toast('Модуль GitHub недоступен');return;}
+  closeModal();
+  window.__dlGhLoginPending=true;
+  window.ghOpenAuth();
+
+  var waited=0;
+  var poll=setInterval(async function(){
+    waited+=600;
+    if(!window.__dlGhLoginPending||waited>15*60*1000){clearInterval(poll);return;}
+    if(!ghAccessToken())return;
+    clearInterval(poll);window.__dlGhLoginPending=false;
+    try{
+      var j=await ghExchangeForSession();
+      refreshAuthUI();toast('Привет, '+j.username+'!');
+    }catch(e){toast(''+(e&&e.message||'Не удалось войти через GitHub'));}
+  },600);
+}
+
 async function authLogout(){
   var tok=authToken();
   if(tok){try{await fetch('/api/auth/logout',{method:'POST',headers:{'Authorization':'Bearer '+tok}});}catch(e){}}
   localStorage.removeItem('dl_token');refreshAuthUI();toast('Вышел из аккаунта');
 }
+/* CTA в шапке: «Начать бесплатно» имеет смысл только для гостя.
+   Авторизованному показываем действие по его тарифу. */
+function updateNavCta(me){
+  var cta=document.getElementById('ctaBtn');if(!cta)return;
+  if(!me){cta.textContent='Начать бесплатно';cta.title='Зарегистрируйся и начни бесплатно';cta.onclick=function(){scrollTo2('gallery');};return;}
+  var plan=(me.plan||'free').toLowerCase();
+  if(plan==='free'){
+    /* Уже вошёл и уже на free — предлагать «начать бесплатно» нелогично. */
+    cta.textContent='Мои проекты';cta.title='Открыть галерею и продолжить работу';
+    cta.onclick=function(){scrollTo2('gallery');};
+  }else{
+    cta.textContent='Новый проект';cta.title='Начать новый проект';
+    cta.onclick=function(){scrollTo2('gallery');};
+  }
+}
+
 async function refreshAuthUI(){
   var btn=document.getElementById('authBtn');if(!btn)return;
   var tok=authToken();
   if(tok){
-    try{var r=await fetch('/api/auth/me',{headers:{'Authorization':'Bearer '+tok}});if(r.ok){var me=await r.json();btn.textContent=me.username;btn.title='Выйти';btn.onclick=authLogout;return;}}catch(e){}
+    try{var r=await fetch('/api/auth/me',{headers:{'Authorization':'Bearer '+tok}});if(r.ok){var me=await r.json();btn.textContent=me.username;btn.title='Выйти';btn.onclick=authLogout;updateNavCta(me);return;}}catch(e){}
   }
-  btn.textContent='Войти';btn.title='Войти / регистрация';btn.onclick=openAuth;
+  btn.textContent='Войти';btn.title='Войти / регистрация';btn.onclick=openAuth;updateNavCta(null);
 }
 try{refreshAuthUI();}catch(e){}
 </script>

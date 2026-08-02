@@ -4,11 +4,16 @@ Users, password hashes and sessions are stored only by USER_DB_SERVICE_URL.
 This application deliberately has no local SQLite authentication fallback.
 """
 import hashlib
+import hmac
+import os
+import re
 import time
 
 import httpx
 from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import Response
+
+from pydantic import BaseModel, Field
 
 from . import config
 from .models import AuthIn, AuthOut, Me
@@ -124,6 +129,89 @@ async def login(body: AuthIn, request: Request):
 @router.get("/me", response_model=Me)
 async def me(authorization: str = Header(None)):
     return await _remote_auth("GET", "me", authorization=authorization)
+
+
+# =====================================================================
+#  Вход через GitHub (отдельный способ входа, без 2FA на нашей стороне)
+#
+#  Клиент присылает GitHub access token. Мы сами спрашиваем api.github.com,
+#  кто этот пользователь, и заводим/открываем ему обычный аккаунт Design Lab.
+#  Пароль никогда не виден клиенту: он выводится HMAC-ом от серверного
+#  секрета и числового GitHub ID, так что подобрать его со стороны нельзя.
+# =====================================================================
+
+GITHUB_LOGIN_SECRET = os.getenv("GITHUB_LOGIN_SECRET", "") or os.getenv("SERVICE_API_TOKEN", "")
+_GH_LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
+
+
+class GithubAuthIn(BaseModel):
+    token: str = Field(..., min_length=8, max_length=500)
+
+
+def _gh_username(login: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", login or "")[:34]
+    return ("gh_" + safe) if safe else ""
+
+
+def _gh_password(github_id: str) -> str:
+    if not GITHUB_LOGIN_SECRET:
+        raise HTTPException(
+            status_code=503,
+            detail="Вход через GitHub не настроен: задай GITHUB_LOGIN_SECRET",
+        )
+    return hmac.new(
+        GITHUB_LOGIN_SECRET.encode("utf-8"),
+        ("design-lab:github:" + str(github_id)).encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:48]
+
+
+async def _github_identity(token: str) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
+            response = await client.get(
+                "https://api.github.com/user",
+                headers={
+                    "Authorization": "Bearer " + token,
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "design-lab",
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"GitHub недоступен: {type(exc).__name__}") from exc
+    if response.status_code in (401, 403):
+        raise HTTPException(status_code=401, detail="GitHub отклонил токен — подключись заново")
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"GitHub ответил {response.status_code}")
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="GitHub вернул некорректный ответ") from exc
+    login = str(data.get("login") or "").strip()
+    gid = str(data.get("id") or "").strip()
+    if not login or not gid or not _GH_LOGIN_RE.match(login):
+        raise HTTPException(status_code=502, detail="GitHub не вернул корректный профиль")
+    return {"login": login, "id": gid, "avatar": data.get("avatar_url") or "", "name": data.get("name") or login}
+
+
+@router.post("/github", response_model=AuthOut)
+async def github_login(body: GithubAuthIn, request: Request):
+    """Вход/регистрация одним шагом по GitHub-токену."""
+    guard("login", request)
+    identity = await _github_identity(body.token.strip())
+    username = _gh_username(identity["login"])
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="Неподходящий логин GitHub")
+    credentials = {"username": username, "password": _gh_password(identity["id"])}
+
+    # Сначала пробуем войти; если аккаунта ещё нет — регистрируем и входим.
+    result = await _remote_auth("POST", "login", credentials)
+    if result.status_code < 400:
+        return result
+    created = await _remote_auth("POST", "register", credentials)
+    if created.status_code < 400:
+        return created
+    return await _remote_auth("POST", "login", credentials)
 
 
 @router.post("/logout", status_code=204)
