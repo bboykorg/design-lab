@@ -1,0 +1,104 @@
+/* Design Lab - выбор модели на телефоне.
+
+   Почему отдельный файл: выпадающее меню было привязано к кнопке через
+   position:absolute и bottom:82px. На телефоне оно уезжало за нижний край
+   экрана (проверено: +58px на 390x844) - нижние модели были недостижимы.
+   На узком экране правильный паттерн - нижний лист, а не выпадашка:
+   большая зона попадания и большой палец дотягивается до любого пункта. */
+
+@media (max-width: 760px) {
+
+  /* Фон под листом. Рисуется только когда меню открыто. */
+  html.dl-phone .model-menu.on::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .62);
+    z-index: -1;
+  }
+
+  html.dl-phone .model-menu {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    margin: 0;
+    width: auto;
+    max-width: none;
+    /* Ограничиваем честной высотой экрана, а не vh: в iOS Safari vh врёт. */
+    max-height: calc(var(--dvh, 1vh) * 72);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 6px 10px calc(10px + env(safe-area-inset-bottom));
+    /* Скругляем только верх: лист растёт снизу, низ уходит за край. */
+    border-radius: 18px 18px 0 0;
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    background: #0b0b0b;
+    box-shadow: 0 -1px 0 rgba(255, 255, 255, .06), 0 -24px 60px rgba(0, 0, 0, .7);
+    z-index: 90;
+  }
+
+  /* Лист выезжает снизу, а не всплывает fadeUp от кнопки.
+     260мс + decelerate: быстро, но глаз успевает связать нажатие и результат. */
+  html.dl-phone .model-menu.on {
+    animation: dlSheetUp .26s cubic-bezier(.16, 1, .3, 1) both;
+  }
+
+  @keyframes dlSheetUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  /* Пункты списка: палец, а не курсор. */
+  html.dl-phone .model-menu .mi,
+  html.dl-phone .model-menu button {
+    min-height: 52px;
+    padding: 11px 12px;
+    border-radius: 12px;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  html.dl-phone .model-menu .mi:active,
+  html.dl-phone .model-menu button:active { background: var(--surface-2); }
+
+  /* Заголовки групп прилипают: в длинном списке понятно, где ты. */
+  html.dl-phone .model-menu .mg {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #0b0b0b;
+    padding: 9px 12px 5px;
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+}
+
+/* Специфичность.
+   #heroModelMenu задан в index.html двумя id-правилами (строки 1889 и 2193):
+     #heroModelMenu{position:absolute;left:16px;top:calc(100% + 8px);width:310px;z-index:90}
+     #heroModelMenu{z-index:9000;max-height:330px;overflow:auto}
+   Селектор по id весит (1,0,0) и бьёт мой html.dl-phone .model-menu (0,2,1),
+   поэтому лист выше не срабатывал: меню оставалось absolute и уезжало вниз на 58px.
+   Повторяем геометрию адресно для каждого id/класса меню. */
+@media (max-width: 760px) {
+  html.dl-phone #heroModelMenu,
+  html.dl-phone #modelMenu,
+  html.dl-phone .model-menu,
+  html.dl-phone .di-chat-model-menu {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    max-height: calc(var(--dvh, 1vh) * 72);
+    border-radius: 18px 18px 0 0;
+    z-index: 9000;
+  }
+}

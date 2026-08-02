@@ -1,0 +1,196 @@
+/* Design Lab — мобильный слой.
+   Подключается ПОСЛЕ dl-design-system.css, поэтому переопределяет её без !important там,
+   где хватает специфичности html.dl-phone.
+
+   Три задачи:
+   1) Ничего не должно перехватывать тап вслепую.
+   2) Бюджет отрисовки для слабых телефонов: без backdrop-filter, без бесконечных
+      декоративных анимаций, с content-visibility на длинных списках.
+   3) Пальцевые размеры целей и читаемый кегль. */
+
+/* ─────────────────────────────────────────────────────────────
+   0. Скрытое — значит скрытое.
+   [hidden] задаёт display:none только как правило user-agent с нулевой
+   специфичностью, поэтому любой display:block/flex в медиазапросе его
+   молча отменяет. Именно так невидимый скрим накрывал весь экран и съедал
+   все нажатия. Держим инвариант жёстко. */
+[hidden] { display: none !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   1. База телефона */
+html.dl-phone {
+  /* На телефоне межстрочный интервал чуть выше: читать с руки тяжелее. */
+  --fs-body: 15px;
+  --fs-body-lg: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.dl-phone body {
+  font-size: var(--fs-body-lg);
+  line-height: 1.6;
+  /* Слово-разрыв: русские составные термины не должны рвать сетку. */
+  overflow-wrap: break-word;
+}
+
+/* iOS Safari: 100vh врёт на высоту адресной строки — используем честный --dvh. */
+html.dl-phone .full-h { height: calc(var(--dvh, 1vh) * 100); }
+
+/* Горизонтальный скролл на телефоне — всегда баг. */
+html.dl-phone body { overflow-x: hidden; }
+
+/* ─────────────────────────────────────────────────────────────
+   2. Бюджет отрисовки
+   backdrop-filter — самый дорогой эффект на мобильных GPU: каждый слой
+   заставляет читать back buffer. На странице их под сотню (оверлеи карточек
+   галереи). На телефоне выключаем полностью и компенсируем плотным фоном,
+   чтобы контраст текста не просел. */
+html.dl-phone *,
+html.dl-phone *::before,
+html.dl-phone *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Панели, которые держались на размытии, получают непрозрачный фон. */
+html.dl-phone .nav,
+html.dl-phone .modal,
+html.dl-phone .sheet,
+html.dl-phone .model-menu,
+html.dl-phone .hero-model-menu,
+html.dl-phone .di-chat-model-menu,
+html.dl-phone .dl-start,
+html.dl-phone .dl-sub,
+html.dl-phone .pv-head,
+html.dl-phone .drawer {
+  background-color: #0b0b0b;
+}
+
+/* Оверлей «Открыть» на карточке рисуется только по :hover — на тач-экране
+   он недостижим, но всё равно создаёт слой с размытием на каждой из ~98 карточек.
+   Убираем сам узел из отрисовки. */
+html.dl-touch .card .open { display: none; }
+
+/* Декоративные бесконечные анимации на телефоне не окупаются: они держат
+   композитор разбуженным и жгут батарею. Гасим именно декор, а не индикаторы
+   загрузки и не переходы состояний. */
+html.dl-phone .btn-solid,
+html.dl-phone .btn-grad,
+html.dl-phone .plan .pick.g,
+html.dl-phone .send,
+html.dl-phone .eyebrow,
+html.dl-phone .prompt-box,
+html.dl-phone .plan.hot::before,
+html.dl-phone .plan .pp,
+html.dl-phone .feat .fi,
+html.dl-phone .step .n,
+html.dl-phone .brand .logo,
+html.dl-phone .brand .logo .shine::before,
+html.dl-phone .brand .logo .trace .tr-run,
+html.dl-phone .brand-name .bn-amp,
+html.dl-phone .badge::after,
+html.dl-phone .silver-glow,
+html.dl-phone .footer::before,
+html.dl-phone .foot-mark,
+html.dl-phone .sec-title,
+html.dl-phone #scrollBar {
+  animation: none !important;
+}
+
+/* Тяжёлые тени-«дыхание» через filter: drop-shadow пересчитываются каждый кадр. */
+html.dl-phone .btn-solid,
+html.dl-phone .btn-grad,
+html.dl-phone .send { filter: none !important; }
+
+/* Длинные списки: не отрисовываем то, чего не видно.
+   contain-intrinsic-size держит корректную высоту скроллбара. */
+html.dl-phone .card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 260px;
+}
+html.dl-phone section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
+}
+/* Первый экран и навигация обязаны рисоваться сразу — иначе моргнёт при загрузке. */
+html.dl-phone .hero,
+html.dl-phone header,
+html.dl-phone .nav {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
+/* Плавный инерционный скролл там, где он свой. */
+html.dl-phone .chat,
+html.dl-phone .model-menu,
+html.dl-phone .di-chat-model-menu,
+html.dl-phone .drawer { -webkit-overflow-scrolling: touch; }
+
+/* ─────────────────────────────────────────────────────────────
+   3. Пальцевые цели
+   Минимум 44×44 — иначе промахи. Расширяем невидимой зоной, чтобы не
+   раздувать визуальные размеры кнопок. */
+html.dl-touch button,
+html.dl-touch a.btn,
+html.dl-touch [role='button'],
+html.dl-touch .icon-btn,
+html.dl-touch .tool-btn,
+html.dl-touch .tb-btn {
+  min-height: 44px;
+  position: relative;
+}
+
+/* Мелкие иконочные кнопки: растим зону нажатия, не трогая рисунок. */
+html.dl-touch .icon-btn::after,
+html.dl-touch .tool-btn::after,
+html.dl-touch .hero-icon-btn::after,
+html.dl-touch .tb-btn::after {
+  content: '';
+  position: absolute;
+  inset: 50% 50% 50% 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  margin: 0;
+}
+
+/* Поля ввода: 16px обязателен, иначе iOS зумит страницу при фокусе. */
+html.dl-touch input,
+html.dl-touch textarea,
+html.dl-touch select {
+  font-size: 16px;
+  min-height: 44px;
+}
+html.dl-touch input[type='checkbox'],
+html.dl-touch input[type='radio'] { min-height: 0; }
+
+/* ─────────────────────────────────────────────────────────────
+   4. Наведение — только там, где курсор реально есть.
+   На тач-экранах :hover «залипает» после тапа. */
+@media (hover: none) {
+  html.dl-touch .card:hover .open { opacity: 0; }
+  html.dl-touch *:hover { transition-duration: 0s; }
+}
+
+/* Активное состояние заменяет hover: короткая отдача на нажатие. */
+html.dl-touch button:active,
+html.dl-touch [role='button']:active { transform: scale(.985); }
+
+/* ─────────────────────────────────────────────────────────────
+   5. Безопасные зоны (вырез и «домашняя» полоса) */
+html.dl-phone .nav { padding-top: env(safe-area-inset-top); }
+html.dl-phone .footer { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+html.dl-phone .composer,
+html.dl-phone .chat-input { padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+
+/* ─────────────────────────────────────────────────────────────
+   6. Уважаем системную настройку «меньше движения» */
+@media (prefers-reduced-motion: reduce) {
+  html.dl-phone *,
+  html.dl-phone *::before,
+  html.dl-phone *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -23,6 +23,10 @@ services:
       - key: USER_DB_SERVICE_URL
         sync: false
       # AI provider keys for /api/proxy (comma-separated for several keys).
+      - key: SEEKAI_API_KEYS
+        sync: false
+      - key: SEEKAI_FAILOVER_COOLDOWN
+        value: "900"
       - key: GOROUTER_API_KEYS
         sync: false
       - key: KIWILLM_API_KEYS

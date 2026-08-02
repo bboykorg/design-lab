@@ -1,0 +1,331 @@
+/* Design Lab — финишный мобильный слой.
+   Подключается ПОСЛЕ dl-mobile.css и dl-mobile-sheet.css — закрывает то, что
+   осталось после первой итерации мобильной версии.
+
+   Каждый блок — ответ на дефект, воспроизведённый в прогоне Chromium
+   на ширинах 320 / 360 / 390 / 430 / 768, а не гипотетическое улучшение. */
+
+/* ───────────────────────────────────────────────
+   1. Плейсхолдер в hero обрезался насухо.
+
+   #heroPh задан как max-height:3.2em; overflow:hidden. На десктопе текст в три
+   строки влезает, на 390px — нет: замер показал 48px скрытой высоты,
+   фраза обрывалась на «сделай лендинг для» без всякого знака обрыва.
+   Обрезать посреди слова хуже, чем показать короткую фразу целиком,
+   поэтому тексты подменяет dl-mobile-polish.js, а здесь — честная высота
+   под четыре строки и мягкое затухание на случай длинного перевода. */
+html.dl-phone #heroPh {
+  max-height: 4.8em;
+  -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
+}
+html.dl-phone .prompt-box .pi { min-height: 5em; }
+
+/* ───────────────────────────────────────────────
+   2. Шапка на узком экране.
+
+   Замер на 390px: .nav-cta занимала 197px и упиралась в правый край (r=378
+   при vw=390) — гамбургер почти касался кромки, а на 320px кнопка
+   «Начать бесплатно» ломалась на две строки.
+   Решение: отступ от края с учётом выреза, запрет переноса,
+   а на самых узких — короткая подпись вместо длинной (текст меняет JS). */
+html.dl-phone .nav {
+  padding-left: max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
+  column-gap: 8px;
+}
+html.dl-phone .nav-cta {
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+html.dl-phone .nav-cta .btn-solid,
+html.dl-phone .nav-cta .btn-ghost {
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* На 320–360px две кнопки + гамбургер физически не умещаются рядом с
+   логотипом. «Войти» уезжает в выдвижное меню (его туда кладёт JS),
+   в шапке остаётся одно главное действие — так чище и по иерархии. */
+@media (max-width: 374px) {
+  html.dl-phone .nav-cta #authBtn { display: none; }
+  html.dl-phone .nav-cta .btn-solid { padding: 10px 11px; font-size: 13px; }
+  html.dl-phone .brand-name { font-size: 15px; }
+}
+
+/* Логотип собран как арт 118×118 со scale(.32203) и transform-origin:0 0.
+   При дробном масштабе и DPR=3 край округляется внутрь и буква L
+   срезается о границу .logo-fit. Даём арту дорисоваться целиком. */
+html.dl-phone .brand .logo-fit { overflow: visible; }
+html.dl-phone .brand .logo { will-change: auto; }
+
+/* ───────────────────────────────────────────────
+   3. Бюджет отрисовки для слабых телефонов.
+
+   dl-mobile.css уже снял backdrop-filter и декоративные анимации.
+   Осталось три статьи расхода, которые держат GPU занятым даже без движения. */
+
+/* 3.1 filter:blur() на больших слоях — самый дорогой оставшийся эффект.
+   Замер: .halo — 967×560 с blur(28px), .noise — 780px шириной, aurora — четыре
+   слоя по ~530–630px. На A-серии Samsung это полноэкранный растр каждый кадр
+   при любом скролле. Градиент и так мягкий — blur ему не нужен. */
+html.dl-phone .bg-fx .halo,
+html.dl-phone .bg-fx .aurora,
+html.dl-phone .bg-fx .a1,
+html.dl-phone .bg-fx .a2,
+html.dl-phone .bg-fx .a3,
+html.dl-phone .bg-fx .a4 {
+  filter: none;
+  will-change: auto;
+}
+
+/* 3.2 Шумовая плёнка тянется на 200% экрана и визуально не читается
+   на плотности 3x. Платить за неё памятью текстуры нет смысла. */
+html.dl-phone .bg-fx .noise,
+html.dl-phone .bg-fx .scanline { display: none; }
+
+/* 3.3 Подсветка текста через drop-shadow пересчитывается при каждом
+   перерисовывании строки. На чёрном фоне белый текст и без неё контрастен. */
+html.dl-phone .hero h1,
+html.dl-phone .sec-title,
+html.dl-phone .silver-glow,
+html.dl-phone .brand-name { filter: none; text-shadow: none; }
+
+/* 3.4 Снимаем will-change там, где анимация уже отключена: иначе браузер
+   держит десятки лишних композиторных слоёв в памяти — на телефонах
+   с 2–3 ГБ это прямой путь к выгрузке вкладки из памяти. */
+html.dl-phone .card,
+html.dl-phone .plan,
+html.dl-phone .feat,
+html.dl-phone .step,
+html.dl-phone .btn-solid,
+html.dl-phone .btn-grad { will-change: auto; }
+
+/* 3.5 Тени в два-три слоя на каждой из 98 карточек — сотни blur-проходов.
+   Оставляем одну плотную тень: глубина читается, стоимость втрое ниже. */
+html.dl-phone .card { box-shadow: 0 8px 22px -14px rgba(0, 0, 0, .9); }
+
+/* 3.6 Изоляция длинных списков.
+
+   Первая редакция ставила `contain: layout paint style` на .card — и это оказалось
+   ошибкой. Карточка становится containing block для абсолютных потомков
+   (.thumb, .open, .load) и теряет вклад содержимого в собственную высоту:
+   тест зафиксировал 33–77px срезанного текста на 320/360/390 при overflow:hidden.
+   Ограничиваемся безопасным content-visibility на самой сетке: браузер
+   пропускает отрисовку секций за экраном, а геометрия карточек не трогается. */
+html.dl-phone .section { content-visibility: auto; contain-intrinsic-size: auto 600px; }
+
+/* ───────────────────────────────────────────────
+   3.7 Кнопка закладки выпадала из карточки — самый крупный найденный баг.
+
+   Базовый стиль: .dl-fav{position:absolute;top:10px;right:10px} — сердечко в углу превью.
+   Мобильный слой задаёт html.dl-touch button{min-height:44px;position:relative} для
+   расширения тач-зоны. Специфичность этого селектора (0,2,1) выше, чем
+   у .dl-fav (0,1,0) — кнопка теряла абсолютное позиционирование и вставала
+   в поток после блока .meta.
+
+   Замер на 390px: карточка clientHeight=280 при scrollHeight=357, .dl-fav занимала
+   top=314..358 — целиком за границей overflow:hidden. Из 99 карточек затронуты 95:
+   на телефоне добавление в избранное было просто недоступно.
+
+   Возвращаем абсолютное позиционирование и сохраняем тач-размер 44×44.
+   На сенсорном экране нет hover, поэтому кнопка видна сразу. */
+html.dl-touch .card .dl-fav {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  bottom: auto;
+  left: auto;
+  z-index: 5;
+  opacity: 1;
+  transform: none;
+}
+
+/* Тот же конфликт угрожает любой кнопке-оверлею внутри карточки
+   и кнопкам закрытия модалок: у них тоже базовый position:absolute
+   с одноклассовым селектором. Закрываем целый класс ошибки, а не один случай. */
+html.dl-touch .modal .x,
+html.dl-touch .modal .close,
+html.dl-touch .drawer .x,
+html.dl-touch .card .open { position: absolute; }
+
+/* ───────────────────────────────────────────────
+   4. Качест��о движения там, где оно осталось.
+
+   Глушить всё п��дряд — дешёвый ход: интерфейс начинает ощущаться мёртвым.
+   Обратная связь на нажатие остаётся, но стоит один transform — это
+   композиторное свойство, оно не трогает layout и идёт мимо main thread.
+   90–120мс — порог, на котором отклик читается как мгновенный, но ещё виден. */
+html.dl-touch .btn-solid,
+html.dl-touch .btn-grad,
+html.dl-touch .btn-ghost,
+html.dl-touch .btn-line,
+html.dl-touch .card,
+html.dl-touch .chip,
+html.dl-touch .plan .pick {
+  transition: transform .11s cubic-bezier(.16, 1, .3, 1),
+              background-color .14s linear,
+              border-color .14s linear;
+}
+html.dl-touch .card:active { transform: scale(.99); }
+html.dl-touch .btn-solid:active,
+html.dl-touch .btn-grad:active { transform: scale(.97); }
+
+/* ───────────────────────────────────────────────
+   5. Читаемость мелкого кегля.
+
+   На телефоне остались подписи 12px. Сам по себе это допустимый пол для
+   служебных меток, но с letter-spacing:.08em и цветом var(--faint) (44% белого)
+   контраст падает ниже WCAG AA. Поднимаем цвет, а не размер. */
+html.dl-phone .eyebrow,
+html.dl-phone .badge,
+html.dl-phone .card .meta .tag,
+html.dl-phone .card .load,
+html.dl-phone .model-menu .mh,
+html.dl-phone .model-menu .mg { color: rgba(244, 244, 244, .72); }
+
+html.dl-phone .step p,
+html.dl-phone .feat p,
+html.dl-phone .plan li,
+html.dl-phone .sec-sub { font-size: 15px; line-height: 1.6; }
+
+/* ───────────────────────────────────────────────
+   6. Планшет 761–1024px — дыра между телефоном и десктопом.
+
+   Порог мобильного слоя — 760px, поэтому iPad в портрете (768px) получал
+   десктопную шапку и десктопные тач-цели по 32px при сенсорном вводе.
+   По тач-целям ориентируемся на способ ввода, а не на ширину. */
+@media (min-width: 761px) and (max-width: 1024px) {
+  .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .steps, .features { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .pricing { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .section { padding-left: 28px; padding-right: 28px; }
+  .hero { padding-left: 28px; padding-right: 28px; }
+  .hero h1 { font-size: clamp(38px, 5.6vw, 52px); }
+}
+
+/* Сенсорный планшет: та же пальцевая геометрия, что и на телефоне. */
+@media (pointer: coarse) and (min-width: 761px) {
+  button, a.btn, [role='button'], .icon-btn, .tool-btn, .tb-btn,
+  .nav-cta button, .chip, .plan .pick { min-height: 44px; }
+  input, textarea, select { font-size: 16px; min-height: 44px; }
+  input[type='checkbox'], input[type='radio'] { min-height: 0; }
+}
+
+/* ───────────────────────────────────────────────
+   7. Ландшафтная ориентация телефона: высоты мало.
+   Нижний лист в 72% экрана при высоте 390px — это 280px на 27 моделей.
+   Разрешаем ему занять почти весь экран и сжимаем вертикальные отступы. */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  html.dl-phone .hero { padding-top: 28px; padding-bottom: 18px; }
+  html.dl-phone .section { padding-top: 30px; }
+  html.dl-phone #heroPh { max-height: 3.2em; }
+  html.dl-phone .model-menu,
+  html.dl-phone #heroModelMenu,
+  html.dl-phone #modelMenu { max-height: calc(var(--dvh, 1vh) * 88); }
+  html.dl-phone #dlNavSheet { max-height: calc(var(--dvh, 1vh) * 100); overflow-y: auto; }
+}
+
+/* ───────────────────────────────────────────────
+   8. Редактор на телефоне: клавиатура съедает половину экрана.
+   Сетка 44vh/56vh от 100vh при открытой клавиатуре выталкивает поле ввода
+   за видимую область. Считаем от честной высоты --dvh, которую обновляет
+   dl-mobile.js по resize — а именно resize и срабатывает на показ клавиатуры. */
+@media (max-width: 760px) {
+  html.dl-phone .editor.on {
+    grid-template-rows: minmax(0, calc(var(--dvh, 1vh) * 44)) minmax(0, calc(var(--dvh, 1vh) * 56));
+  }
+}
+
+/* 9. Logotype monogram: separate the overlapping letters.
+
+   Defect found by measuring letter boxes in the logo's own 118x118 coordinate space.
+   Before (index.html lines 73-75):
+     D  x 20.0..89.6  y 15..87   font-size 62
+     &  x 30.0..66.3  y 56..92   font-size 26
+     L  x 35.6..96.0  y 32..104  font-size 62
+   Pairwise overlaps: D/L 54x55, D/& 36x31, &/L 31x36.
+   With glyph widths of 60-70px, a 54px overlap is not a monogram effect but three
+   letters stacked on top of each other. The mark is unreadable at every width, and
+   on phones, where the tile shrinks to 38px, it collapses into a blob.
+   The font is not the cause: Playfair Display is actually loaded (document.fonts.check = true).
+
+   First attempt used font-size 52. Box overlap dropped to 14.7x31, but the letters
+   still merged visually, because glyph boxes carry side bearings and the leg of L
+   still crossed the D. Two 52px glyphs simply cannot fit inside a 118px tile
+   without intersecting (49 + 53 plus margins exceeds 118).
+
+   Final: font-size 42. D occupies x 8..57, L occupies x 67..110, so there is no
+   horizontal intersection at all. The D-upper-left / L-lower-right diagonal is kept,
+   and the ampersand sits in the free lower-left corner, touching nothing.
+   No mobile guard: the defect is identical on phone, tablet and desktop.
+   Selectors match the original specificity (0,3,0) and win by cascade order. */
+
+.brand .logo .lg.d {
+  top: 12px;
+  left: 8px;
+  font-size: 42px;
+}
+
+.brand .logo .lg.l {
+  bottom: 12px;
+  right: 8px;
+  font-size: 42px;
+}
+
+.brand .logo .lg.amp {
+  bottom: 14px;
+  left: 12px;
+  font-size: 20px;
+}
+
+/* 10. Тач-цели по ширине, а не только по высоте.
+
+   Замер показал, что проверка только min-height пропускает узкие кнопки-иконки:
+   на 768px .dl-fav имела 32x44, а .hero-icon-btn — 38x44. По высоте порог взят,
+   по ширине — нет, и попасть пальцем в полоску в 32px по-прежнему трудно.
+   На телефоне (до 760px) ширину уже чинит dl-design-system.css, но на сенсорном
+   планшете то правило уже не действует. Палец от ширины экрана не меняется. */
+@media (pointer: coarse) {
+  .dl-fav,
+  .hero-icon-btn,
+  .icon-btn,
+  .tool-btn,
+  .tb-btn,
+  .modal .x,
+  .drawer .x {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Пункты списка моделей в нижнем листе были 43px — ровно на пиксель ниже порога.
+   Высота складывалась из паддингов и линии текста, поэтому задаẻм порог явно. */
+@media (pointer: coarse) {
+  .dl-mi,
+  .mi,
+  .mopt {
+    min-height: 44px;
+  }
+}
+
+/* 11. Остатки мелкого текста в панели подключения репозиториев.
+
+   Замер на 390px нашẻл три узла с кеглем 10.5-11px: подпись подсказки,
+   заголовок «Твои репозитории» и сноска про перетаскивание папки.
+   В момент замера панель скрыта, поэтому глазом дефект не виден — но при открытии
+   панели пользователь получит текст ниже порога читаемости.
+
+   Без гварда html.dl-phone: первая версия правила действовала только до 760px,
+   и замер показал, что на 768 / 1024 / 1440 те же три узла остались 10.5-11px.
+   Порог читаемости от ширины экрана не зависит. */
+.dl-tip,
+.dl-tip span,
+.dl-sub-h,
+.dl-sub-h span,
+.dl-foot {
+  font-size: 12.5px;
+  line-height: 1.5;
+}

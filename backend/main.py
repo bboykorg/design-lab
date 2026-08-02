@@ -51,12 +51,36 @@ _PATCH_SCRIPTS = (
     "ui-cleanup.js", "iframe-cursor-bridge.js", "design-edit-fix.js", "design-text-scale.js",
     "design-inert.js", "session-restore.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
+    "seekai-models.js", "dl-mobile.js",
+    # Закрытие нижнего листа выбора модели: тап по фону, свайп вниз, Escape.
+    "dl-mobile-sheet.js",
+    "dl-mobile-polish.js",
+)
+
+# Листы стилей подключаются в конце документа: так они идут после всех
+# инлайн-<style> в index.html и переопределяют их без гонки за !important.
+_PATCH_STYLES = (
+    "dl-design-system.css",
+    # Мобильный слой идёт последним: он правит то, что задала дизайн-система.
+    "dl-mobile.css",
+    # Нижний лист выбора модели — после мобильного слоя.
+    "dl-mobile-sheet.css",
+    "dl-mobile-polish.css",
 )
 _index_cache = None
 
 def _build_index() -> str:
     raw = (config.FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
-    missing = [f'<script src="/{name}"></script>' for name in _PATCH_SCRIPTS if name not in raw]
+    missing = [
+        f'<link rel="stylesheet" href="/{name}">'
+        for name in _PATCH_STYLES
+        if name not in raw
+    ]
+    missing += [
+        f'<script src="/{name}"></script>'
+        for name in _PATCH_SCRIPTS
+        if name not in raw
+    ]
     if not missing:
         return raw
     patch = "\n".join(missing)

@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Header, Request, HTTPException
 from fastapi.responses import Response, StreamingResponse
 
 from . import config
+from . import seekai
 from .auth import require_user
 from .plans import consume_edit, ensure_model_allowed
 from .ratelimit import guard
@@ -76,6 +77,7 @@ _MISTRAL_BASE = os.getenv("MISTRAL_BASE_URL", "https://api.mistral.ai/v1").rstri
 _MISTRAL_ENDPOINT = _MISTRAL_BASE + "/chat/completions"
 
 _PROVIDERS = {
+    "seekai": (seekai.ENDPOINT, seekai.ENV_NAMES, "bearer"),
     "gorouter": (_GOROUTER_ENDPOINT, _GOROUTER_ENV, "bearer"),
     "kiwi": (_KIWI_ENDPOINT, _KIWI_ENV, "bearer"),
     "vyce": (_VYCE_ENDPOINT, _VYCE_ENV, "bearer"),
@@ -95,6 +97,8 @@ for _model in _GOROUTER_MODELS:
     _MODEL_PROVIDER[_model] = "gorouter"
 for _model in _CEREBRAS_MODELS:
     _MODEL_PROVIDER[_model] = "cerebras"
+for _model in seekai.OWN_MODELS:
+    _MODEL_PROVIDER.setdefault(_model, "seekai")
 
 _HOST_PROVIDER = {
     "gorouter.app": "gorouter",
@@ -106,6 +110,8 @@ _HOST_PROVIDER = {
     "openrouter.ai": "openrouter",
     "open.bigmodel.cn": "glm",
     "api.mistral.ai": "mistral",
+    "seekai.cc": "seekai",
+    "www.seekai.cc": "seekai",
 }
 
 _counters = {}
@@ -241,6 +247,101 @@ def _is_challenge(content_type: str, data: bytes) -> bool:
     )
 
 
+def _error_response(message: str, status: int = 502) -> Response:
+    payload = json.dumps({"error": {"message": message}}, ensure_ascii=False)
+    return Response(content=payload, status_code=status, media_type="application/json")
+
+
+def _set_model(body: bytes, model: str) -> bytes:
+    """Подменяет имя модели в теле запроса."""
+    try:
+        data = json.loads(body.decode("utf-8", "ignore"))
+        if not isinstance(data, dict):
+            return body
+        data["model"] = model
+        return json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    except (ValueError, AttributeError, TypeError):
+        return body
+
+
+async def _open_upstream(target: str, body: bytes, headers: dict):
+    """Открывает потоковый запрос. Возвращает (client, response, error)."""
+    client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=False)
+    try:
+        upstream_request = client.build_request("POST", target, content=body, headers=headers)
+        response = await client.send(upstream_request, stream=True)
+    except httpx.HTTPError as exc:
+        await client.aclose()
+        return None, None, f"{type(exc).__name__}: {exc}".rstrip()
+    return client, response, ""
+
+
+async def _drain(client, response) -> bytes:
+    data = await response.aread()
+    await response.aclose()
+    await client.aclose()
+    return data
+
+
+async def _attempt(provider: str, target: str, host: str, env_names: str, auth: str, body: bytes):
+    """Одна попытка к одному шлюзу.
+
+    Возвращает dict: ok / failed(retryable) / готовый ответ клиенту.
+    """
+    if provider == "seekai":
+        pool = seekai.keys()
+    else:
+        pool = _keys(env_names)
+    key = _next_key(host, pool)
+    if not key:
+        first = env_names.split(",")[0]
+        return {"state": "failed", "status": 503,
+                "message": f"нет ключа для {host} — задай {first} в .env"}
+
+    headers = _headers_for(host, key, auth)
+    client, response, error = await _open_upstream(target, body, headers)
+    if error:
+        return {"state": "failed", "status": 502, "message": f"upstream error: {error}"}
+
+    if 300 <= response.status_code < 400:
+        await response.aclose()
+        await client.aclose()
+        message = f"{host}: провайдер просит перейти на другой адрес ({response.status_code})."
+        return {"state": "failed", "status": 502, "message": message}
+
+    content_type = response.headers.get("content-type", "application/json")
+    if "html" in content_type.lower():
+        data = await _drain(client, response)
+        if _is_challenge(content_type, data):
+            message = f"{host}: запрос заблокирован проверкой браузера Cloudflare."
+        else:
+            message = f"{host}: вместо ответа API вернулась HTML-страница (код {response.status_code})."
+        return {"state": "failed", "status": 502, "message": message}
+
+    if response.status_code >= 400:
+        data = await _drain(client, response)
+        return {"state": "failed", "status": response.status_code,
+                "raw": data, "contentType": content_type}
+
+    return {"state": "ok", "client": client, "response": response, "contentType": content_type}
+
+
+def _stream(client, response) -> StreamingResponse:
+    async def generate():
+        try:
+            async for chunk in response.aiter_bytes():
+                yield chunk
+        finally:
+            await response.aclose()
+            await client.aclose()
+
+    return StreamingResponse(
+        generate(),
+        status_code=response.status_code,
+        media_type=response.headers.get("content-type", "application/json"),
+    )
+
+
 @router.api_route("/proxy", methods=["POST"])
 async def proxy(request: Request, user=Depends(require_user)):
     guard("proxy", request, user)
@@ -254,56 +355,46 @@ async def proxy(request: Request, user=Depends(require_user)):
     consume_edit(user)
     body = _rewrite_model(body, model)
 
-    key = _next_key(host, _keys(env_names))
-    if not key:
-        first = env_names.split(",")[0]
-        raise HTTPException(status_code=503, detail=f"нет ключа для {host} — задай {first} в .env")
+    seek_model = seekai.target_model(model)
+    seek_ready = bool(seek_model and seekai.enabled())
+    seek_host = (urlparse(seekai.ENDPOINT).hostname or "").lower()
 
-    headers = _headers_for(host, key, auth)
-    client = httpx.AsyncClient(timeout=config.AI_TIMEOUT, follow_redirects=False)
-    try:
-        upstream_request = client.build_request("POST", target, content=body, headers=headers)
-        response = await client.send(upstream_request, stream=True)
-    except httpx.HTTPError as exc:
-        await client.aclose()
-        detail = f"{type(exc).__name__}: {exc}".rstrip()
-        raise HTTPException(status_code=502, detail=f"upstream error: {detail}")
+    # Если родной шлюз уже помечен как выдохшийся — сразу идём в SeekAI.
+    skip_primary = provider != "seekai" and seek_ready and seekai.is_exhausted(provider, model)
 
-    if 300 <= response.status_code < 400:
-        location = response.headers.get("location", "")
-        await response.aclose()
-        await client.aclose()
-        message = f"{host}: провайдер просит перейти на другой адрес ({response.status_code})."
-        if location:
-            message += " Обнови адрес провайдера в настройках сервера."
-        return Response(content=json.dumps({"error": {"message": message}}, ensure_ascii=False), status_code=502, media_type="application/json")
+    last = None
+    if not skip_primary:
+        last = await _attempt(provider, target, host, env_names, auth, body)
+        if last["state"] == "ok":
+            seekai.mark_alive(provider, model)
+            return _stream(last["client"], last["response"])
+        if provider != "seekai" and last.get("status") in seekai.EXHAUSTED_CODES:
+            seekai.mark_exhausted(provider, model)
+        if not (seek_ready and provider != "seekai"):
+            if "raw" in last:
+                return Response(content=last["raw"], status_code=last["status"],
+                                media_type=last.get("contentType", "application/json"))
+            return _error_response(last["message"], last["status"])
 
-    content_type = response.headers.get("content-type", "application/json")
-    if "html" in content_type.lower():
-        data = await response.aread()
-        await response.aclose()
-        await client.aclose()
-        if _is_challenge(content_type, data):
-            message = f"{host}: запрос заблокирован проверкой браузера Cloudflare."
-        else:
-            message = f"{host}: вместо ответа API вернулась HTML-страница (код {response.status_code})."
-        return Response(content=json.dumps({"error": {"message": message}}, ensure_ascii=False), status_code=502, media_type="application/json")
+    # Резерв: три ключа SeekAI с тем же запросом.
+    seek_body = _set_model(body, seek_model)
+    attempts = max(1, min(len(seekai.keys()), 3))
+    seek_last = None
+    for _ in range(attempts):
+        seek_last = await _attempt("seekai", seekai.ENDPOINT, seek_host,
+                                   seekai.ENV_NAMES, "bearer", seek_body)
+        if seek_last["state"] == "ok":
+            return _stream(seek_last["client"], seek_last["response"])
+        if seek_last.get("status") not in seekai.EXHAUSTED_CODES:
+            break
 
-    if response.status_code >= 400:
-        data = await response.aread()
-        await response.aclose()
-        await client.aclose()
-        return Response(content=data, status_code=response.status_code, media_type=content_type)
-
-    async def generate():
-        try:
-            async for chunk in response.aiter_bytes():
-                yield chunk
-        finally:
-            await response.aclose()
-            await client.aclose()
-
-    return StreamingResponse(generate(), status_code=response.status_code, media_type=content_type)
+    if seek_last and "raw" in seek_last:
+        return Response(content=seek_last["raw"], status_code=seek_last["status"],
+                        media_type=seek_last.get("contentType", "application/json"))
+    detail = (seek_last or {}).get("message") or "SeekAI не ответил"
+    if last and last.get("message"):
+        detail = last["message"] + " Резерв SeekAI тоже не сработал: " + detail
+    return _error_response(detail, (seek_last or {}).get("status", 502))
 
 
 async def _probe(base: str, env_names: str, paths=("models",)):
@@ -355,3 +446,11 @@ async def kiwi_check(_admin=Depends(admin_only)):
 @router.get("/vyce/check")
 async def vyce_check(_admin=Depends(admin_only)):
     return await _probe(_VYCE_BASE, _VYCE_ENV, ("models", "me"))
+
+
+@router.get("/seekai/check")
+async def seekai_check(_admin=Depends(admin_only)):
+    """Состояние SeekAI + список провайдеров, у которых кончились лимиты."""
+    report = await _probe(seekai.BASE_URL, seekai.ENV_NAMES)
+    report["failover"] = seekai.status()
+    return report

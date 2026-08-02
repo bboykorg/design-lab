@@ -1,0 +1,595 @@
+/* Design Lab — единая система: типографика, монохром, чёткие границы.
+   Загружается последней, поэтому переопределяет ранние правила. */
+
+:root{
+  /* Монохром: чёрный, белый, немного серого. Никаких синих/бирюзовых. */
+  --bg:#000000;
+  --bg-2:#0a0a0a;
+  --bg-3:#111111;
+
+  --surface:rgba(255,255,255,.030);
+  --surface-2:rgba(255,255,255,.058);
+  --surface-3:rgba(255,255,255,.092);
+
+  --border:rgba(255,255,255,.14);
+  --border-2:rgba(255,255,255,.22);
+  --border-3:rgba(255,255,255,.38);
+
+  --text:#f4f4f4;
+  --muted:rgba(244,244,244,.66);
+  --faint:rgba(244,244,244,.44);
+  --white:#ffffff;
+
+  --silver:#c9c9c9;
+  --silver-dim:#8f8f8f;
+  --silver-bright:#ffffff;
+
+  --chrome:linear-gradient(180deg,#ffffff,#e8e8e8 42%,#bdbdbd 78%,#f2f2f2);
+  --chrome-h:linear-gradient(110deg,#b4b4b4 4%,#ffffff 30%,#e6e6e6 48%,#ffffff 64%,#b4b4b4 96%);
+  --glow:0 0 16px rgba(255,255,255,.28);
+  --edge:inset 0 1px 0 rgba(255,255,255,.06);
+
+  /* Одно семейство на весь интерфейс + моно только для кода. */
+  --font:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --display:var(--font);
+  --ital:var(--font);
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+  --fs-micro:12px;
+  --fs-small:13px;
+  --fs-body:15px;
+  --fs-body-lg:16px;
+
+  --ease:cubic-bezier(.4,0,.2,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+
+  /* Осмысленная иерархия скруглений вместо одного радиуса везде. */
+  --r-xs:6px;
+  --r-sm:9px;
+  --r-md:12px;
+  --r-lg:18px;
+  --radius:12px;
+  --radius-lg:18px;
+}
+
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{
+  font-family:var(--font);
+  font-size:var(--fs-body-lg);
+  line-height:1.55;
+  letter-spacing:0;
+  font-weight:400;
+  color:var(--text);
+  background:var(--bg);
+}
+
+/* Гарнитуры-слоп вычищаем: остаётся один голос. */
+.hero h1,.sec-title,.plan .pp,.card .num,.brand-name,
+.ital-accent,.ital-caps,h1,h2,h3,h4,h5{font-family:var(--font)}
+.ital-accent,.ital-caps{font-style:normal}
+.ital-caps{text-transform:none;letter-spacing:.01em}
+code,pre,kbd,samp,.mono{font-family:var(--mono)}
+.brand .logo{font-family:'Playfair Display',Georgia,serif}
+
+/* Читаемость: убираем прозрачный текст под градиентом в мелком кегле. */
+.sec-title,.plan .pp,.silver-glow,.brand-name .bn-amp{
+  background:none;
+  -webkit-background-clip:border-box;
+  background-clip:border-box;
+  -webkit-text-fill-color:currentColor;
+  color:var(--silver-bright);
+  filter:none;
+  animation:none;
+  text-shadow:none;
+}
+.silver-soft{text-shadow:none;color:var(--silver-bright)}
+
+.hero h1{
+  font-weight:700;
+  font-size:clamp(32px,5.4vw,64px);
+  line-height:1.08;
+  letter-spacing:-.03em;
+  color:#fff;
+  animation:none;
+}
+.hero h1 .grad{background:none;-webkit-text-fill-color:#fff;color:#fff;filter:none;animation:none}
+.hero p.sub{font-size:var(--fs-body-lg);color:var(--muted);max-width:52ch}
+
+.sec-title{font-size:clamp(22px,2.6vw,29px);font-weight:700;letter-spacing:-.022em}
+.sec-sub{font-size:var(--fs-body);color:var(--muted);max-width:62ch}
+
+/* Минимальные кегли: было 10–11.5px, стало читаемо. */
+.chip,.search input,.card .meta .t,.step p,.feat p,.plan li,
+.composer textarea,.suggests button,.model-pill,
+.footer,.card.scratch .ss{font-size:var(--fs-small)}
+.nav-links button,.btn-ghost,.btn-solid,.btn-line,.btn-grad,.plan .pick{font-size:14px}
+.card .meta .tag,.card .load,.badge,.plan .pn,.model-menu .mh,
+.plan .badge-hot,.di-chat-hint{font-size:var(--fs-micro)}
+.step h3{font-size:17px}
+.feat h4,.card.scratch .st{font-size:16px}
+.model-menu .mh,.plan .badge-hot{letter-spacing:.08em}
+
+/* ===== Монохромный фон: те же слои, серый вместо синего ===== */
+.bg-fx .a1{background:radial-gradient(circle,rgba(255,255,255,.10),transparent 68%)}
+.bg-fx .a2{background:radial-gradient(circle,rgba(255,255,255,.07),transparent 66%)}
+.bg-fx .a3{background:radial-gradient(circle,rgba(255,255,255,.06),transparent 70%)}
+.bg-fx .a4{background:radial-gradient(circle,rgba(255,255,255,.05),transparent 70%)}
+.bg-fx .halo{background:radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.06),transparent 66%)}
+.bg-fx .grid{background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px)}
+.bg-fx .scanline{background:linear-gradient(180deg,rgba(255,255,255,.04),transparent)}
+.bg-fx .current-grid .track{stroke:rgba(255,255,255,.045)}
+.bg-fx .current-grid .charge{filter:drop-shadow(0 0 4px rgba(255,255,255,.7)) drop-shadow(0 0 14px rgba(255,255,255,.28))}
+.bg-fx .current-grid .spark{filter:drop-shadow(0 0 6px #fff) drop-shadow(0 0 20px rgba(255,255,255,.6))}
+
+.badge:hover,.chip:hover,.btn-line:hover,.search:focus-within{box-shadow:0 0 0 1px rgba(255,255,255,.14)}
+.btn-solid:hover,.btn-grad:hover,.plan .pick.g:hover{box-shadow:0 8px 24px rgba(255,255,255,.16)}
+.card:hover{box-shadow:0 18px 40px -26px #000,0 0 0 1px rgba(255,255,255,.16)}
+.step:hover,.feat:hover,.plan:hover{box-shadow:0 0 0 1px rgba(255,255,255,.13)}
+
+/* ===== Меню выбора модели: чёткая обводка, читаемый текст ===== */
+.model-pill{
+  gap:9px;
+  padding:8px 12px;
+  border-radius:var(--r-sm);
+  border:1px solid var(--border);
+  background:var(--surface-2);
+  font-size:13.5px;
+  font-weight:600;
+  color:var(--text);
+  max-width:250px;
+}
+.model-pill:hover{border-color:var(--border-3);background:var(--surface-3)}
+.model-pill .ml{font-weight:600;letter-spacing:0}
+.model-pill .mav{border-radius:5px;background:rgba(255,255,255,.10)!important;color:#fff}
+
+.model-menu{
+  background:#0b0b0b;
+  border:1px solid rgba(255,255,255,.20);
+  border-radius:var(--r-md);
+  padding:6px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 24px 64px -18px rgba(0,0,0,.95);
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.24) transparent;
+}
+.model-menu::-webkit-scrollbar{width:9px}
+.model-menu::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:99px;border:3px solid transparent;background-clip:content-box}
+.model-menu.on{animation:dlMenuIn .17s var(--ease-out) both}
+@keyframes dlMenuIn{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:none}}
+
+.model-menu .mh{
+  font-size:11px;
+  font-weight:700;
+  color:rgba(255,255,255,.5);
+  padding:12px 10px 6px;
+  text-transform:uppercase;
+  letter-spacing:.10em;
+  position:sticky;
+  top:-6px;
+  background:#0b0b0b;
+  z-index:1;
+}
+.model-menu .mh:first-child{padding-top:8px}
+
+.mopt{
+  display:grid;
+  grid-template-columns:26px minmax(0,1fr) 16px;
+  align-items:center;
+  gap:11px;
+  padding:9px 10px;
+  border-radius:var(--r-sm);
+  border:1px solid transparent;
+  transition:background .14s var(--ease),border-color .14s var(--ease);
+}
+.mopt:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12)}
+.mopt.sel{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.26)}
+.mopt .mi{
+  width:26px;height:26px;
+  border-radius:7px;
+  background:rgba(255,255,255,.10)!important;
+  border:1px solid rgba(255,255,255,.16);
+  color:#fff;
+}
+.mopt .mi svg text{fill:#fff!important}
+.mopt .minfo{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.mopt .mn{
+  font-size:14px;
+  font-weight:600;
+  color:#fff;
+  letter-spacing:-.005em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+.mopt .md2{
+  font-size:12.5px;
+  font-weight:400;
+  color:rgba(255,255,255,.56);
+  line-height:1.35;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+.mopt .tick{color:#fff;opacity:0}
+.mopt.sel .tick{opacity:1}
+
+.model-menu .mfoot{border-top:1px solid rgba(255,255,255,.12);margin-top:6px;padding:12px 10px 8px}
+.model-menu .mfoot .lbl{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:7px}
+.model-menu .mfoot input{
+  font-size:13px;
+  padding:9px 11px;
+  border-radius:var(--r-sm);
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.04);
+}
+.model-menu .mfoot input:focus{border-color:var(--border-3);outline:none}
+
+input,textarea,select,button{font-family:var(--font)}
+.prompt-box .pi,.composer textarea{font-size:15px;line-height:1.55}
+.prompt-box{border-radius:var(--r-lg)}
+.btn-solid,.btn-grad,.plan .pick.g{background:#fff;color:#000;font-weight:600}
+.btn-line,.chip,.btn-ghost{border-radius:var(--r-sm)}
+:where(a,button,input,textarea,select,[tabindex]):focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+/* =========================== МОБИЛЬНАЯ ВЕРСИЯ =========================== */
+
+@media (max-width:1024px){
+  .section{padding:64px 24px 0;max-width:100%}
+  .gallery{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+  .features{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .pricing{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+}
+
+@media (max-width:760px){
+  html,body{overflow-x:hidden}
+  body{font-size:16px}
+
+  .nav{grid-template-columns:1fr auto;gap:10px;padding:11px 16px;background:rgba(0,0,0,.86)}
+  .nav-links{display:none}
+  .nav-cta{gap:6px}
+  .nav-cta .btn-ghost,.nav-cta .btn-solid{padding:10px 13px;font-size:13.5px}
+  .brand-name{font-size:16px}
+
+  .hero{padding:52px 18px 26px;text-align:left}
+  .hero h1{font-size:clamp(29px,8.4vw,42px);line-height:1.12;letter-spacing:-.025em}
+  .hero p.sub{margin:16px 0 0;font-size:15.5px;max-width:none}
+  .badge{margin-bottom:22px;font-size:12px;padding:6px 12px 6px 10px}
+
+  .prompt-box{margin-top:26px;padding:14px;border-radius:16px}
+  .prompt-box .pi{font-size:16px;min-height:64px}
+  .prompt-row{gap:8px}
+  .prompt-actions{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .prompt-actions .btn-line,.prompt-actions .btn-grad{width:100%;text-align:center;padding:12px 14px}
+
+  .section{padding:48px 18px 0}
+  .section-head{flex-direction:column;align-items:stretch;gap:14px;margin-bottom:22px}
+  .search{width:100%;min-width:0;padding:11px 13px}
+  .search input{font-size:16px}
+
+  .gallery{grid-template-columns:1fr;gap:14px}
+  .card .meta{padding:12px 14px}
+  .card.scratch{min-height:0;padding:26px 20px}
+  .steps,.features,.pricing{grid-template-columns:1fr;gap:14px}
+  .step,.feat{padding:20px}
+  .plan{padding:24px}
+  .footer{margin-top:60px;padding:32px 18px;font-size:13px}
+
+  .nav-cta button,.chip,.suggests button,.tool-btn,.icon-btn,
+  .tb-btn,.model-pill,.plan .pick,.mopt{min-height:44px}
+  .mopt{padding:11px 10px}
+  .icon-btn,.tool-btn{min-width:44px}
+
+  .editor.on{grid-template-columns:1fr;grid-template-rows:minmax(0,44vh) minmax(0,56vh)}
+  .divider{display:none}
+  .chat{border-right:none;border-bottom:1px solid var(--border)}
+  .chat-head{padding:11px 13px}
+  .composer{padding:10px 13px 13px}
+  .composer textarea{font-size:16px}
+  .composer .row{gap:8px}
+  .suggests{padding:0 13px 10px;gap:7px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  .suggests::-webkit-scrollbar{display:none}
+  .suggests button{flex:none;white-space:nowrap}
+
+  .model-menu{left:10px;right:10px;bottom:78px;max-height:min(56vh,420px);border-radius:14px}
+  .model-pill{max-width:min(58vw,220px)}
+
+  .pv-head{gap:6px;padding:8px 10px;overflow-x:auto;scrollbar-width:none}
+  .pv-head::-webkit-scrollbar{display:none}
+  .pv-head .urlbar{display:none}
+
+  .modal .box{width:calc(100vw - 28px);max-width:none;max-height:86vh;overflow-y:auto;border-radius:16px;padding:22px}
+  .toast{left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));text-align:center}
+}
+
+@media (max-width:400px){
+  .hero{padding:44px 15px 22px}
+  .section{padding:40px 15px 0}
+  .hero h1{font-size:27px}
+  .prompt-actions{grid-template-columns:1fr}
+  .card .meta .tag{display:none}
+  .nav-cta .btn-ghost{display:none}
+}
+
+/* Чёлка и жестовая полоса */
+@supports(padding:max(0px)){
+  @media (max-width:760px){
+    .nav{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+    .footer{padding-bottom:max(32px,calc(24px + env(safe-area-inset-bottom)))}
+    .composer{padding-bottom:max(13px,calc(10px + env(safe-area-inset-bottom)))}
+  }
+}
+
+/* Ландшафт на телефоне: экран низкий — ужимаем вертикали */
+@media (max-height:520px) and (orientation:landscape) and (pointer:coarse){
+  .hero{padding-top:28px}
+  .editor.on{grid-template-columns:minmax(280px,40%) 1fr;grid-template-rows:minmax(0,1fr)}
+  .chat{border-right:1px solid var(--border);border-bottom:none}
+  .model-menu{max-height:64vh}
+}
+
+/* ===== ТЕЛЕФОНЫ: фоновые анимации выключены полностью =====
+   Класс dl-phone ставит dl-mobile.js ещё до первого кадра. */
+html.dl-phone .bg-fx .aurora,
+html.dl-phone .bg-fx .grid,
+html.dl-phone .bg-fx .halo,
+html.dl-phone .bg-fx .scanline,
+html.dl-phone .bg-fx .stars .st,
+html.dl-phone .bg-fx .comets i,
+html.dl-phone .bg-fx .current-grid .charge,
+html.dl-phone .bg-fx .current-grid .spark,
+html.dl-phone .brand .logo,
+html.dl-phone .badge::after,
+html.dl-phone .sec-title,
+html.dl-phone .silver-glow,
+html.dl-phone .hero h1 .grad{animation:none!important}
+
+html.dl-phone .bg-fx .stars,
+html.dl-phone .bg-fx .comets,
+html.dl-phone .bg-fx .scanline,
+html.dl-phone .bg-fx .current-grid,
+html.dl-phone .bg-fx .noise,
+html.dl-phone #cursorGlow,
+html.dl-phone #cursorDot,
+html.dl-phone #cursorRing,
+html.dl-phone .cursor-trail,
+html.dl-phone .click-ripple{display:none!important}
+
+/* Blur-слои на мобильном GPU дорогие — заменяем статичной подложкой. */
+html.dl-phone .bg-fx .aurora{filter:none;opacity:.30;mix-blend-mode:normal}
+html.dl-phone .bg-fx .halo{filter:none}
+html.dl-phone .bg-fx .grid{opacity:.7}
+html.dl-phone .card::before,
+html.dl-phone .btn-solid::before,
+html.dl-phone .btn-grad::before,
+html.dl-phone .btn-line::before,
+html.dl-phone .chip::before{display:none}
+html.dl-phone .nav{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+
+/* Наведение на тач-устройствах не должно залипать. */
+@media (hover:none){
+  .card:hover,.step:hover,.feat:hover,.plan:hover{transform:none}
+  .card:hover .open{opacity:0}
+  .btn-solid:hover,.btn-grad:hover,.btn-line:hover{transform:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .model-menu.on{animation:none}
+}
+
+/* =========================================================================
+   Доводка по результатам автотеста: мелкий текст, тач-цели, переполнение.
+   ========================================================================= */
+
+/* Ничего мельче 12px — даже в служебных подписях. */
+.eyebrow{font-size:12px;letter-spacing:.10em}
+.card .meta .n,.chip .n,.filters .n{font-size:12px}
+.dl-mh{font-size:12px;letter-spacing:.08em}
+.fl{font-size:11px;font-weight:700}
+.dl-hist-item .dl-hi-time,.dl-hist-item small{font-size:12px}
+
+/* Фоновые световые пятна не должны создавать горизонтальную прокрутку. */
+.bg-fx{overflow:hidden;max-width:100vw}
+
+@media (max-width:760px){
+  /* Тост был отцентрован через translateX(-50%) и уезжал за левый край. */
+  .toast{
+    left:14px!important;
+    right:14px!important;
+    transform:none!important;
+    width:auto!important;
+    max-width:none!important;
+    box-sizing:border-box;
+  }
+
+  /* Все интерактивные элементы — не меньше 44px по высоте. */
+  .chip,.filters button,.suggests button,
+  #heroModelPill,#heroAttachBtn,#attachBtn,#micBtn,#sendBtn,
+  #modelPill,.tb-btn,.seg button,.pv-head button{
+    min-height:44px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #heroAttachBtn,#attachBtn,#micBtn,#sendBtn,.tb-btn,.pv-head button{min-width:44px}
+  .chip,.filters button{padding:0 14px}
+  .filters{gap:8px}
+
+  /* Шапка на узком экране: гамбургер важнее второстепенных иконок. */
+  .nav-cta a[href*="github"],.nav-cta .gh{display:none}
+  .nav-cta .btn-solid{white-space:nowrap}
+}
+
+@media (max-width:400px){
+  /* На самых узких экранах оставляем только логотип, CTA и меню. */
+  .nav-cta .btn-solid{padding:10px 12px;font-size:13px}
+}
+
+/* ================================================================
+   ЧАСТЬ 5 — точечные исправления по реальным селекторам index.html.
+   Найдены автотестом: градиентный текст, живые фоновые анимации,
+   мелкий шрифт и маленькие тач-цели.
+   ================================================================ */
+
+/* --- 5.1 Градиентный «хром»-текст → плотный белый.
+   Такой текст прозрачен (-webkit-text-fill-color:transparent) и на части
+   экранов просто исчезает. #codeTa не трогаем — там это нужно. */
+.brand .logo .lg,
+.brand-name .bn-amp,
+.hero h1 .grad,
+.sec-title,
+.silver-glow,
+.eyebrow,
+.plan .pp,
+.card:hover .meta .t,
+.foot-mark,
+.think-head .tt {
+	background: none !important;
+	background-image: none !important;
+	-webkit-background-clip: border-box !important;
+	background-clip: border-box !important;
+	-webkit-text-fill-color: currentColor !important;
+	color: var(--text) !important;
+	filter: none !important;
+	animation: none !important;
+}
+.eyebrow { color: var(--faint) !important; }
+.plan .pp span,
+.think-head .tt { color: var(--muted) !important; -webkit-text-fill-color: var(--muted) !important; }
+
+/* --- 5.2 На телефоне фон статичен: снимаем всё движение и шум. */
+html.dl-phone .bg-fx .grid,
+html.dl-phone .bg-fx .current-grid .charge,
+html.dl-phone .bg-fx .current-grid .spark,
+html.dl-phone .bg-fx .comets i,
+html.dl-phone .bg-fx .scanline,
+html.dl-phone .bg-fx .stars .st,
+html.dl-phone .bg-fx .noise { animation: none !important; }
+
+html.dl-phone .bg-fx .current-grid,
+html.dl-phone .bg-fx .comets,
+html.dl-phone .bg-fx .scanline,
+html.dl-phone .bg-fx .stars,
+html.dl-phone .bg-fx .noise { display: none !important; }
+
+/* Декор не должен создавать горизонтальную прокрутку. */
+.bg-fx { overflow: hidden !important; }
+
+/* --- 5.3 Минимальный читаемый кегль. */
+.chip .n,
+.ep-chip .n {
+	font-family: var(--font) !important;
+	font-size: 12px !important;
+	color: var(--faint) !important;
+}
+.tag { font-size: 12px !important; }
+.lg .t { font-size: 11.5px !important; }
+.chat-head .live { font-size: 12px !important; }
+
+/* --- 5.4 Тач-цели не меньше 44px на сенсорных экранах. */
+@media (max-width: 760px) {
+	.chip,
+	.ep-chip {
+		min-height: 44px !important;
+		padding: 10px 14px !important;
+		font-size: 13.5px !important;
+	}
+	.nav .btn-solid,
+	.nav .btn-ghost,
+	.gh-nav-btn,
+	#authBtn,
+	.btn-grad,
+	.plan .pick,
+	.suggests button,
+	.dl-mi,
+	.icon-btn,
+	.tool-btn { min-height: 44px !important; }
+	.gh-nav-btn { min-width: 44px !important; }
+}
+
+/* --- 5.5 Узкие телефоны: шапка не должна слипаться. */
+@media (max-width: 480px) {
+	.nav {
+		grid-template-columns: 1fr auto !important;
+		padding: 10px 12px !important;
+		gap: 8px !important;
+	}
+	.nav .gh-nav-btn { display: none !important; }
+	.nav-cta { gap: 6px !important; }
+	.nav-cta .btn-solid {
+		font-size: 13px !important;
+		padding: 0 12px !important;
+	}
+}
+
+/* Очень узкие экраны: оставляем только логотип и гамбургер. */
+@media (max-width: 380px) {
+	.nav-cta .btn-solid { display: none !important; }
+}
+
+/* ================================================================
+   ЧАСТЬ 6 — остатки по итогам второго прогона автотеста.
+   Описания карточек, фильтры (генерируются JS с data-cat), шапки меню.
+   ================================================================ */
+
+/* --- 6.1 Описание карточки: снимаем прозрачный градиент и поднимаем кегль. */
+.card .meta .d,
+.card:hover .meta .d {
+	background: none !important;
+	background-image: none !important;
+	-webkit-background-clip: border-box !important;
+	background-clip: border-box !important;
+	-webkit-text-fill-color: currentColor !important;
+	color: var(--muted) !important;
+	filter: none !important;
+	animation: none !important;
+	font-size: 12.5px !important;
+	line-height: 1.5 !important;
+}
+
+/* --- 6.2 Счётчики и шапки меню — читаемый минимум. */
+[data-cat] .n,
+.fav .n {
+	font-family: var(--font) !important;
+	font-size: 12px !important;
+	color: var(--faint) !important;
+}
+.dl-menu .dl-mh {
+	font-size: 12px !important;
+	letter-spacing: .1em !important;
+}
+
+/* --- 6.3 Фильтры и кнопка закладок на сенсорных экранах. */
+@media (max-width: 760px) {
+	[data-cat] {
+		min-height: 44px !important;
+		padding: 10px 14px !important;
+		font-size: 13.5px !important;
+	}
+	.dl-fav {
+		width: 44px !important;
+		height: 44px !important;
+		opacity: 1 !important;
+		transform: none !important;
+	}
+	.dl-menu .dl-mi { min-height: 44px !important; }
+}
+
+/* ================================================================
+   ЧАСТЬ 7 — финальная зачистка по третьему прогону.
+   ================================================================ */
+
+/* Коды языков в меню перевода были 9.5px — нечитаемо. */
+.fl {
+	font-family: var(--font) !important;
+	font-size: 12px !important;
+	font-weight: 700 !important;
+	letter-spacing: .04em !important;
+}
+
+/* Кнопка отката в истории версий. */
+@media (max-width: 760px) {
+	.dl-hist-undo,
+	#dlHistUndo { min-height: 44px !important; }
+}

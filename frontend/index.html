@@ -3263,7 +3263,7 @@ select.gh-inp option{background:#141419;color:var(--text)}
   // files: [{path,text?|bytes?}] -> one commit on branch. Returns {commitUrl, sha}
   API.deploy = async function (token, fullName, branch, files, message, targetDir, onProgress) {
     var plan = GH.buildCommitPlan(files, targetDir || '');
-    if (!plan.length) throw new Error('Нет файлов для деплоя');
+    if (!plan.length) throw new Error('Нет файлов д��я деплоя');
     // 1) current head
     var refRes;
     try {
@@ -4017,7 +4017,7 @@ select.gh-inp option{background:#141419;color:var(--text)}
       document.getElementById('ghDeployBody').innerHTML = doneHtml + '<button class="btn-solid gh-cta" onclick="ghCloseDeploy()">Готово</button>';
       if (window.currentProject) window.currentProject.repo = { fullName: fullName, defaultBranch: branch };
       addAI('Задеплоил <b>' + escapeHtml(fullName) + '</b> ✓ ' + r.count + ' файл. ' + (pagesUrl ? 'Сайт: <a href="' + escapeHtml(pagesUrl) + '" target="_blank" rel="noopener">' + escapeHtml(pagesUrl) + '</a>' : '<a href="' + escapeHtml(r.commitUrl) + '" target="_blank" rel="noopener">Посмотреть коммит</a>'));
-      toast('Деплой завершён ✓');
+      toast('Деплой з��вершён ✓');
     } catch (e) {
       depProg('');
       depErr('Не удалось: ' + e.message + (e.status === 401 ? ' — войди заново через GitHub' : ''));
@@ -8079,9 +8079,11 @@ document.addEventListener('keydown',function(e){
 		var man={name:'Design Lab',short_name:'Design Lab',description:'ИИ-редактор сайтов: 98 шаблонов и правки через чат',start_url:'.',display:'standalone',background_color:'#09090a',theme_color:'#09090a',icons:[{src:icon,sizes:'any',type:'image/svg+xml',purpose:'any'}]};
 		var l=document.createElement('link');l.rel='manifest';l.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(man));document.head.appendChild(l);
 		[['theme-color','#09090a'],['apple-mobile-web-app-capable','yes'],['mobile-web-app-capable','yes'],['apple-mobile-web-app-status-bar-style','black-translucent'],['apple-mobile-web-app-title','Design Lab']].forEach(function(mm){var m=document.createElement('meta');m.name=mm[0];m.content=mm[1];document.head.appendChild(m);});
-		if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
-			fetch('sw.js',{method:'HEAD'}).then(function(r){if(r.ok&&(r.headers.get('content-type')||'').indexOf('javascript')>-1)return navigator.serviceWorker.register('sw.js');}).catch(function(){});
-		}
+		/* Service worker не регистрируется: файла sw.js в сборке нет.
+		   Прежний код делал HEAD-запрос к нему при каждой загрузке и получал 404
+		   (net::ERR_ABORTED в консоли на всех семи проверенных ширинах).
+		   Регистрация всё равно не происходила из-за проверки r.ok, так что запрос
+		   был чистым расходом на мобильной сети. Если sw.js появится — вернуть блок. */
 		var defP=null;
 		window.addEventListener('beforeinstallprompt',function(e){
 			e.preventDefault();defP=e;
@@ -8712,7 +8714,7 @@ document.addEventListener('keydown',function(e){
 			'',
 			'МНОГОСТРАНИЧНОСТЬ — сайт должен «тыкаться» в превью:',
 			'- Создавай 2–4 страницы: главная «/» + внутренние по смыслу («/menu», «/about», «/order», «/booking»…). Каждая — отдельный replacePage со своим path.',
-			'- Обязательно страница-исход: куда приводит главная CTA-кнопка — оформление заказа/брони/заявки с шагами («1. Выбери… 2. Напиши…»), контактами и кнопкой возврата «На главную» (href "/").',
+			'- Обязательно страница-��сход: куда приводит главная CTA-кнопка — оформление заказа/брони/заявки с шагами («1. Выбери… 2. Напиши…»), контактами и кнопкой возврата «На главную» (href "/").',
 			'- На каждой странице свой header: логотип (href "/") + nav со ссылками на ВСЕ страницы; внизу footer. Так навигация работает откуда угодно.',
 			'- Кнопки ведут либо на якорь этой же страницы ("#cta"), либо на другую страницу ("/order") — переходы работают в превью через встроенный роутинг.',
 			'- Последней операцией верни пользователя на главную: {"op":"setActivePage","path":"/"}.',
@@ -8966,7 +8968,7 @@ document.addEventListener('keydown',function(e){
 		var p2 = SF.makePage('О студии', '/about');
 		pr.pages.push(p2);
 		SF.addTo(pr, p2.root.id, band({}, [
-			SF.makeNode('paragraph', { text: 'О студии', fontSize: 48, fontWeight: 600 }),
+			SF.makeNode('paragraph', { text: '�� студии', fontSize: 48, fontWeight: 600 }),
 			SF.makeNode('paragraph', { text: 'Это вторая страница — роутинг работает прямо в одном HTML-файле через #/about.', fontSize: 18, color: 'rgba(242,243,245,.62)', maxWidth: '640px' }),
 			SF.makeNode('button', { label: 'На главную', href: '/' })
 		]));
@@ -9061,7 +9063,7 @@ document.addEventListener('keydown',function(e){
 				}
 			}
 			var htmls = files.filter(function (x) { return /\.html?$/i.test(x.path); });
-			if (!htmls.length) throw new Error('Не нашёл HTML-файл (нужен index.html)');
+			if (!htmls.length) throw new Error('Не нашёл HTML-файл (нуж��н index.html)');
 			htmls.sort(function (a, b) { return (/(^|\/)index\.html?$/i.test(b.path) ? 1 : 0) - (/(^|\/)index\.html?$/i.test(a.path) ? 1 : 0) || a.path.length - b.path.length; });
 			var n = sfImportHtml(sfText(htmls[0].bytes), files, null);
 			toast('Импортировано блоков: ' + n + '. Двигай и растягивай их прямо в превью.');
