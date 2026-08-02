@@ -51,7 +51,11 @@ _PATCH_SCRIPTS = (
     "ui-cleanup.js", "iframe-cursor-bridge.js", "design-edit-fix.js", "design-text-scale.js",
     "design-inert.js", "session-restore.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
-    "seekai-models.js", "dl-mobile.js",
+    "seekai-models.js",
+    # Единый движок прокрутки. Обязан идти ДО dl-mobile.js: мобильное меню
+    # строит пункты поверх уже рабочего window.dlScrollToId / scrollTo2.
+    "dl-scroll.js",
+    "dl-mobile.js",
     # Закрытие нижнего листа выбора модели: тап по фону, свайп вниз, Escape.
     "dl-mobile-sheet.js",
     "dl-mobile-polish.js",
@@ -59,12 +63,20 @@ _PATCH_SCRIPTS = (
     "dl-fix.js",
     # Мобильный редактор-мессенджер: чат нижним листом, рабочая область сверху.
     "dl-mobile-chat.js",
+    # Финальный мобильный фикс-слой: растяжка превью под свёрнутым чатом,
+    # рабочая панель кода на телефоне, пересчёт геометрии при повороте.
+    "dl-mobile-fix.js",
+    # Пересборка герой-композера в настоящий чат. Идёт ПОСЛЕДНИМ:
+    # он расставляет узлы поверх всех остальных патчей композера.
+    "dl-chat-mobile.js",
 )
 
 # Листы стилей подключаются в конце документа: так они идут после всех
 # инлайн-<style> в index.html и переопределяют их без гонки за !important.
 _PATCH_STYLES = (
     "dl-design-system.css",
+    # Блокировка прокрутки без потери позиции (см. комментарий в файле).
+    "dl-scroll.css",
     # Мобильный слой идёт последним: он правит то, что задала дизайн-система.
     "dl-mobile.css",
     # Нижний лист выбора модели — после мобильного слоя.
@@ -76,6 +88,11 @@ _PATCH_STYLES = (
     "dl-fix.css",
     # Идёт последним: перекрывает десктопную сетку редактора на телефоне.
     "dl-mobile-chat.css",
+    # Самый последний слой: убирает пустоту под свёрнутым чатом и делает
+    # панель кода полноэкранной на телефоне.
+    "dl-mobile-fix.css",
+    # Последним: перекрывает flex-direction:column из dl-fix.css.
+    "dl-chat-mobile.css",
 )
 _index_cache = None
 

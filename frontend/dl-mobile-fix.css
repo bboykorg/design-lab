@@ -1,0 +1,215 @@
+/* ============================================================================
+   Design Lab — MOBILE FIX LAYER v5 (стили)
+   Подключается ПОСЛЕ всех остальных стилей.
+
+   Что чинит:
+     1. Пустота под свёрнутым чатом. Лента уезжает вниз по transform,
+        но под ней оставался чёрный прямоугольник: #pvFrame не тянулся на
+        всю сцену, потому что эмулятор устройств выставляет ему фиксированные
+        размеры в px (расчёт на десктопную рамку).
+     2. Панель кода на телефоне. #codePanel был только десктопным:
+        width:47%, min-width:330px, прижат к right:0. На экране 360px это
+        узкая полоса поверх сайта, часть уходила под строку ввода.
+     3. Горизонтальный overflow и рваная анимация.
+   ========================================================================= */
+
+@media (max-width: 860px) {
+
+  /* ─── 1. Превью занимает ВСЮ свободную область ─────────────── */
+
+  .editor.on .preview {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Сцена — простой растягивающийся контейнер без рамок эмулятора:
+     на телефоне сам телефон и есть рамка. */
+  .editor.on .pv-stage,
+  .editor.on #pvStage {
+    position: relative !important;
+    flex: 1 1 auto !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #08080a;
+    overflow: hidden;
+    contain: layout paint;
+    /* Высоту считает dl-mobile-fix.js: от низа тулбара до верха строки ввода.
+       flex-растяжка тут ненадёжна из-за абсолютной шапки превью. */
+    height: var(--dlm-stage-h, auto) !important;
+  }
+
+  /* Главное: фрейм тянется на весь контейнер, что бы ему ни проставил
+     эмулятор устройств инлайном. Именно это убирает чёрную пустоту. */
+  .editor.on .pv-stage #pvFrame,
+  .editor.on #pvStage #pvFrame,
+  .editor.on #pvFrame {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    transform: none !important;
+    zoom: 1 !important;
+    display: block !important;
+    background: #08080a;
+  }
+
+  /* Обёртки эмулятора (рамка телефона/планшета) на телефоне не нужны. */
+  .editor.on .pv-fit,
+  .editor.on .pv-dev,
+  .editor.on .pv-scr,
+  .editor.on .emu,
+  .editor.on #emuStage {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    transform: none !important;
+    zoom: 1 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .editor.on .pv-hw,
+  .editor.on .pv-meta,
+  .editor.on .pv-nub { display: none !important; }
+
+  /* Свёрнутый чат не должен ни перехватывать касания, ни рисовать фон. */
+  .editor[data-dlm='peek'] .chat {
+    pointer-events: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: transparent !important;
+  }
+  .editor[data-dlm='peek'] .dlm-scrim { opacity: 0 !important; pointer-events: none !important; }
+
+  /* Затемнение появляется только на полностью раскрытом чате. */
+  .editor[data-dlm='full'] .dlm-scrim { opacity: 1; pointer-events: auto; }
+
+  /* ─── 2. Панель кода — полноэкранный лист ─────────────────── */
+
+  .editor.on #codePanel {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: var(--dlm-top, 52px) !important;
+    bottom: calc(var(--dlm-comp, 92px) + var(--dlm-kb, 0px)) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    z-index: 45 !important;
+    display: none;
+    flex-direction: column;
+    border: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, .09) !important;
+    border-radius: 14px 14px 0 0 !important;
+    box-shadow: 0 -18px 44px rgba(0, 0, 0, .6) !important;
+    background: #0d1117 !important;
+    overflow: hidden;
+  }
+
+  .editor.on #codePanel.on { display: flex !important; }
+
+  /* Шапка панели: крупные цели под палец. */
+  .editor.on #codePanel .cp-head {
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    gap: 8px;
+    min-height: 46px;
+  }
+  .editor.on #codePanel .cp-head #cpName {
+    font-size: 13px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .editor.on #codePanel .cp-a {
+    min-width: 38px;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .editor.on #codePanel .code-ed {
+    flex: 1 1 auto;
+    min-height: 0;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  /* Номера строк на узком экране съедают треть ширины — прячем. */
+  .editor.on #codePanel #codeGut { display: none !important; }
+
+  .editor.on #codePanel .code-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .editor.on #codePanel #codeHl,
+  .editor.on #codePanel #codeTa {
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Пока код открыт — чат не лезет поверх него. */
+  .editor.on.dl-code-open .chat { visibility: hidden; }
+  .editor.on.dl-code-open .dlm-badge { opacity: .45; pointer-events: none; }
+
+  /* ─── 3. Тулбар: горизонтальная лента без обрезки ──────────── */
+
+  .editor.on .pv-head {
+    padding-inline: 10px;
+    gap: 6px;
+    overscroll-behavior-x: contain;
+  }
+  .editor.on .pv-head .seg { flex: 0 0 auto; }
+  .editor.on .pv-head .seg button { white-space: nowrap; }
+
+  /* ─── 4. Общая гигиена мобильного макета ─────────────── */
+
+  html, body { overflow-x: clip; max-width: 100%; }
+
+  /* Строка ввода учитывает жестовую полосу iOS/Android. */
+  .editor.on .composer {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Плавность: одна кривая на все переходы листа и панели кода. */
+  .editor.on .chat {
+    transition: transform .34s cubic-bezier(.22, 1, .36, 1);
+    will-change: transform;
+  }
+  .editor.on .chat.dlm-drag { transition: none !important; }
+
+  .editor.on #codePanel {
+    transition: opacity .22s ease, transform .28s cubic-bezier(.22, 1, .36, 1);
+  }
+  .editor.on #codePanel:not(.on) { opacity: 0; transform: translate3d(0, 12px, 0); }
+  .editor.on #codePanel.on { opacity: 1; transform: none; }
+}
+
+/* Уважаем системную настройку «меньше движения». */
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+  .editor.on .chat,
+  .editor.on #codePanel { transition: none !important; }
+}

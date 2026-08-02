@@ -1,0 +1,175 @@
+/* Design Lab — чат-композер на телефоне.
+
+   Подключается ПОСЛЕ dl-fix.css и dl-mobile-fix.css: именно там живёт
+   правило, ломавшее строку действий (@media max-width:620px →
+   .prompt-actions{flex-direction:column} + #heroSendBtn{align-self:flex-end}).
+
+   Принципы, по которым собран блок:
+   • Иерархия: поле ввода → инструменты + отправка → альтернативный путь.
+     Три уровня веса, не три одинаковых кнопки.
+   • Контраст: активная отправка — единственное белое пятно в блоке.
+   • Ограниченная палитра: только грунт, белый акцент и hairline-границы.
+   • Разный радиус осмыслен: 12px у прямоугольных действий, круг у отправки,
+     пилюля у выбора модели — форма сама говорит о типе элемента. */
+
+@media (max-width: 900px) {
+
+  .prompt-box.dl-cmp {
+    padding: 10px;
+    border-radius: 16px;
+    /* Лёгкий подъём над фоном: hairline вместо тени. */
+    border: 1px solid rgba(255, 255, 255, .12);
+    background: rgba(20, 20, 22, .92);
+  }
+
+  /* Поле ввода — главный элемент блока. */
+  .prompt-box.dl-cmp .pi {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 56px;
+    padding: 12px 12px 10px;
+    border: 0;
+    background: transparent;
+    resize: none;
+    /* 16px обязателен: при меньшем размере iOS Safari зумит страницу
+       при фокусе и сломает вёрстку. */
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  /* Строка — теперь колонка из двух осмысленных рядов, а не куча flex-wrap. */
+  .prompt-box.dl-cmp .prompt-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  /* Ряд 1: инструменты слева, отправка справа. Одна линия, всегда. */
+  .dl-cmp-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .dl-cmp-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* min-width:0 даёт пилюле право сжаться вместо того, чтобы
+       вытолкнуть кнопку отправки за край экрана. */
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Пилюля модели ужимается многоточием — имя модели бывает длинным. */
+  .dl-cmp-tools .hero-model {
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+
+  .dl-cmp-tools .hero-model .ml {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .dl-cmp-tools .hero-icon-btn {
+    flex: 0 0 auto;
+  }
+
+  /* Отправка: последний ребёнок строки, прибита к правому краю.
+     Перекрываем align-self:flex-end из dl-fix.css — теперь у кнопки другой
+     родитель и правило больше не имеет смысла. */
+  .dl-cmp-bar > #heroSendBtn.hero-send {
+    flex: 0 0 auto;
+    align-self: center;
+    margin-left: auto;
+    width: 44px;
+    height: 44px;
+
+    /* Пока поле пустое — кнопка тихая: тот же вес, что у инструментов.
+       Это честно: отправлять пока нечего. */
+    background: rgba(255, 255, 255, .10);
+    color: rgba(255, 255, 255, .55);
+    box-shadow: none;
+    transition:
+      background .18s cubic-bezier(.22, 1, .36, 1),
+      color .18s cubic-bezier(.22, 1, .36, 1),
+      transform .18s cubic-bezier(.22, 1, .36, 1);
+  }
+
+  /* Появился текст — кнопка загорается и становится главным действием. */
+  .dl-cmp-bar > #heroSendBtn.hero-send.is-ready {
+    background: #ffffff;
+    color: #0b0b0d;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+  }
+
+  .dl-cmp-bar > #heroSendBtn.hero-send:active {
+    transform: scale(.94);
+  }
+
+  /* Ряд 2: альтернативный сценарий. Отделён hairline: это другое
+     действие, а не вторая половина отправки. */
+  .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt {
+    display: block;
+    width: auto;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, .09);
+  }
+
+  /* Вторичное действие не должно кричать громче отправки:
+     контур вместо заливки. Раньше это была белая плашка на всю ширину,
+     которая перетягивала всё внимание блока на себя. */
+  .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt .btn-grad {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    min-height: 46px;
+    height: 46px;
+    border-radius: 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, .22);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: none;
+    transition: background .18s cubic-bezier(.22, 1, .36, 1), border-color .18s cubic-bezier(.22, 1, .36, 1);
+  }
+
+  .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt .btn-grad:active {
+    background: rgba(255, 255, 255, .08);
+    border-color: rgba(255, 255, 255, .38);
+  }
+
+  /* Плейсхолдер-накладка #heroPh позиционируется поверх поля ввода.
+     Она декоративная — палец должен проходить сквозь неё в textarea. */
+  .prompt-box.dl-cmp #heroPh {
+    pointer-events: none;
+  }
+
+  /* Фокус виден с клавиатуры и не мешает пальцу. */
+  .prompt-box.dl-cmp :focus-visible {
+    outline: 2px solid rgba(255, 255, 255, .7);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dl-cmp-bar > #heroSendBtn.hero-send,
+  .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt .btn-grad {
+    transition: none;
+  }
+  .dl-cmp-bar > #heroSendBtn.hero-send:active {
+    transform: none;
+  }
+}

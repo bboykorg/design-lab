@@ -115,15 +115,44 @@
     sheet.setAttribute('aria-label', 'Мобильная навигация');
     sheet.hidden = true;
 
-    // Пункты — прокси к реальным кнопкам, чтобы не дублировать обработчики.
+    /* Пункты меню.
+
+       Раньше это был «прокси»: close() и через 60 мс src.click() по скрытой
+       кнопке шапки, которая звала scrollIntoView({behavior:'smooth'}).
+       На телефоне это НЕ работало — ни один пункт никуда не переносил.
+       Причина (замер в браузере на 390x844): скролл-контейнер здесь <body>,
+       а close() ставил body.style.overflow='hidden'/''. Снятие overflow со
+       скролл-контейнера заставляет браузер асинхронно восстанавливать его
+       scrollTop, и это восстановление приходит ПОСЛЕ старта плавной прокрутки,
+       возвращая страницу на 0.
+
+       Теперь: цель извлекаем один раз при сборке меню, прокрутку ведёт
+       dl-scroll.js по явному контейнеру, и стартуем её ТОЛЬКО после того,
+       как лист закрылся и блокировка снята. */
     links.querySelectorAll('button,a').forEach(function (src) {
       var item = document.createElement('button');
       item.type = 'button';
       item.textContent = (src.textContent || '').trim();
       if (!item.textContent) return;
+
+      // scrollTo2('gallery') -> 'gallery'; href="#pricing" -> 'pricing'.
+      var target = '';
+      var m = /scrollTo2\(\s*['"]([^'"]+)['"]\s*\)/.exec(src.getAttribute('onclick') || '');
+      if (m) target = m[1];
+      if (!target) {
+        var href = src.getAttribute('href') || '';
+        if (href.charAt(0) === '#' && href.length > 1) target = href.slice(1);
+      }
+      if (target) item.setAttribute('data-target', target);
+
       item.addEventListener('click', function () {
-        close();
-        setTimeout(function () { src.click(); }, 60);
+        closeThen(function () {
+          if (target && typeof window.dlScrollToId === 'function') {
+            window.dlScrollToId(target);
+          } else {
+            src.click();
+          }
+        });
       });
       sheet.appendChild(item);
     });
@@ -141,19 +170,42 @@
     document.body.appendChild(scrim);
     document.body.appendChild(sheet);
 
+    // Длительность закрытия должна совпадать с transition листа (.3s), иначе
+     // прокрутка стартует поверх ещё едущей панели и выглядит как рывок.
+    var CLOSE_MS = 300;
+    var locked = false;
+
     function open() {
       scrim.hidden = false; sheet.hidden = false;
       requestAnimationFrame(function () { scrim.classList.add('on'); sheet.classList.add('on'); });
       toggle.setAttribute('aria-expanded', 'true');
-      document.body.style.overflow = 'hidden';
+      /* НЕ трогаем overflow скролл-контейнера: на этом сайте это <body>,
+         и в iOS Safari overflow:hidden на нём сбрасывает позицию прокрутки.
+         dlLockScroll гасит жест через touch-action, сохраняя scrollTop. */
+      if (typeof window.dlLockScroll === 'function' && !locked) {
+        window.dlLockScroll();
+        locked = true;
+      }
     }
-    function close() {
+
+    function unlock() {
+      if (locked && typeof window.dlUnlockScroll === 'function') {
+        window.dlUnlockScroll();
+      }
+      locked = false;
+    }
+
+    function close() { closeThen(null); }
+
+    function closeThen(after) {
+      var wasOpen = toggle.getAttribute('aria-expanded') === 'true';
       scrim.classList.remove('on'); sheet.classList.remove('on');
       toggle.setAttribute('aria-expanded', 'false');
-      document.body.style.overflow = '';
+      unlock();
       setTimeout(function () {
         if (!sheet.classList.contains('on')) { scrim.hidden = true; sheet.hidden = true; }
-      }, 300);
+        if (after) after();
+      }, wasOpen ? CLOSE_MS : 0);
     }
     toggle.addEventListener('click', function () {
       if (toggle.getAttribute('aria-expanded') === 'true') close(); else open();

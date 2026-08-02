@@ -73,14 +73,32 @@
 }
 
 /* 1.4 Тяжёлые фоновые эффекты — только на мощных экранах, и без mix-blend. */
-.bg-fx{contain:strict;pointer-events:none}
+/* БЫЛО: `contain:strict` = size + layout + paint + style.
+   Составляющая `size` заставляет браузер считать собственный размер блока
+   нулевым, игнорируя `inset:0`. Все дочерние слои (.grid, .halo, .aurora)
+   растянуты по родителю — и схлопывались в точку. Именно поэтому с десктопа
+   пропала фоновая сетка. Оставляем layout/paint/style — весь выигрыш по
+   производительности сохраняется, геометрия снова работает. */
+.bg-fx{contain:layout paint style;pointer-events:none}
+.bg-fx,.bg-fx .grid,.bg-fx .halo,.bg-fx .aurora{min-width:0}
 .bg-fx .b,.bg-fx .a4{will-change:auto}
 @media (max-width:1024px),(pointer:coarse){
   .bg-fx .comets,.bg-fx .a4{display:none !important}
   .bg-fx .b{filter:blur(48px) !important;opacity:.35 !important}
   .bg-fx *{animation:none !important}
 }
-html.dl-lowfx .bg-fx{display:none !important}
+/* БЫЛО: весь фоновый слой вырезался целиком — сайт становился плоским чёрным
+   прямоугольником. Сетка практически бесплатна (два линейных градиента без blur),
+   поэтому в low-fx гасим только дорогие слои: blur-блобы, звёзды, кометы. */
+html.dl-lowfx .bg-fx .aurora,
+html.dl-lowfx .bg-fx .stars,
+html.dl-lowfx .bg-fx .comets,
+html.dl-lowfx .bg-fx .scanline,
+html.dl-lowfx .bg-fx .current-grid,
+html.dl-lowfx .bg-fx .noise{display:none !important}
+html.dl-lowfx .bg-fx{display:block !important;opacity:1 !important}
+html.dl-lowfx .bg-fx .grid{display:block !important;opacity:.85 !important;animation:none !important}
+html.dl-lowfx .bg-fx .halo{display:block !important;filter:none !important}
 html.dl-lowfx *{animation-duration:.001s !important;animation-iteration-count:1 !important}
 html.dl-lowfx .card:hover{transform:none !important}
 

@@ -1,0 +1,37 @@
+/* Design Lab — блокировка прокрутки без потери позиции.
+
+   Почему не overflow:hidden.
+   На этом сайте скролл-контейнер — сам <body> (замер: body{overflow-y:auto;height:844px},
+   body.scrollTop = 32166 при window.pageYOffset = 0). В iOS Safari установка overflow:hidden
+   на скролл-контейнер клампит его scrollTop к нулю, а после снятия браузер
+   восстанавливает позицию асинхронно — и гасит любую прокрутку, запущенную
+   сразу после закрытия меню. Именно поэтому пункты гамбургера «не работали».
+
+   Вместо этого гасим жест через touch-action и overscroll-behavior:
+   геометрия и scrollTop контейнера остаются нетронутыми. */
+
+.dl-scroll-locked {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+/* Сама панель и её содержимое обязаны оставаться прокручиваемыми:
+   длинный список моделей или меню на низком экране иначе станет тупиком. */
+.dl-scroll-locked-root #dlNavSheet,
+.dl-scroll-locked-root #dlNavSheet *,
+.dl-scroll-locked-root .model-menu,
+.dl-scroll-locked-root .model-menu *,
+.dl-scroll-locked-root .modal,
+.dl-scroll-locked-root .modal * {
+  touch-action: auto;
+}
+
+.dl-scroll-locked-root #dlNavSheet {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Плавная прокрутка браузера отключена осознанно.
+   Движок dl-scroll.js ведёт анимацию сам, с правильным easing и компенсацией
+   липкой шапки. Два одновременных механизма дают рывки. */
+html, body { scroll-behavior: auto; }

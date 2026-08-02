@@ -23,9 +23,23 @@
   /* ------------------------------------------------------------------ *
    * 1. Определяем слабое устройство
    * ------------------------------------------------------------------ */
-  var cores = navigator.hardwareConcurrency || 4;
-  var mem = navigator.deviceMemory || 4;
-  var lowFx = reduce || cores <= 4 || mem <= 4 || (coarse && innerWidth < 900);
+  /* ВАЖНО: детект намеренно консервативный.
+     Раньше условие было `cores <= 4 || mem <= 4` — под него попадал почти любой
+     обычный десктоп (4 ядра / 4 ГБ — типичная офисная машина, а Chrome вдобавок
+     режет deviceMemory до 4 на многих сборках). В результате на нормальных ПК
+     включался режим слабого устройства: пропадал фоновый слой (.bg-fx с сеткой)
+     и глушились все mousemove на window — вместе с кастомным курсором.
+     Теперь low-fx — это либо явная просьба системы (reduced-motion), либо
+     действительно слабое сенсорное устройство. */
+  var cores = navigator.hardwareConcurrency || 8;
+  var mem = navigator.deviceMemory || 8;
+  var weakSpecs = cores <= 2 || mem <= 2;
+  /* Тонкий указатель = есть мышь: кастомный курсор обязан жить. */
+  var finePointer = !!(window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches);
+  /* Настоящий десктоп (мышь + широкое окно) никогда не считаем слабым:
+     именно из-за ложного срабатывания пропадала фоновая сетка. */
+  var realDesktop = finePointer && !coarse && innerWidth >= 1000;
+  var lowFx = (reduce || weakSpecs || (coarse && innerWidth < 700 && cores <= 4)) && !realDesktop;
   if (lowFx) docEl.classList.add('dl-lowfx');
 
   /* ------------------------------------------------------------------ *
@@ -76,11 +90,48 @@
     }, true);
   }
 
-  /* Parallax фона — самый дорогой эффект (перерисовка blur-блобов). */
-  if (lowFx) {
+  /* Parallax фона — самый дорогой эффект (перерисовка blur-блобов).
+
+     Здесь была фатальная строка:
+         window.addEventListener('mousemove', e => e.stopImmediatePropagation(), true)
+     Она глушила ВСЕ window-слушатели mousemove, а кастомный курсор
+     (#cursorDot/#cursorRing/#cursorGlow) подписан именно на window. Плюс
+     `html.cursor-on *{cursor:none}` прячет системную стрелку — в итоге курсор
+     исчезал полностью. Глушим parallax только там, где мыши нет в принципе. */
+  if (lowFx && !finePointer) {
     window.addEventListener('mousemove', function (e) { e.stopImmediatePropagation(); }, true);
+  }
+  if (lowFx) {
     var fx = document.querySelector('.bg-fx');
     if (fx) { fx.style.setProperty('--mx', '0'); fx.style.setProperty('--my', '0'); }
+  }
+
+  /* Страховка: если курсор всё же кто-то заглушил — держим его живым сами.
+     Слушатель ставится в фазе захвата на window, поэтому срабатывает раньше
+     любого stopImmediatePropagation от сторонних патчей. */
+  if (finePointer) {
+    var cDot = document.getElementById('cursorDot');
+    var cRing = document.getElementById('cursorRing');
+    var cGlow = document.getElementById('cursorGlow');
+    if (cDot && cRing && cGlow) {
+      docEl.classList.add('cursor-on');
+      var cx = innerWidth / 2, cy = innerHeight / 2;
+      var rrx = cx, rry = cy, ggx = cx, ggy = cy, cursorRaf = 0;
+      window.addEventListener('mousemove', function (e) {
+        cx = e.clientX; cy = e.clientY;
+        cDot.style.transform = 'translate(' + cx + 'px,' + cy + 'px)';
+        if (cDot.style.opacity === '0') {
+          cDot.style.opacity = ''; cRing.style.opacity = ''; cGlow.style.opacity = '';
+        }
+      }, true);
+      (function cursorLoop() {
+        rrx += (cx - rrx) * 0.18; rry += (cy - rry) * 0.18;
+        ggx += (cx - ggx) * 0.09; ggy += (cy - ggy) * 0.09;
+        cRing.style.transform = 'translate(' + rrx + 'px,' + rry + 'px)';
+        cGlow.style.transform = 'translate(' + ggx + 'px,' + ggy + 'px)';
+        cursorRaf = requestAnimationFrame(cursorLoop);
+      })();
+    }
   }
 
   killInlineTransforms();
