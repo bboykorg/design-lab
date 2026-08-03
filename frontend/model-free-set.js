@@ -1,27 +1,38 @@
-/* Design Lab — single source of truth for which models the Free plan includes. */
+/* Design Lab — единый список бесплатных моделей.
+   На него опираются и группы в меню, и блокировка выбора.
+   Всё, чего здесь нет, считается платным (PRO) — включая модели SeekAI. */
 (function () {
   'use strict';
-  var FREE_MODEL_IDS = {
-    /* Cerebras */
-    'zai-glm-4.7': true, 'gpt-oss-120b': true, 'gemma-4-31b': true,
-    /* OpenRouter free tier */
-    'google/gemma-4-31b-it:free': true, 'nvidia/nemotron-3-ultra-550b-a55b:free': true,
-    'openai/gpt-oss-20b:free': true, 'cohere/north-mini-code:free': true, 'openrouter/free': true,
-    /* Added to Free by request */
-    'Qwen3.6-35B-A3B': true, 'qwen3.6-35b-a3b': true,
-    'glm-4.6': true, 'kiwi::glm-4.6': true,
-    'mistral-large-latest': true, 'mistral-large': true,
-    'glm-4.5v': true, 'GLM-4.5V': true, 'zai-glm-4.5v': true, 'glm-4.5-v': true
-  };
-  var FREE_NAMES = {
-    'qwen 3.6 35b a3b': true, 'glm-4.6': true, 'glm 4.6': true,
-    'mistral large': true, 'glm-4.5v': true, 'glm 4.5v': true
-  };
-  function norm(value) { return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+  var IDS = [
+    'google/gemma-4-31b-it:free', 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    'openai/gpt-oss-20b:free', 'cohere/north-mini-code:free', 'openrouter/free',
+    'zai-glm-4.7', 'gpt-oss-120b', 'gemma-4-31b',
+    'Qwen3.6-35B-A3B', 'glm-4.6', 'kiwi::glm-4.6',
+    'mistral-large-latest', 'mistral-large',
+    'glm-4.5v', 'GLM-4.5V', 'zai-glm-4.5v'
+  ];
+  var NAMES = [
+    'qwen 3.6 35b a3b', 'glm-4.6', 'glm 4.6', 'mistral large', 'glm-4.5v', 'glm 4.5v'
+  ];
+
+  var ids = {};
+  IDS.forEach(function (id) {
+    ids[id] = true;
+    ids[String(id).toLowerCase()] = true;
+  });
+
+  function norm(value) {
+    return String(value == null ? '' : value).replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+
   window.dlIsFreeModel = function (model) {
     if (!model) return false;
-    if (FREE_MODEL_IDS[model.model || '']) return true;
-    if (FREE_MODEL_IDS[norm(model.model)]) return true;
-    return !!FREE_NAMES[norm(model.name)];
+    if (typeof model === 'string') {
+      return !!ids[model] || !!ids[model.toLowerCase()] || NAMES.indexOf(norm(model)) >= 0;
+    }
+    if (model.provider === 'seekai') return false;
+    var id = model.model || model.id || '';
+    if (ids[id] || ids[String(id).toLowerCase()]) return true;
+    return NAMES.indexOf(norm(model.name)) >= 0;
   };
 })();

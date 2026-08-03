@@ -5,8 +5,10 @@
    • Модели-дубли не трогаем: backend/seekai.py сам переключает их на SeekAI,
      когда лимиты основного провайдера заканчиваются.
 
-   Название провайдера в списке моделей не показывается: группы в меню только
-   по тарифам (FREE / PRO), их ставит model-plan-groups.js.
+   Группа в меню — всегда PRO: это платные модели. Группу ставим явно:
+   model-plan-groups.js отрабатывает раньше, чем эти модели появляются в MODELS,
+   и без явной метки они падали в список бесплатных. Названия провайдера
+   в списке нет — только деление по тарифам.
 
    Важно: MODELS/AV/FALLBACK_ORDER объявлены через const в index.html, поэтому
    их нет в window — обращаемся к ним по имени, как это делает models-patch.js. */
@@ -14,6 +16,7 @@
   'use strict';
   if (window.__dlSeekaiPatched) return;
 
+  var GROUP = 'PRO';
   var GW = { url: 'https://seekai.cc/v1/chat/completions', host: 'seekai.cc' };
 
   var NEW = {
@@ -56,7 +59,8 @@
       var icon = avatar(LETTERS[m.brand] || '•');
       models[id] = {
         name: m.name, desc: m.desc, provider: 'seekai',
-        model: m.model, brand: m.brand, gw: GW,
+        model: m.model, brand: m.brand, gw: GW, group: GROUP,
+        pro: true, plan: 'pro',
         av: icon, icon: icon
       };
     });
