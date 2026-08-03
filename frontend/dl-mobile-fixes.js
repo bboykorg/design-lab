@@ -1,8 +1,7 @@
 /* Точечные исправления поверх всех остальных слоёв:
    1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) после входа аккаунт в меню появлялся только после перезагрузки,
-      да и то одной кнопкой «Выйти» — теперь рядом есть вход в профиль;
+   3) в меню есть отдельный вход в профиль, а никнейм в кнопках не дублируется;
    4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
    5) на телефоне всплывающие окна (профиль, меню, листы) делаются непрозрачными.
       На компьютере оформление не меняется. */
@@ -118,10 +117,10 @@
   }
 
   /* --- Вход в профиль рядом с кнопкой выхода -----------------------
-     После входа в меню оставалась только кнопка «Выйти — логин»: попасть
-     в профиль было неоткуда. Ставим рядом отдельную кнопку с никнеймом,
-     а саму кнопку выхода не трогаем — её обработчик нам недоступен. */
-  var LOGOUT = /^выйти\s*[—–-]\s*(.+)$/i;
+     Никнейм в подписи кнопок не нужен: он уже виден в самом профиле,
+     а в меню только удлинял кнопки и ломал строку на узком экране. */
+  var LOGOUT = /^выйти(\s*[—–-]\s*.+)?$/i;
+  var NICKED = /^(\s*)выйти\s*[—–-]\s*.+$/i;
   function openProfile(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (typeof window.dlProfile === 'function') { window.dlProfile(); return; }
@@ -131,29 +130,39 @@
     var list;
     try { list = document.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
     Array.prototype.forEach.call(list, function (el) {
-      if (el.hasAttribute(ACCT) || el.hasAttribute(MARK)) return;
-      var hit = LOGOUT.exec(text(el));
-      if (!hit) return;
+      if (el.getAttribute(ACCT) === 'open' || el.hasAttribute(MARK)) return;
+      if (!LOGOUT.test(text(el))) return;
       el.setAttribute(ACCT, 'logout');
-      var host = el.parentElement;
-      if (!host || host.querySelector('[' + ACCT + '="open"]')) return;
 
-      var nick = String(hit[1]).trim();
-      var button = document.createElement(el.tagName === 'A' ? 'button' : el.tagName.toLowerCase());
-      button.className = el.className || '';
-      var css = el.getAttribute('style');
-      if (css) button.setAttribute('style', css);
-      button.setAttribute(ACCT, 'open');
-      button.setAttribute('type', 'button');
-      button.textContent = 'Профиль — ' + nick;
-      button.addEventListener('click', openProfile);
-      host.insertBefore(button, el);
+      var host = el.parentElement;
+      if (host && !host.querySelector('[' + ACCT + '="open"]')) {
+        var button = document.createElement(el.tagName === 'A' ? 'button' : el.tagName.toLowerCase());
+        button.className = el.className || '';
+        var css = el.getAttribute('style');
+        if (css) button.setAttribute('style', css);
+        button.setAttribute(ACCT, 'open');
+        button.setAttribute('type', 'button');
+        button.textContent = 'Профиль';
+        button.addEventListener('click', openProfile);
+        host.insertBefore(button, el);
+      }
+
+      /* Подпись кнопки выхода — просто «Выйти», без логина.
+         Меняем только текстовый узел, чтобы не снести значки внутри. */
+      trimNick(el);
     });
   }
+  function trimNick(el) {
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var node;
+    while ((node = walker.nextNode())) {
+      var value = String(node.nodeValue || '');
+      if (!NICKED.test(value.replace(/\s+/g, ' ').trim())) continue;
+      node.nodeValue = value.replace(/выйти\s*[—–-]\s*.+$/i, 'Выйти');
+    }
+  }
 
-  /* --- Непрозрачные всплывающие окна на телефоне ------------------
-     Окно профиля собирается без классов и id, поэтому общий поиск его не видел:
-     подключаем его метку адресно и разрешаем вложенные блоки внутри окон. */
+  /* --- Непрозрачные всплывающие окна на телефоне ------------------ */
   var PANEL = '[data-dl-profile-panel],[data-dl-profile-panel] > div,' +
     '[role="dialog"],[class*="sheet"],[class*="modal"],[class*="menu"],' +
     '[class*="drawer"],[class*="popover"],[class*="dropdown"],[class*="account"],' +
@@ -161,7 +170,6 @@
   function floating(el, css) {
     var pos = css.position;
     if (pos === 'fixed' || pos === 'absolute' || pos === 'sticky') return true;
-    /* Внутренняя карточка окна может быть relative — смотрим на родителя. */
     try {
       return !!el.closest('[data-dl-profile-panel],[role="dialog"]');
     } catch (e) { return false; }
