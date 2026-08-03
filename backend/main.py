@@ -57,6 +57,8 @@ _PATCH_SCRIPTS = (
     "ui-cleanup.js", "iframe-cursor-bridge.js", "design-edit-fix.js", "design-text-scale.js",
     # Снятие чужих ограничений ширины при растяжке блока в режиме дизайна.
     "design-resize-free.js",
+    # Режим дизайна сразу запускает движок редактирования блоков.
+    "design-autoarm.js",
     "design-inert.js", "session-restore.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
     "seekai-models.js",
