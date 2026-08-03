@@ -1,8 +1,8 @@
 /* Точечные исправления поверх всех остальных слоёв:
    1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) у вошедшего пользователя в меню остаётся одна кнопка «Профиль»: кнопки выхода
-      и входа, а также строка со своим логином убираются — выход есть в самом профиле;
+   3) у вошедшего пользователя в шапке и меню остаётся одна кнопка «Профиль»:
+      кнопки выхода и входа, а также строка со своим логином убираются;
    4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
    5) на телефоне всплывающие окна (профиль, меню, листы) делаются непрозрачными.
       На компьютере оформление не меняется. */
@@ -124,11 +124,13 @@
     });
   }
 
-  /* --- Логин текущего пользователя ----------------------------------- */
+  /* --- Логин и состояние входа ------------------------------------- */
   var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
+  var TOKENY = /(token|jwt|session|access)/i;
   var nick = '';
   try { nick = String(localStorage.getItem(NICK_CACHE) || ''); } catch (e) { nick = ''; }
   var asked = false;
+  var sawLogout = false;
 
   function setNick(value) {
     value = String(value || '').trim();
@@ -143,10 +145,25 @@
         if (value) return value;
       } catch (e) {}
     }
+    // Запасной путь: ключ мог быть назван иначе — ищем по имени ключа.
+    var stores = [];
+    try { stores.push(localStorage); } catch (e) {}
+    try { stores.push(sessionStorage); } catch (e) {}
+    for (var s = 0; s < stores.length; s++) {
+      var store = stores[s];
+      try {
+        for (var k = 0; k < store.length; k++) {
+          var key = store.key(k);
+          if (!key || !TOKENY.test(key)) continue;
+          var got = String(store.getItem(key) || '');
+          if (got.length >= 16 && got !== 'null' && got !== 'undefined') return got;
+        }
+      } catch (e) {}
+    }
     return '';
   }
   function signedIn() {
-    return !!token();
+    return !!(token() || nick || sawLogout);
   }
   function askNick() {
     if (asked || nick) return;
@@ -165,11 +182,10 @@
     } catch (e) {}
   }
 
-  /* --- Аккаунт в меню -------------------------------------------------
-     Раньше здесь была кнопка «Выйти — логин» и отдельная строка списка
-     с логином. Обе пересобирались чужим слоем и мелькали при загрузке.
-     Оставляем только свою кнопку «Профиль». Кнопку выхода внутри
-     самого окна профиля не трогаем. */
+  /* --- Кнопка профиля вместо кнопки выхода ------------------------
+     Кнопка «Выйти — логин» пересобиралась чужим слоем и мелькала
+     подписью при загрузке. Оставляем только свою кнопку «Профиль»:
+     выход есть внутри самого окна профиля, его не трогаем. */
   var LOGOUT = /^выйти(\s*[—–-]\s*(.+))?$/i;
   function openProfile(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -178,7 +194,7 @@
   }
   function addButton(host, sample) {
     if (!host || host.querySelector('[' + ACCT + '="open"]')) return;
-    var tag = sample && sample.tagName === 'A' ? 'button' : (sample ? sample.tagName.toLowerCase() : 'button');
+    var tag = sample && sample.tagName !== 'A' ? sample.tagName.toLowerCase() : 'button';
     var button = document.createElement(tag);
     if (sample) {
       button.className = sample.className || '';
@@ -200,6 +216,7 @@
       if (inProfilePanel(el)) return;
       var hit = LOGOUT.exec(raw(el));
       if (!hit) return;
+      sawLogout = true;
       if (hit[2]) setNick(hit[2]);
 
       var host = el.parentElement;
@@ -213,29 +230,34 @@
   }
 
   /* --- Кнопки входа у вошедшего пользователя ------------------------
-     Слой меню рисует «Войти» / «Начать бесплатно» независимо от того,
-     вошёл ли пользователь. Убираем их только в том же блоке, где стоит
-     кнопка профиля, чтобы не трогать призывы на самих страницах. */
+     Шапка и бургер-меню рисуют «Войти» / «Начать бесплатно» независимо
+     от того, вошёл ли пользователь. Убираем такие кнопки в шапке, навигации
+     и меню, но не трогаем призывы в теле страницы (тарифы, главный экран). */
   var SIGNIN = [
     'войти', 'вход', 'войти в аккаунт', 'войти в профиль',
     'регистрация', 'зарегистрироваться', 'создать аккаунт',
-    'начать бесплатно', 'попробовать бесплатно',
+    'начать бесплатно', 'попробовать бесплатно', 'начать бесплатно →',
     'sign in', 'sign up', 'log in', 'login'
   ];
+  var BARS = 'header,nav,[' + ACCT + '="host"],' +
+    '[class*="menu"],[class*="nav"],[class*="header"],[class*="drawer"],' +
+    '[class*="burger"],[class*="sheet"],[class*="topbar"],[class*="toolbar"],' +
+    '[id*="menu"],[id*="nav"],[id*="header"],[id*="drawer"],[id*="burger"]';
+  function inBar(el) {
+    try { return !!el.closest(BARS); } catch (e) { return false; }
+  }
   function dropSignIn() {
     if (!signedIn()) return;
-    var hosts;
-    try { hosts = document.querySelectorAll('[' + ACCT + '="host"]'); } catch (e) { return; }
-    Array.prototype.forEach.call(hosts, function (host) {
-      var list;
-      try { list = host.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
-      Array.prototype.forEach.call(list, function (el) {
-        if (el.getAttribute(ACCT) === 'open' || el.hasAttribute(MARK)) return;
-        if (inProfilePanel(el)) return;
-        if (SIGNIN.indexOf(text(el)) < 0) return;
-        el.setAttribute(MARK, 'signin');
-        if (el.parentElement) el.parentElement.removeChild(el);
-      });
+    var list;
+    try { list = document.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
+    Array.prototype.forEach.call(list, function (el) {
+      if (el.getAttribute(ACCT) === 'open' || el.hasAttribute(MARK)) return;
+      if (inProfilePanel(el)) return;
+      var value = text(el).replace(/\s*[→>›]+$/, '').trim();
+      if (SIGNIN.indexOf(value) < 0) return;
+      if (!inBar(el)) return;
+      el.setAttribute(MARK, 'signin');
+      if (el.parentElement) el.parentElement.removeChild(el);
     });
   }
 
@@ -363,6 +385,7 @@
     if (!token()) {
       nick = '';
       asked = false;
+      sawLogout = false;
       try { localStorage.removeItem(NICK_CACHE); } catch (e) {}
     } else {
       asked = false;
