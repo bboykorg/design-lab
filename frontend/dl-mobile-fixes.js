@@ -1,10 +1,11 @@
 /* Точечные исправления поверх всех остальных слоёв:
    1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) после входа аккаунт в бургер-меню появлялся только после перезагрузки;
+   3) после входа аккаунт в меню появлялся только после перезагрузки,
+      да и то одной кнопкой «Выйти» — теперь рядом есть вход в профиль;
    4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
    5) на телефоне всплывающие окна (профиль, меню, листы) делаются непрозрачными.
-      На компьютере оформление не меняется: там прозрачность читаемости не мешает. */
+      На компьютере оформление не меняется. */
 (function () {
   'use strict';
   if (window.__dlMobileFixes) return;
@@ -21,10 +22,10 @@
   ];
   var MARK = 'data-dl-removed';
   var SOLID = 'data-dl-solid';
+  var ACCT = 'data-dl-account';
   var RELOADED = 'dl_auth_reloaded';
-  var BASE = '#0b0b0b';
+  var BASE = '#0f1116';
 
-  /* Стили в медиазапросе: на пк они просто не применяются. */
   var style = document.createElement('style');
   style.textContent =
     '[' + MARK + ']{display:none!important}' +
@@ -41,7 +42,7 @@
     return String(node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
-  /* Убираем саму кнопку, а не её текст: ищем ближайший кликабельный узел. */
+  /* --- Кнопка установки приложения ------------------------------------ */
   function dropInstall() {
     var list;
     try { list = document.querySelectorAll('button,a,[role="button"],div,span'); } catch (e) { return; }
@@ -61,7 +62,7 @@
     });
   }
 
-  /* Заголовки с названием провайдера в списке моделей не нужны. */
+  /* --- Заголовки провайдеров в списке моделей --------------------- */
   var VENDOR = [
     'seekai', 'seek ai', 'gorouter', 'kiwillm', 'kiwi', 'vyce', 'vyce ai',
     'cerebras', 'openrouter', 'bigmodel', 'z.ai'
@@ -81,7 +82,7 @@
     });
   }
 
-  /* Значок модели не нашёлся — в разметку попало слово undefined. */
+  /* --- undefined вместо значка модели -------------------------------- */
   var SYMBOL = [
     { mark: 'grok', sign: '✕' }, { mark: 'gpt', sign: 'G' },
     { mark: 'claude', sign: 'C' }, { mark: 'opus', sign: 'C' },
@@ -116,12 +117,55 @@
     });
   }
 
-  /* На телефоне окно профиля занимает весь экран, и сквозь него видна страница:
-     текст и поля читаются плохо. Делаем фон плотным и убираем размытие.
-     Свой цвет панели сохраняем; если фона нет вовсе — подкладываем базовый тёмный. */
-  var PANEL = '[role="dialog"],[class*="sheet"],[class*="modal"],[class*="menu"],' +
+  /* --- Вход в профиль рядом с кнопкой выхода -----------------------
+     После входа в меню оставалась только кнопка «Выйти — логин»: попасть
+     в профиль было неоткуда. Ставим рядом отдельную кнопку с никнеймом,
+     а саму кнопку выхода не трогаем — её обработчик нам недоступен. */
+  var LOGOUT = /^выйти\s*[—–-]\s*(.+)$/i;
+  function openProfile(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    if (typeof window.dlProfile === 'function') { window.dlProfile(); return; }
+    location.hash = '#profile';
+  }
+  function addAccountButton() {
+    var list;
+    try { list = document.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
+    Array.prototype.forEach.call(list, function (el) {
+      if (el.hasAttribute(ACCT) || el.hasAttribute(MARK)) return;
+      var hit = LOGOUT.exec(text(el));
+      if (!hit) return;
+      el.setAttribute(ACCT, 'logout');
+      var host = el.parentElement;
+      if (!host || host.querySelector('[' + ACCT + '="open"]')) return;
+
+      var nick = String(hit[1]).trim();
+      var button = document.createElement(el.tagName === 'A' ? 'button' : el.tagName.toLowerCase());
+      button.className = el.className || '';
+      var css = el.getAttribute('style');
+      if (css) button.setAttribute('style', css);
+      button.setAttribute(ACCT, 'open');
+      button.setAttribute('type', 'button');
+      button.textContent = 'Профиль — ' + nick;
+      button.addEventListener('click', openProfile);
+      host.insertBefore(button, el);
+    });
+  }
+
+  /* --- Непрозрачные всплывающие окна на телефоне ------------------
+     Окно профиля собирается без классов и id, поэтому общий поиск его не видел:
+     подключаем его метку адресно и разрешаем вложенные блоки внутри окон. */
+  var PANEL = '[data-dl-profile-panel],[data-dl-profile-panel] > div,' +
+    '[role="dialog"],[class*="sheet"],[class*="modal"],[class*="menu"],' +
     '[class*="drawer"],[class*="popover"],[class*="dropdown"],[class*="account"],' +
     '[class*="profile"],[id*="menu"],[id*="modal"],[id*="sheet"],[id*="account"],[id*="profile"]';
+  function floating(el, css) {
+    var pos = css.position;
+    if (pos === 'fixed' || pos === 'absolute' || pos === 'sticky') return true;
+    /* Внутренняя карточка окна может быть relative — смотрим на родителя. */
+    try {
+      return !!el.closest('[data-dl-profile-panel],[role="dialog"]');
+    } catch (e) { return false; }
+  }
   function solidify() {
     if (!phone()) return;
     var list;
@@ -133,9 +177,7 @@
       if (box.width < 40 || box.height < 40) return;
       var css = window.getComputedStyle(el);
       if (css.display === 'none' || css.visibility === 'hidden') return;
-      /* Статичные блоки в потоке страницы не трогаем — только всплывающие. */
-      var pos = css.position;
-      if (pos !== 'fixed' && pos !== 'absolute' && pos !== 'sticky') return;
+      if (!floating(el, css)) return;
 
       var rgba = String(css.backgroundColor || '').match(/^rgba?\(([^)]+)\)$/);
       var alpha = 1;
@@ -147,16 +189,16 @@
           tone = 'rgb(' + parts[0].trim() + ',' + parts[1].trim() + ',' + parts[2].trim() + ')';
         }
       }
-      var blurred = /blur/.test(String(css.backdropFilter || css.webkitBackdropFilter || ''));
-      if (alpha >= 1 && !blurred) return;
+      var blur = String(css.backdropFilter || css.webkitBackdropFilter || '');
+      if (alpha >= 1 && !/blur/.test(blur)) return;
 
       el.setAttribute(SOLID, '1');
       el.style.setProperty('background-color', tone, 'important');
+      el.style.setProperty('background-image', 'none', 'important');
       el.style.setProperty('backdrop-filter', 'none', 'important');
       el.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
     });
   }
-  /* При смене ширины (поворот, окно на пк) возвращаем исходное оформление. */
   function unsolidify() {
     if (phone()) return;
     var list;
@@ -164,13 +206,13 @@
     Array.prototype.forEach.call(list, function (el) {
       el.removeAttribute(SOLID);
       el.style.removeProperty('background-color');
+      el.style.removeProperty('background-image');
       el.style.removeProperty('backdrop-filter');
       el.style.removeProperty('-webkit-backdrop-filter');
     });
   }
 
-  /* Вход и выход должны сразу отражаться в меню.
-     Ключ токена угадывать бессмысленно — смотрим на всё хранилище сразу. */
+  /* --- Вход и выход сразу отражаются в меню ---------------------- */
   var AUTHY = /(token|auth|user|profile|session|login|jwt|nick|account|plan)/i;
   function snapshot() {
     var parts = [];
@@ -258,6 +300,7 @@
     dropInstall();
     dropVendorHeads();
     dropUndefined();
+    addAccountButton();
     unsolidify();
     solidify();
   }
