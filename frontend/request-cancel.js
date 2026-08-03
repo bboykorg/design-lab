@@ -5,6 +5,8 @@
    1. Кнопка висела отдельным окошком посередине экрана. Теперь она встаёт
       НА МЕСТО кнопки отправки и копирует её классы и размер, а после
       окончания генерации кнопка отправки возвращается на место.
+      На кнопке квадратик остановки, а не слово: рядом с полем ввода всё
+      остальное тоже значками, и надпись ломала размер кнопки.
       Кнопка отправки ищется от поля ввода, а не по жёсткому селектору:
       вёрстка композера разная на главной, в редакторе и на телефоне.
 
@@ -24,12 +26,16 @@
   window.__dlRequestCancel = true;
 
   var BTN_ID = 'dl-cancel-btn';
-  var LABEL = '\u0421\u0442\u043e\u043f';
   var TIMEOUT_MS = 150000;   // предел ожидания одной попытки
   var LOCK_MS = 90000;       // срок жизни замка после отмены
 
+  // Квадратик остановки — такой же значок, как в плеерах и чатах.
+  var ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" ' +
+    'style="display:block"><rect x="7" y="7" width="10" height="10" rx="2" ' +
+    'fill="currentColor"></rect></svg>';
+
   var live = [];             // активные запросы
-  var lockedAt = 0;          // когда нажали «Стоп»
+  var lockedAt = 0;          // когда нажали остановку
   var hiddenSend = null;     // спрятанная кнопка отправки
   var prevDisplay = '';
 
@@ -45,8 +51,6 @@
   window.dlAllowAI = unlock;
 
   /* --------------------------------------------- поиск кнопки отправки */
-  /* Ищем от видимого поля ввода: в композере кнопка всегда рядом, а вот
-     классы и идентификаторы у неё разные на главной, в редакторе и на телефоне. */
 
   function visible(el) {
     if (!el || !el.getBoundingClientRect) return false;
@@ -102,7 +106,8 @@
     el = document.createElement('button');
     el.id = BTN_ID;
     el.type = 'button';
-    el.textContent = LABEL;
+    el.innerHTML = ICON;
+    el.title = '\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c';
     el.setAttribute('aria-label', '\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0433\u0435\u043d\u0435\u0440\u0430\u0446\u0438\u044e');
     el.addEventListener('click', function (event) {
       event.preventDefault();
@@ -119,16 +124,19 @@
       var box = send.getBoundingClientRect();
       el.style.minWidth = Math.round(box.width) + 'px';
       el.style.height = Math.round(box.height) + 'px';
-    } catch (e) { /* стиль ниже */ }
+    } catch (e) { /* размер не критичен */ }
+    el.style.display = 'inline-flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
     el.style.cursor = 'pointer';
-    el.style.display = '';
   }
 
   function corner(el) {
     el.className = '';
     el.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:99998;' +
-      'padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.16);' +
-      'background:#0f1116;color:#fff;font:14px/1 Manrope,system-ui,sans-serif;cursor:pointer;';
+      'width:40px;height:40px;display:inline-flex;align-items:center;' +
+      'justify-content:center;border-radius:12px;' +
+      'border:1px solid rgba(255,255,255,.16);background:#0f1116;color:#fff;cursor:pointer;';
   }
 
   function show() {
@@ -233,7 +241,7 @@
         return original.apply(this, arguments);
       }
 
-      // После «Стоп» цепочка не должна уйти на следующую модель.
+      // После остановки цепочка не должна уйти на следующую модель.
       if (locked()) return aborted();
 
       var controller;
@@ -273,7 +281,7 @@
     else unlock();
   }, true);
 
-  // Любой клик по кнопке отправки снимает замок: человек сам начал заново.
+  // Любой клик мимо кнопки остановки снимает замок: человек начал заново.
   document.addEventListener('pointerdown', function (event) {
     var el = event.target;
     if (el && el.closest && el.closest('#' + BTN_ID)) return;
