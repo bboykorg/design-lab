@@ -136,21 +136,50 @@ def _version(name: str) -> str:
         return "0"
 
 
+def _early_boot() -> str:
+    """Ранняя пометка телефонной ширины экрана.
+
+    Класс dl-phone раньше выставлялся скриптами в конце документа, поэтому
+    первый кадр на телефоне рисовался десктопной вёрсткой и только потом
+    резко перестраивался. Здесь класс ставится до отрисовки тела страницы.
+    """
+    return (
+        "<script>(function(){var d=document.documentElement;"
+        "function set(){var phone;try{phone=window.matchMedia('(max-width:760px)').matches;}"
+        "catch(e){phone=(window.innerWidth||0)<=760;}"
+        "if(phone){d.classList.add('dl-phone');}else{d.classList.remove('dl-phone');}}"
+        "set();window.addEventListener('resize',set);"
+        "window.addEventListener('orientationchange',set);})();</script>"
+    )
+
+
 def _build_index() -> str:
     raw = (config.FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
-    missing = [
+    styles = [
         f'<link rel="stylesheet" href="/{name}?v={_version(name)}">'
         for name in _PATCH_STYLES
         if name not in raw
     ]
-    missing += [
+    scripts = [
         f'<script src="/{name}?v={_version(name)}"></script>'
         for name in _PATCH_SCRIPTS
         if name not in raw
     ]
-    if not missing:
+
+    # Те же листы стилей дублируются в <head>. Адреса совпадают, так что файл
+    # скачивается один раз. Копия в шапке блокирует первую отрисовку, поэтому
+    # на телефоне сразу видна мобильная вёрстка, а не десктопная. Копия в конце
+    # тела остаётся и по-прежнему решает исход каскада.
+    head = _early_boot()
+    if styles:
+        head += "\n" + "\n".join(styles)
+    j = raw.find("</head>")
+    raw = head + raw if j < 0 else raw[:j] + head + "\n" + raw[j:]
+
+    tail = styles + scripts
+    if not tail:
         return raw
-    patch = "\n".join(missing)
+    patch = "\n".join(tail)
     i = raw.rfind("</body>")
     return raw + patch if i < 0 else raw[:i] + patch + "\n" + raw[i:]
 
