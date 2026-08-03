@@ -1,31 +1,31 @@
 /* Без автоподмены модели.
 
-   Задача: если выбранная модель не ответила, сайт не подставляет другую
-   тихонько — решение остаётся за человеком.
+   Задача: запрос всегда уходит на ту модель, которую выбрал человек.
 
-   Четыре слоя, потому что подмена происходила в разных местах:
+   ЧТО БЫЛО СЛОМАНО ДВАЖДЫ — важно, чтобы не повторить:
 
-   1) ЦЕПОЧКА. В FALLBACK_ORDER держим ровно одну запись — выбранную модель.
-      Обнулять список нельзя: часть кода (доска) берёт кандидатов только оттуда
-      и при пустом списке уходит в демо-режим, не отправив ни одного запроса.
+   Сначала я чистил FALLBACK_ORDER доноля, потом оставлял в нём одну запись.
+   Оба раза доска переставала отправлять запросы вообще и сразу уходила в
+   локальный демо-режим: код отбора кандидатов сверяет цепочку с картой
+   доступности (AV), и если после сверки не осталось ни одного имени,
+   фетча не будет совсем. Поэтому ЦЕПОЧКУ МЫ БОЛЬШЕ НЕ ТРОГАЕМ вовсе;
+   если прошлая версия успела её укоротить — восстанавливаем из копии.
 
-   2) ВЫЗОВ pickModel без живого клика игнорируется.
+   Автоподмена глушится там, где это безопасно — на выходе:
 
-   3) ТЕЛО ЗАПРОСА fetch. Перед отправкой в /api/proxy имя модели сверяется
+   1) ТЕЛО ЗАПРОСА fetch. Перед отправкой в /api/proxy имя модели сверяется
       с выбором пользователя и при расхождении возвращается обратно.
+      Цепочка при этом может сколько угодно перебирать имена: куда бы она
+      ни «переключилась», на провайдер уйдёт выбранная модель.
+   2) ТЕЛО ЗАПРОСА XHR — то же самое для второго способа отправки.
+   3) ВЫЗОВ pickModel без живого клика игнорируется, чтобы пилюля с именем
+      модели не менялась сама собой.
 
-   4) ТЕЛО ЗАПРОСА XHR. То же самое для запросов через XMLHttpRequest.
-
-   Отдельно про выбор модели: currentModel объявлен через let в index.html,
-   поэтому в window его НЕТ. Обращение к window.currentModel всегда давало
-   undefined, сверка молча отключалась, и запросы продолжали уходить на Opus.
-   Читаем по имени, как MODELS и FALLBACK_ORDER.
+   currentModel объявлен через let в index.html, поэтому в window его НЕТ —
+   читаем по имени, как MODELS и FALLBACK_ORDER.
 
    При ошибке видна причина: код и текст ответа провайдера, полный текст —
-   в window.__dlLastModelError. Факты перехвата копятся в window.__dlModelForced.
-
-   Ничего не блокируется и не затемняется. Серверный резерв (другой ключ для
-   ТОЙ ЖЕ модели) не трогаем: он выбор пользователя не меняет. */
+   в window.__dlLastModelError. Факты перехвата копятся в window.__dlModelForced. */
 (function () {
   'use strict';
   if (window.__dlNoAutoSwitch) return;
@@ -70,8 +70,6 @@
   }
   window.dlModelNote = note;
 
-  // MODELS / FALLBACK_ORDER / currentModel объявлены через const и let в
-  // index.html — в window их нет, обращаемся по имени.
   function chainRef() {
     var chain;
     try { chain = FALLBACK_ORDER; } catch (e) { chain = window.FALLBACK_ORDER; }
@@ -113,29 +111,25 @@
     return typeof url === 'string' ? url : '';
   }
 
-  // 1. В цепочке всегда ровно одна запись — выбранная модель.
-  function pinChain() {
+  // Восстановление цепочки после прошлых версий этого файла.
+  var restored = false;
+  function restoreChain() {
+    if (restored) return;
     var chain = chainRef();
+    var saved = window.__dlFallbackOrder;
     if (!chain) return;
-    if (!window.__dlFallbackOrder && chain.length > 1) {
-      window.__dlFallbackOrder = chain.slice();
+    if (saved && saved.length && chain.length < saved.length) {
+      chain.splice.apply(chain, [0, chain.length].concat(saved));
     }
-    var key = currentKey();
-    if (!key) {
-      if (chain.length > 1) chain.splice(1, chain.length - 1);
-      return;
-    }
-    if (chain.length === 1 && chain[0] === key) return;
-    chain.splice(0, chain.length, key);
+    restored = true;
   }
 
-  // 2. Заслон на машинный вызов pickModel.
   function guardPick() {
     var pick = window.pickModel;
     if (typeof pick !== 'function' || pick.__dlGuardedAuto) return;
     var guarded = function () {
       var startup = (Date.now() - bootAt) < BOOT_MS;
-      if (!byUser() && !startup) {
+      if (!byUser() && !startup && !window.__dlAllowAutoPick) {
         note('Модель не ответила. Выбери другую модель вручную.');
         return;
       }
@@ -156,7 +150,6 @@
     return out.length > 160 ? out.slice(0, 160) + '…' : out;
   }
 
-  // 3/4. Сверка тела запроса с выбором пользователя.
   function enforce(url, rawBody) {
     var key = currentKey();
     var entry = entryOf(key);
@@ -238,7 +231,6 @@
     window.fetch = wrapped;
   }
 
-  // Часть кода ходит мимо fetch — через XMLHttpRequest. Там та же сверка.
   function watchXhr() {
     var proto = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
     if (!proto || proto.__dlModelWatch) return;
@@ -269,7 +261,7 @@
   }
 
   function run() {
-    pinChain();
+    restoreChain();
     guardPick();
     watchFetch();
     watchXhr();
