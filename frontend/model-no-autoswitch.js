@@ -3,7 +3,7 @@
    Задача: если выбранная модель не ответила, сайт не подставляет другую
    тихонько — решение остаётся за человеком.
 
-   Три слоя защиты, потому что подмена происходила в разных местах:
+   Четыре слоя, потому что подмена происходила в разных местах:
 
    1) ЦЕПОЧКА. В FALLBACK_ORDER держим ровно одну запись — выбранную модель.
       Обнулять список нельзя: часть кода (доска) берёт кандидатов только оттуда
@@ -11,16 +11,20 @@
 
    2) ВЫЗОВ pickModel без живого клика игнорируется.
 
-   3) САМ ЗАПРОС. Главное место. Какая бы часть кода ни собирала тело запроса,
-      перед отправкой в /api/proxy имя модели сверяется с выбором пользователя
-      и при расхождении возвращается обратно. Адрес шлюза правится заодно.
-      Именно так ловится случай «выбран GPT-5.6, отвечает Opus»: там подмена
-      шла мимо цепочки и мимо pickModel.
+   3) ТЕЛО ЗАПРОСА fetch. Перед отправкой в /api/proxy имя модели сверяется
+      с выбором пользователя и при расхождении возвращается обратно.
+
+   4) ТЕЛО ЗАПРОСА XHR. То же самое для запросов через XMLHttpRequest.
+
+   Отдельно про выбор модели: currentModel объявлен через let в index.html,
+   поэтому в window его НЕТ. Обращение к window.currentModel всегда давало
+   undefined, сверка молча отключалась, и запросы продолжали уходить на Opus.
+   Читаем по имени, как MODELS и FALLBACK_ORDER.
 
    При ошибке видна причина: код и текст ответа провайдера, полный текст —
    в window.__dlLastModelError. Факты перехвата копятся в window.__dlModelForced.
 
-   Ничего не блокируется и не затемняется. Серверный резерв (другой шлюз для
+   Ничего не блокируется и не затемняется. Серверный резерв (другой ключ для
    ТОЙ ЖЕ модели) не трогаем: он выбор пользователя не меняет. */
 (function () {
   'use strict';
@@ -66,8 +70,8 @@
   }
   window.dlModelNote = note;
 
-  // MODELS / FALLBACK_ORDER объявлены через const в index.html — в window их нет,
-  // обращаемся по имени, как это делают models-patch.js и seekai-models.js.
+  // MODELS / FALLBACK_ORDER / currentModel объявлены через const и let в
+  // index.html — в window их нет, обращаемся по имени.
   function chainRef() {
     var chain;
     try { chain = FALLBACK_ORDER; } catch (e) { chain = window.FALLBACK_ORDER; }
@@ -82,12 +86,14 @@
 
   function currentKey() {
     var key = '';
-    try { key = window.currentModel || ''; } catch (e) { key = ''; }
+    try { key = currentModel || ''; } catch (e) { key = ''; }
+    if (!key) { try { key = window.currentModel || ''; } catch (e) { key = ''; } }
     if (!key) {
       try { key = localStorage.getItem('dl_model') || ''; } catch (e) { key = ''; }
     }
-    return key;
+    return typeof key === 'string' ? key : '';
   }
+  window.dlCurrentModelKey = currentKey;
 
   function entryOf(key) {
     var models = modelsRef();
@@ -127,10 +133,10 @@
   function guardPick() {
     var pick = window.pickModel;
     if (typeof pick !== 'function' || pick.__dlGuardedAuto) return;
-    var guarded = function (key) {
+    var guarded = function () {
       var startup = (Date.now() - bootAt) < BOOT_MS;
       if (!byUser() && !startup) {
-        note('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b\u0430. \u0412\u044b\u0431\u0435\u0440\u0438 \u0434\u0440\u0443\u0433\u0443\u044e \u043c\u043e\u0434\u0435\u043b\u044c \u0432\u0440\u0443\u0447\u043d\u0443\u044e.');
+        note('Модель не ответила. Выбери другую модель вручную.');
         return;
       }
       return pick.apply(this, arguments);
@@ -147,10 +153,10 @@
         (data && data.detail) || (data && data.message) || '';
       if (message) out = String(message);
     } catch (e) { /* не JSON — оставляем как есть */ }
-    return out.length > 160 ? out.slice(0, 160) + '\u2026' : out;
+    return out.length > 160 ? out.slice(0, 160) + '…' : out;
   }
 
-  // 3. Сверка тела запроса с выбором пользователя.
+  // 3/4. Сверка тела запроса с выбором пользователя.
   function enforce(url, rawBody) {
     var key = currentKey();
     var entry = entryOf(key);
@@ -160,7 +166,6 @@
     var data;
     try { data = JSON.parse(rawBody); } catch (e) { return null; }
     if (!data || typeof data !== 'object') return null;
-    // Только обычный чат-запрос с именем модели.
     if (typeof data.model !== 'string' || !data.model) return null;
     if (!data.messages || !data.messages.length) return null;
     if (data.model === want) return null;
@@ -170,15 +175,14 @@
 
     var nextUrl = url;
     var gateway = wantedGateway(entry);
-    if (gateway) {
+    if (gateway && /[?&]url=/.test(url)) {
       nextUrl = url.replace(/([?&]url=)[^&]*/, '$1' + encodeURIComponent(gateway));
     }
 
     window.__dlModelForced.push({ from: was, to: want, key: key, at: Date.now() });
     if (!toldAboutForce) {
       toldAboutForce = true;
-      note('\u0417\u0430\u043f\u0440\u043e\u0441 \u0443\u0445\u043e\u0434\u0438\u043b \u043d\u0430 \u0434\u0440\u0443\u0433\u0443\u044e \u043c\u043e\u0434\u0435\u043b\u044c (' + was +
-        ') \u2014 \u0432\u0435\u0440\u043d\u0443\u043b \u0442\u0432\u043e\u0439 \u0432\u044b\u0431\u043e\u0440: ' + want + '.');
+      note('Запрос уходил на другую модель (' + was + ') — вернул твой выбор: ' + want + '.');
     }
     return { url: nextUrl, body: JSON.stringify(data) };
   }
@@ -196,15 +200,14 @@
       var watched = url.indexOf('/api/proxy') >= 0;
 
       var args = arguments;
-      if (watched && method === 'POST' && typeof input === 'string' &&
-        init && typeof init.body === 'string') {
+      if (watched && method === 'POST' && init && typeof init.body === 'string') {
         var fixed = null;
         try { fixed = enforce(url, init.body); } catch (e) { fixed = null; }
         if (fixed) {
           var nextInit = {};
           Object.keys(init).forEach(function (name) { nextInit[name] = init[name]; });
           nextInit.body = fixed.body;
-          args = [fixed.url, nextInit];
+          args = [typeof input === 'string' ? fixed.url : input, nextInit];
           url = fixed.url;
         }
       }
@@ -218,16 +221,14 @@
           try { copy = response.clone(); } catch (e) { copy = null; }
           if (!copy) {
             window.__dlLastModelError = { status: status, text: '', at: Date.now() };
-            note('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b\u0430 (\u043a\u043e\u0434 ' + status +
-              '). \u0412\u044b\u0431\u0435\u0440\u0438 \u0434\u0440\u0443\u0433\u0443\u044e \u043c\u043e\u0434\u0435\u043b\u044c \u0432\u0440\u0443\u0447\u043d\u0443\u044e.');
+            note('Модель не ответила (код ' + status + '). Выбери другую модель вручную.');
             return;
           }
           copy.text().then(function (text) {
             var reason = shorten(text);
             window.__dlLastModelError = { status: status, text: reason, at: Date.now() };
-            note('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b\u0430 (\u043a\u043e\u0434 ' + status + ')' +
-              (reason ? ': ' + reason : '') +
-              '. \u0412\u044b\u0431\u0435\u0440\u0438 \u0434\u0440\u0443\u0433\u0443\u044e \u043c\u043e\u0434\u0435\u043b\u044c \u0432\u0440\u0443\u0447\u043d\u0443\u044e.');
+            note('Модель не ответила (код ' + status + ')' + (reason ? ': ' + reason : '') +
+              '. Выбери другую модель вручную.');
           }, function () { });
         }, function () { });
       }
@@ -237,10 +238,41 @@
     window.fetch = wrapped;
   }
 
+  // Часть кода ходит мимо fetch — через XMLHttpRequest. Там та же сверка.
+  function watchXhr() {
+    var proto = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
+    if (!proto || proto.__dlModelWatch) return;
+    var openOriginal = proto.open;
+    var sendOriginal = proto.send;
+
+    proto.open = function (method, url) {
+      try {
+        this.__dlUrl = String(url || '');
+        this.__dlMethod = String(method || '').toUpperCase();
+      } catch (e) { /* ничего */ }
+      return openOriginal.apply(this, arguments);
+    };
+
+    proto.send = function (body) {
+      try {
+        var url = this.__dlUrl || '';
+        if (this.__dlMethod === 'POST' && url.indexOf('/api/proxy') >= 0 &&
+          typeof body === 'string') {
+          var fixed = enforce(url, body);
+          if (fixed) return sendOriginal.call(this, fixed.body);
+        }
+      } catch (e) { /* отправляем как есть */ }
+      return sendOriginal.apply(this, arguments);
+    };
+
+    proto.__dlModelWatch = true;
+  }
+
   function run() {
     pinChain();
     guardPick();
     watchFetch();
+    watchXhr();
   }
 
   run();
