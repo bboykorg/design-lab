@@ -1,19 +1,35 @@
-/* Design Lab — text scales together with the block that is being dragged.
-   Strict rules so nothing else moves:
-     1. only while a resize drag is in progress;
-     2. only the dragged block itself, and only if it shows its own text;
-     3. nested blocks, buttons and links are never rescaled — a container with
-        no text of its own just changes its frame. */
+/* Design Lab — текст тянется вместе с блоком, который растягивают, и ОСТАЁТСЯ
+   таким после отпускания мыши.
+
+   Почему раньше буквы сбрасывались: размер шрифта писался только в inline-стиль
+   элемента, а редактор при перетаскивании и в конце драга перезаписывает
+   атрибут style целиком (там остаются только width/height), а при перерисовке
+   из сохранённого HTML шрифт терялся совсем. Теперь каждый увеличенный
+   элемент помечается data-dl-fs, размер хранится отдельно и дублируется
+   таблицей стилей внутри кадра, а inline-значение восстанавливается, если его
+   затёрли.
+
+   Строгие правила, чтобы ничего лишнего не ехало:
+     1. масштаб меняется только во время растяжки;
+     2. только у самого блока и только если у него есть собственный текст;
+     3. вложенные блоки, кнопки и ссылки никогда не масштабируются — контейнер
+        без своего текста просто меняет рамку. */
 (function () {
   'use strict';
   if (window.__dlTextScale) return;
   window.__dlTextScale = true;
 
   var MIN_PX = 5;
-  var MAX_PX = 400;
+  var MAX_PX = 2000;
   var MIN_STEP = 0.02;
   var DRAG_MAX_MS = 15000;
   var DRAG_TAIL_MS = 300;
+  var ATTR = 'data-dl-fs';
+  var STYLE_ID = 'dl-fs-style';
+
+  /* Живёт в верхнем окне, поэтому переживает полную перерисовку кадра. */
+  var wanted = window.__dlFsWanted || (window.__dlFsWanted = {});
+  var seq = 0;
 
   var dragUntil = 0;
   function dragging() { return Date.now() < dragUntil; }
@@ -33,7 +49,7 @@
     var value = el.style && el.style[prop];
     return !!value && value !== 'auto' && value !== '100%';
   }
-  /* Direct text only. A wrapper around other blocks has none, so it is skipped. */
+  /* Только собственный текст. Обёртка вокруг других блоков его не имеет. */
   function ownText(el) {
     for (var i = 0; i < el.childNodes.length; i++) {
       var node = el.childNodes[i];
@@ -41,6 +57,52 @@
     }
     return false;
   }
+
+  /* Таблица стилей внутри кадра: она переживает затирание style у элемента. */
+  function css() {
+    var out = [];
+    for (var id in wanted) {
+      if (Object.prototype.hasOwnProperty.call(wanted, id)) {
+        out.push('[' + ATTR + '="' + id + '"]{font-size:' + wanted[id].toFixed(2) + 'px !important}');
+      }
+    }
+    return out.join('\n');
+  }
+  function paintStyle(doc) {
+    if (!doc || !doc.head) return;
+    var tag = doc.getElementById(STYLE_ID);
+    if (!tag) {
+      tag = doc.createElement('style');
+      tag.id = STYLE_ID;
+      doc.head.appendChild(tag);
+    }
+    var text = css();
+    if (tag.textContent !== text) tag.textContent = text;
+  }
+  function setFont(el, px) {
+    var id = el.getAttribute(ATTR);
+    if (!id) {
+      id = 'f' + Date.now().toString(36) + (++seq);
+      el.setAttribute(ATTR, id);
+    }
+    wanted[id] = px;
+    el.style.fontSize = px.toFixed(2) + 'px';
+    paintStyle(el.ownerDocument);
+  }
+  /* Возвращаем размер, если редактор перезаписал атрибут style. */
+  function restore(doc) {
+    var list;
+    try { list = doc.querySelectorAll('[' + ATTR + ']'); } catch (e) { return; }
+    var any = false;
+    Array.prototype.forEach.call(list, function (el) {
+      var px = wanted[el.getAttribute(ATTR)];
+      if (!px) return;
+      var now = num(el.style.fontSize);
+      if (Math.abs(now - px) > 0.5) { el.style.fontSize = px.toFixed(2) + 'px'; any = true; }
+    });
+    if (any || !doc.getElementById(STYLE_ID)) paintStyle(doc);
+  }
+
   function baseline(el) {
     var rect = el.getBoundingClientRect();
     if (!rect.width || !rect.height) return null;
@@ -55,22 +117,25 @@
     if (!base.font || !ownText(el)) return;
     var rect = el.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    /* Only pinned dimensions drive the ratio: a pinned box cannot grow because
-       of the new font size, so there is no feedback loop. */
+    /* Отношение считаем только по закреплённым сторонам: закреплённая
+       коробка не может вырасти из-за нового шрифта, петли не будет. */
     var ratioW = base.lockW ? rect.width / base.w : 0;
     var ratioH = base.lockH ? rect.height / base.h : 0;
     var ratio = ratioW && ratioH ? Math.sqrt(ratioW * ratioH) : (ratioW || ratioH);
     if (!ratio || !isFinite(ratio) || ratio <= 0) return;
     if (Math.abs(ratio - base.last) < MIN_STEP) return;
     base.last = ratio;
-    el.style.fontSize = Math.min(MAX_PX, Math.max(MIN_PX, base.font * ratio)).toFixed(2) + 'px';
+    setFont(el, Math.min(MAX_PX, Math.max(MIN_PX, base.font * ratio)));
   }
+
   function attach(doc) {
     if (!doc || !doc.body || doc.__dlTextScale) return;
     var win = doc.defaultView;
     if (!win || typeof win.ResizeObserver !== 'function') return;
     doc.__dlTextScale = true;
     watchDrag(doc);
+    paintStyle(doc);
+    restore(doc);
 
     var bases = new WeakMap();
     var observer = new win.ResizeObserver(function (entries) {
@@ -78,7 +143,9 @@
         var el = entry.target;
         var base = bases.get(el);
         if (!base || !dragging()) {
-          /* Reflow, window resize and AI re-render must not touch fonts. */
+          /* Перетекание вёрстки, ресайз окна и ответ ИИ шрифты не трогают.
+             База берётся от текущего размера — уже увеличенного, если его
+             тянули раньше, так что отката назад не происходит. */
           var fresh = baseline(el);
           if (fresh) bases.set(el, fresh);
           return;
@@ -107,17 +174,20 @@
     scan();
     new win.MutationObserver(function () {
       clearTimeout(doc.__dlScanTimer);
-      doc.__dlScanTimer = setTimeout(scan, 120);
+      doc.__dlScanTimer = setTimeout(function () { scan(); restore(doc); }, 120);
     }).observe(doc.documentElement, {
       childList: true, subtree: true, attributes: true, attributeFilter: ['style']
     });
+    /* Страховка от перезаписей, которые проходят мимо наблюдателя. */
+    doc.__dlFsTimer = win.setInterval(function () { restore(doc); }, 600);
   }
+
   function tick() {
     var frame = document.getElementById('pvFrame');
     if (!frame) return;
     var doc = null;
     try { doc = frame.contentDocument; } catch (e) { doc = null; }
-    if (doc) attach(doc);
+    if (doc) { attach(doc); if (doc.__dlTextScale) restore(doc); }
   }
   watchDrag(document);
   tick();
