@@ -1,11 +1,9 @@
 /* Точечные исправления поверх всех остальных слоёв:
-   1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
+   1) кнопка «Установить приложение» убрана;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) у вошедшего пользователя в шапке и меню остаётся одна кнопка «Профиль»:
-      кнопки выхода и входа, а также строка со своим логином убираются;
-   4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
-   5) на телефоне всплывающие окна (профиль, меню, листы) делаются непрозрачными.
-      На компьютере оформление не меняется. */
+   3) у вошедшего пользователя в шапке и меню стоит ровно одна кнопка «Профиль»;
+   4) в списке моделей нет названий провайдеров — только FREE и PRO;
+   5) на телефоне всплывающие окна делаются непрозрачными; на компьютере оформление не меняется. */
 (function () {
   'use strict';
   if (window.__dlMobileFixes) return;
@@ -145,7 +143,6 @@
         if (value) return value;
       } catch (e) {}
     }
-    // Запасной путь: ключ мог быть назван иначе — ищем по имени ключа.
     var stores = [];
     try { stores.push(localStorage); } catch (e) {}
     try { stores.push(sessionStorage); } catch (e) {}
@@ -182,31 +179,32 @@
     } catch (e) {}
   }
 
-  /* --- Кнопка профиля вместо кнопки выхода ------------------------
-     Кнопка «Выйти — логин» пересобиралась чужим слоем и мелькала
-     подписью при загрузке. Оставляем только свою кнопку «Профиль»:
-     выход есть внутри самого окна профиля, его не трогаем. */
+  /* --- Кнопка профиля ---------------------------------------------
+     Кнопки «Выйти — логин» и «Войти» рисует чужой слой. Любую из них
+     заменяем на свою кнопку «Профиль» на том же месте и только потом
+     убираем исходную: иначе при пересборке меню могло не остаться
+     ни одной кнопки. Выход внутри окна профиля не трогаем. */
   var LOGOUT = /^выйти(\s*[—–-]\s*(.+))?$/i;
   function openProfile(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (typeof window.dlProfile === 'function') { window.dlProfile(); return; }
     location.hash = '#profile';
   }
-  function addButton(host, sample) {
-    if (!host || host.querySelector('[' + ACCT + '="open"]')) return;
-    var tag = sample && sample.tagName !== 'A' ? sample.tagName.toLowerCase() : 'button';
+  function replaceWithProfile(el) {
+    var host = el.parentElement;
+    if (!host) return;
+    host.setAttribute(ACCT, 'host');
+    if (host.querySelector('[' + ACCT + '="open"]')) return;
+    var tag = el.tagName === 'A' ? 'button' : el.tagName.toLowerCase();
     var button = document.createElement(tag);
-    if (sample) {
-      button.className = sample.className || '';
-      var css = sample.getAttribute('style');
-      if (css) button.setAttribute('style', css);
-    }
+    button.className = el.className || '';
+    var css = el.getAttribute('style');
+    if (css) button.setAttribute('style', css);
     button.setAttribute(ACCT, 'open');
     button.setAttribute('type', 'button');
     button.textContent = 'Профиль';
     button.addEventListener('click', openProfile);
-    if (sample && sample.parentElement === host) host.insertBefore(button, sample);
-    else host.appendChild(button);
+    host.insertBefore(button, el);
   }
   function accountButton() {
     var list;
@@ -218,25 +216,20 @@
       if (!hit) return;
       sawLogout = true;
       if (hit[2]) setNick(hit[2]);
-
-      var host = el.parentElement;
-      if (host) {
-        host.setAttribute(ACCT, 'host');
-        addButton(host, el);
-      }
+      replaceWithProfile(el);
       el.setAttribute(MARK, 'logout');
       if (el.parentElement) el.parentElement.removeChild(el);
     });
   }
 
   /* --- Кнопки входа у вошедшего пользователя ------------------------
-     Шапка и бургер-меню рисуют «Войти» / «Начать бесплатно» независимо
-     от того, вошёл ли пользователь. Убираем такие кнопки в шапке, навигации
-     и меню, но не трогаем призывы в теле страницы (тарифы, главный экран). */
+     Шапка и бургер-меню рисуют «Войти» / «Начать бесплатно» всегда.
+     У вошедшего такая кнопка становится кнопкой профиля.
+     Призывы в теле страницы (тарифы, главный экран) не трогаем. */
   var SIGNIN = [
     'войти', 'вход', 'войти в аккаунт', 'войти в профиль',
     'регистрация', 'зарегистрироваться', 'создать аккаунт',
-    'начать бесплатно', 'попробовать бесплатно', 'начать бесплатно →',
+    'начать бесплатно', 'попробовать бесплатно',
     'sign in', 'sign up', 'log in', 'login'
   ];
   var BARS = 'header,nav,[' + ACCT + '="host"],' +
@@ -256,6 +249,7 @@
       var value = text(el).replace(/\s*[→>›]+$/, '').trim();
       if (SIGNIN.indexOf(value) < 0) return;
       if (!inBar(el)) return;
+      replaceWithProfile(el);
       el.setAttribute(MARK, 'signin');
       if (el.parentElement) el.parentElement.removeChild(el);
     });
