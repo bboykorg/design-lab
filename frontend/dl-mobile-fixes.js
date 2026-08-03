@@ -1,7 +1,8 @@
 /* Точечные исправления поверх всех остальных слоёв:
    1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) после входа аккаунт в бургер-меню появлялся только после перезагрузки. */
+   3) после входа аккаунт в бургер-меню появлялся только после перезагрузки;
+   4) в списке моделей не должно быть названий провайдеров — только FREE и PRO. */
 (function () {
   'use strict';
   if (window.__dlMobileFixes) return;
@@ -43,6 +44,30 @@
       }
       target.setAttribute(MARK, 'install');
       if (target.parentElement) target.parentElement.removeChild(target);
+    });
+  }
+
+  /* Заголовки с названием провайдера в списке моделей не нужны:
+     деление только по тарифам. Сами модели остаются на месте. */
+  var VENDOR = [
+    'seekai', 'seek ai', 'gorouter', 'kiwillm', 'kiwi', 'vyce', 'vyce ai',
+    'cerebras', 'openrouter', 'bigmodel', 'z.ai'
+  ];
+  function dropVendorHeads() {
+    var list;
+    try {
+      list = document.querySelectorAll('.mh,#modelMenu div,#modelMenu span');
+    } catch (e) { return; }
+    Array.prototype.forEach.call(list, function (el) {
+      if (el.hasAttribute(MARK)) return;
+      var value = text(el).replace(/[·|•:—-]+$/, '').trim();
+      if (VENDOR.indexOf(value) < 0) return;
+      /* Не трогаем строки выбора модели — только подписи-разделители. */
+      if (el.className && String(el.className).indexOf('mopt') >= 0) return;
+      if (el.querySelector && el.querySelector('.mopt')) return;
+      if (el.getAttribute && el.getAttribute('onclick')) return;
+      el.setAttribute(MARK, 'vendor');
+      if (el.parentElement) el.parentElement.removeChild(el);
     });
   }
 
@@ -125,6 +150,7 @@
 
   function run() {
     dropInstall();
+    dropVendorHeads();
     dropUndefined();
   }
   function start() {
