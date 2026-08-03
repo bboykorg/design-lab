@@ -2,12 +2,20 @@
  * Это слой поверх главной страницы, а не отдельный документ, поэтому фон
  * остаётся родным: анимация и градиент главной видны сквозь панель.
  * Открыть: клик по никнейму в шапке, адрес с #profile или window.dlProfile().
+ *
+ * Аккаунты через GitHub: пароль там вычисляет сервер (HMAC от GitHub ID),
+ * человек его не знает и знать не может. Формы со «текущим паролем» для
+ * такого аккаунта бесполезны, поэтому они скрываются, а вместо них стоит
+ * объяснение. Опознаётся такой аккаунт по логину вида gh_… — так его
+ * заводит backend/auth.py.
  */
 (function () {
   if (window.__dlProfilePatched) return;
   window.__dlProfilePatched = true;
 
-  var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
+  var TOKEN_KEYS = ['dl_token', 'dl_auth_token', 'auth_token', 'authToken', 'access_token', 'token', 'dlToken'];
+  var NICK_CACHE = 'dl_nick_cache';
+  var GH_NAME = /^gh_/i;
   var overlay = null;
   var username = '';
 
@@ -37,6 +45,10 @@
 
   function textOf(node) {
     return (node.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function fromGithub(name) {
+    return GH_NAME.test(String(name || ''));
   }
 
   var FIELD = 'width:100%;box-sizing:border-box;margin-top:6px;padding:10px 12px;' +
@@ -113,12 +125,14 @@
   }
 
   function field(parent, labelText, type, placeholder) {
-    parent.appendChild(el('label', LABEL, labelText));
+    var label = el('label', LABEL, labelText);
+    parent.appendChild(label);
     var input = el('input', FIELD);
     input.type = type;
     input.autocomplete = type === 'password' ? 'off' : 'username';
     if (placeholder) input.placeholder = placeholder;
     parent.appendChild(input);
+    input.dlLabel = label;
     return input;
   }
 
@@ -149,13 +163,19 @@
       });
   }
 
+  /* Выход убирает ВСЁ признаки сессии, включая сохранённый ник.
+     Иначе после перезагрузки соседний слой снова рисует «Профиль» без сессии. */
   function logout() {
     try {
       fetch('/api/auth/logout', { method: 'POST', headers: headers() }).catch(function () {});
     } catch (e) {}
     try {
       for (var i = 0; i < TOKEN_KEYS.length; i++) localStorage.removeItem(TOKEN_KEYS[i]);
+      localStorage.removeItem(NICK_CACHE);
+      sessionStorage.removeItem('dl_auth_reloaded');
+      for (var j = 0; j < TOKEN_KEYS.length; j++) sessionStorage.removeItem(TOKEN_KEYS[j]);
     } catch (e) {}
+    username = '';
     setTimeout(function () { location.reload(); }, 200);
   }
 
@@ -184,16 +204,27 @@
     var who = el('div', 'margin-top:4px;font-size:12px;opacity:.65;', '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026');
     panel.appendChild(who);
 
+    // --- Объяснение для аккаунтов GitHub (показывается только им) ---
+    var ghNote = el('div',
+      'display:none;margin-top:20px;padding:12px 14px;border-radius:12px;' +
+      'border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);' +
+      'font-size:13px;line-height:1.5;opacity:.9;',
+      '\u0412\u0445\u043e\u0434 \u0447\u0435\u0440\u0435\u0437 GitHub. \u041b\u043e\u0433\u0438\u043d \u0438 \u043f\u0430\u0440\u043e\u043b\u044c \u0437\u0434\u0435\u0441\u044c \u043d\u0435 \u043c\u0435\u043d\u044f\u044e\u0442\u0441\u044f: \u0434\u043e\u0441\u0442\u0443\u043f\u043e\u043c ' +
+      '\u0443\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442 \u0441\u0430\u043c GitHub. \u0427\u0442\u043e\u0431\u044b \u0432\u044b\u0439\u0442\u0438 \u0438\u0437 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430, \u043d\u0430\u0436\u043c\u0438 \u043a\u043d\u043e\u043f\u043a\u0443 \u043d\u0438\u0436\u0435.');
+    panel.appendChild(ghNote);
+
     // --- Логин ---
-    panel.appendChild(el('div',
+    var nameBox = el('div');
+    nameBox.appendChild(el('div',
       'margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1);' +
       'font-weight:600;', '\u0421\u043c\u0435\u043d\u0438\u0442\u044c \u043b\u043e\u0433\u0438\u043d'));
-    var newName = field(panel, '\u041d\u043e\u0432\u044b\u0439 \u043b\u043e\u0433\u0438\u043d', 'text', 'латиница, цифры, . _ -');
-    var namePass = field(panel, '\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'password', '');
+    var newName = field(nameBox, '\u041d\u043e\u0432\u044b\u0439 \u043b\u043e\u0433\u0438\u043d', 'text', '\u043b\u0430\u0442\u0438\u043d\u0438\u0446\u0430, \u0446\u0438\u0444\u0440\u044b, . _ -');
+    var namePass = field(nameBox, '\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'password', '');
     var nameNote = el('div', 'margin-top:10px;font-size:12px;min-height:16px;');
     var nameButton = el('button', BUTTON, '\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043b\u043e\u0433\u0438\u043d');
-    panel.appendChild(nameButton);
-    panel.appendChild(nameNote);
+    nameBox.appendChild(nameButton);
+    nameBox.appendChild(nameNote);
+    panel.appendChild(nameBox);
 
     nameButton.addEventListener('click', function () {
       if (!newName.value.trim()) { say(nameNote, '\u0412\u0432\u0435\u0434\u0438 \u043d\u043e\u0432\u044b\u0439 \u043b\u043e\u0433\u0438\u043d', 'error'); return; }
@@ -211,16 +242,18 @@
     });
 
     // --- Пароль ---
-    panel.appendChild(el('div',
+    var passBox = el('div');
+    passBox.appendChild(el('div',
       'margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1);' +
       'font-weight:600;', '\u0421\u043c\u0435\u043d\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c'));
-    var oldPass = field(panel, '\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'password', '');
-    var pass1 = field(panel, '\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'password', 'минимум 6 символов');
-    var pass2 = field(panel, '\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435 \u043d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'password', '');
+    var oldPass = field(passBox, '\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'password', '');
+    var pass1 = field(passBox, '\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'password', '\u043c\u0438\u043d\u0438\u043c\u0443\u043c 6 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432');
+    var pass2 = field(passBox, '\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435 \u043d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'password', '');
     var passNote = el('div', 'margin-top:10px;font-size:12px;min-height:16px;');
     var passButton = el('button', BUTTON, '\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c');
-    panel.appendChild(passButton);
-    panel.appendChild(passNote);
+    passBox.appendChild(passButton);
+    passBox.appendChild(passNote);
+    panel.appendChild(passBox);
 
     passButton.addEventListener('click', function () {
       if (!oldPass.value) { say(passNote, '\u041d\u0443\u0436\u0435\u043d \u0442\u0435\u043a\u0443\u0449\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c', 'error'); return; }
@@ -250,10 +283,20 @@
       if (event.target === back) hide();
     });
 
-    return { back: back, who: who };
+    return { back: back, who: who, ghNote: ghNote, nameBox: nameBox, passBox: passBox };
   }
 
-  function load(who) {
+  /* У аккаунтов GitHub формы со сменой пароля и логина просто не работают:
+     обе требуют текущий пароль, который создал сервер. Показывать их — обман. */
+  function applyGithub(view, name) {
+    var gh = fromGithub(name);
+    view.ghNote.style.display = gh ? 'block' : 'none';
+    view.nameBox.style.display = gh ? 'none' : 'block';
+    view.passBox.style.display = gh ? 'none' : 'block';
+  }
+
+  function load(view) {
+    var who = view.who;
     fetch('/api/profile', { headers: headers() })
       .then(function (response) {
         if (response.status === 401) return null;
@@ -267,6 +310,7 @@
         username = data.username || username;
         who.textContent = '\u0410\u043a\u043a\u0430\u0443\u043d\u0442: ' + (username || '\u2014') +
           ' \u00b7 \u0442\u0430\u0440\u0438\u0444 ' + (data.plan || 'free');
+        applyGithub(view, username);
       })
       .catch(function () {
         who.textContent = '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u043f\u0440\u043e\u0444\u0438\u043b\u044c';
@@ -277,8 +321,9 @@
     if (!overlay) overlay = build();
     if (!overlay.back.parentNode) document.body.appendChild(overlay.back);
     overlay.back.style.display = 'flex';
+    applyGithub(overlay, username);
     liftCursor(true);
-    load(overlay.who);
+    load(overlay);
   }
 
   function hide() {
@@ -290,6 +335,7 @@
   }
 
   window.dlProfile = show;
+  window.dlLogout = logout;
 
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') hide();
@@ -327,34 +373,45 @@
   }
 
   function whoAmI() {
-    if (!readToken()) return;
+    if (!readToken()) { username = ''; return; }
     fetch('/api/profile', { headers: headers() })
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (data) {
-        if (!data) return;
+        if (!data) { username = ''; return; }
         username = data.username || '';
         bindNickname();
       })
       .catch(function () {});
   }
 
+  /* Привязка клика по нику — по событиям, а не по таймеру:
+     постоянный обход всей страницы на телефоне заметен. */
   function start() {
     var stale = document.getElementById('dlProfileButton');
     if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
 
     whoAmI();
-    setInterval(function () {
-      if (!username) { whoAmI(); return; }
-      bindNickname();
-    }, 1500);
 
     if (window.MutationObserver) {
       var pending = null;
-      new MutationObserver(function () {
+      new MutationObserver(function (records) {
         if (pending) return;
-        pending = setTimeout(function () { pending = null; bindNickname(); }, 300);
+        var worth = false;
+        for (var i = 0; i < records.length; i++) {
+          if (records[i].addedNodes && records[i].addedNodes.length) { worth = true; break; }
+        }
+        if (!worth) return;
+        pending = setTimeout(function () {
+          pending = null;
+          if (!username) whoAmI(); else bindNickname();
+        }, 400);
       }).observe(document.documentElement, { childList: true, subtree: true });
     }
+
+    window.addEventListener('focus', function () { if (!username) whoAmI(); });
+    document.addEventListener('click', function () {
+      if (username) bindNickname();
+    }, true);
 
     if (location.hash === '#profile') show();
   }
