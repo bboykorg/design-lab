@@ -62,7 +62,12 @@ _PATCH_SCRIPTS = (
     # Чистка следов выделения перед сохранением сайта.
     "design-clean-save.js",
     "design-inert.js", "session-restore.js",
-    "proxy-auth-patch.js", "auth-error-patch.js",
+    "proxy-auth-patch.js",
+    # Сразу за ним: чистка чужих ключей из заголовков. Старый патч меняет
+    # Authorization только когда нашёл сессионный токен, поэтому без входа
+    # в аккаунт зашитый в index.html ключ провайдера уходил по сети как есть.
+    "proxy-key-strip.js",
+    "auth-error-patch.js",
     "seekai-models.js",
     # После seekai-models.js: запрет автоподмены модели. Цепочка
     # FALLBACK_ORDER НЕ укорачивается (это дважды выключало запросы
