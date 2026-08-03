@@ -1,8 +1,8 @@
 /* Точечные исправления поверх всех остальных слоёв:
    1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) в меню остаётся одна кнопка «Профиль»: кнопка выхода и строка с логином
-      из списка убираются — выход есть внутри самого профиля;
+   3) у вошедшего пользователя в меню остаётся одна кнопка «Профиль»: кнопки выхода
+      и входа, а также строка со своим логином убираются — выход есть в самом профиле;
    4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
    5) на телефоне всплывающие окна (профиль, меню, листы) делаются непрозрачными.
       На компьютере оформление не меняется. */
@@ -145,6 +145,9 @@
     }
     return '';
   }
+  function signedIn() {
+    return !!token();
+  }
   function askNick() {
     if (asked || nick) return;
     var key = token();
@@ -173,6 +176,22 @@
     if (typeof window.dlProfile === 'function') { window.dlProfile(); return; }
     location.hash = '#profile';
   }
+  function addButton(host, sample) {
+    if (!host || host.querySelector('[' + ACCT + '="open"]')) return;
+    var tag = sample && sample.tagName === 'A' ? 'button' : (sample ? sample.tagName.toLowerCase() : 'button');
+    var button = document.createElement(tag);
+    if (sample) {
+      button.className = sample.className || '';
+      var css = sample.getAttribute('style');
+      if (css) button.setAttribute('style', css);
+    }
+    button.setAttribute(ACCT, 'open');
+    button.setAttribute('type', 'button');
+    button.textContent = 'Профиль';
+    button.addEventListener('click', openProfile);
+    if (sample && sample.parentElement === host) host.insertBefore(button, sample);
+    else host.appendChild(button);
+  }
   function accountButton() {
     var list;
     try { list = document.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
@@ -184,29 +203,51 @@
       if (hit[2]) setNick(hit[2]);
 
       var host = el.parentElement;
-      if (host && !host.querySelector('[' + ACCT + '="open"]')) {
-        var button = document.createElement(el.tagName === 'A' ? 'button' : el.tagName.toLowerCase());
-        button.className = el.className || '';
-        var css = el.getAttribute('style');
-        if (css) button.setAttribute('style', css);
-        button.setAttribute(ACCT, 'open');
-        button.setAttribute('type', 'button');
-        button.textContent = 'Профиль';
-        button.addEventListener('click', openProfile);
-        host.insertBefore(button, el);
+      if (host) {
+        host.setAttribute(ACCT, 'host');
+        addButton(host, el);
       }
-
       el.setAttribute(MARK, 'logout');
       if (el.parentElement) el.parentElement.removeChild(el);
     });
   }
 
+  /* --- Кнопки входа у вошедшего пользователя ------------------------
+     Слой меню рисует «Войти» / «Начать бесплатно» независимо от того,
+     вошёл ли пользователь. Убираем их только в том же блоке, где стоит
+     кнопка профиля, чтобы не трогать призывы на самих страницах. */
+  var SIGNIN = [
+    'войти', 'вход', 'войти в аккаунт', 'войти в профиль',
+    'регистрация', 'зарегистрироваться', 'создать аккаунт',
+    'начать бесплатно', 'попробовать бесплатно',
+    'sign in', 'sign up', 'log in', 'login'
+  ];
+  function dropSignIn() {
+    if (!signedIn()) return;
+    var hosts;
+    try { hosts = document.querySelectorAll('[' + ACCT + '="host"]'); } catch (e) { return; }
+    Array.prototype.forEach.call(hosts, function (host) {
+      var list;
+      try { list = host.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
+      Array.prototype.forEach.call(list, function (el) {
+        if (el.getAttribute(ACCT) === 'open' || el.hasAttribute(MARK)) return;
+        if (inProfilePanel(el)) return;
+        if (SIGNIN.indexOf(text(el)) < 0) return;
+        el.setAttribute(MARK, 'signin');
+        if (el.parentElement) el.parentElement.removeChild(el);
+      });
+    });
+  }
+
   /* --- Строка списка с логином («05 korg») --------------------------- */
+  function escape(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
   function dropNickRow() {
     if (!nick) { askNick(); return; }
-    var low = nick.toLowerCase();
-    var plain = new RegExp('^' + low.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
-    var numbered = new RegExp('^\\d{1,2}\\s*[.)·-]?\\s*' + low.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
+    var low = escape(nick.toLowerCase());
+    var plain = new RegExp('^' + low + '$', 'i');
+    var numbered = new RegExp('^\\d{1,2}\\s*[.)·-]?\\s*' + low + '$', 'i');
 
     var list;
     try { list = document.querySelectorAll('a,button,li,[role="button"],[role="menuitem"]'); } catch (e) { return; }
@@ -385,6 +426,7 @@
     dropVendorHeads();
     dropUndefined();
     accountButton();
+    dropSignIn();
     dropNickRow();
     unsolidify();
     solidify();
