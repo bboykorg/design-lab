@@ -181,7 +181,7 @@
     var send = document.getElementById('heroSendBtn');
     if (!send) return;
     /* класс btn-grad тянет за собой padding/min-height текстовой кнопки,
-       а это иконочная ��нопка — ей нужен свой модификатор */
+       а это иконочная ккнопка — ей нужен свой модификатор */
     send.classList.remove('btn-grad');
     send.classList.add('send', 'hero-send');
     send.setAttribute('aria-label', 'Отправить');

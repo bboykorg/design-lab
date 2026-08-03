@@ -213,6 +213,11 @@ html.dl-lowfx .card:hover{transform:none !important}
 /* 2.3 Шапка: CTA и "Войти" одной высоты с пилюлей навигации. */
 .nav-cta .btn-grad,.nav-cta .btn-solid,.nav-cta .btn-line,.nav-cta .btn-ghost{
   height:38px;min-height:38px;padding:0 16px;border-radius:999px;
+  /* Текст CTA не должен обрезаться на средних ширинах (замер: 1024px,
+     "Начать бесплатно" = 141px в поле 130px). Кнопка не сжимается и
+     держит содержимое в одну строку. */
+  white-space:nowrap;flex:0 0 auto;width:auto;min-width:max-content;
+  display:inline-flex;align-items:center;justify-content:center;overflow:visible;
 }
 .nav-cta .btn-ghost{border-color:transparent;background:transparent;color:var(--muted)}
 .nav-cta .btn-ghost:hover{background:rgba(255,255,255,.07);color:#fff}
@@ -334,7 +339,7 @@ html.dl-lowfx .card:hover{transform:none !important}
 }
 .gh-cta,.btn-solid.gh-cta{height:var(--ctl-h-lg);min-height:var(--ctl-h-lg);width:100%}
 
-/* ═════════════════════════════���════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════════
    5. ШРИФТЫ: моноширинный — только в коде и терминале
    ══════════════════════════════════════════════════════════════════════════ */
 

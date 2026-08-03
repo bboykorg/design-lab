@@ -1,0 +1,257 @@
+/* ============================================================================
+   Design Lab — герой-композер на главном экране.
+   Подключается САМЫМ ПОСЛЕДНИМ из стилей, поэтому перекрывает все слои выше.
+
+   ПРОБЛЕМА (замер DOM на 1440x900 до правки):
+     .prompt-row        [x, y  628x92]   ← две строки вместо одной
+     #heroAttachBtn     [.., y+0   38x38]
+     #heroModelPill     [.., y+0  169x38]
+     #heroSendBtn       [.., y+52  38x38]  ← уехал ПОД инструменты, слева
+     .prompt-actions    [.., y+48 214x44]  ← «Выбрать шаблон» справа от отправки
+
+   Причина: dl-chat-mobile.js пересобирает композер в .dl-cmp-bar на ЛЮБОЙ
+   ширине, а стили для .dl-cmp-bar лежат внутри @media (max-width:900px).
+   На десктопе контейнер оставался обычным блоком: инструменты вставали в
+   строку, отправка переносилась на новую, «Выбрать шаблон» вклинивался
+   справа. Получался не чат, а свалка кнопок трёх разных высот.
+
+   РЕШЕНИЕ — каноническая раскладка мессенджера, одна на все ширины:
+
+     +-------------------------------------------------+
+     |  поле ввода (растёт под текст)                   |
+     |                                                  |
+     |  [+] [модель v]                           ( > )  |  ← одна линия
+     |--------------------------------------------------|
+     |                            Выбрать шаблон ->     |  ← второй путь
+     +-------------------------------------------------+
+
+   Принципы (законы 2, 5, 6, 7 из дизайн-системы проекта):
+   • Иерархия: поле ввода → отправка → альтернативный сценарий. Три уровня
+     веса, а не три равнозначные кнопки.
+   • Контраст: активная отправка — единственное светлое пятно блока.
+   • Повторяемость: та же шкала 38px и тот же ритм, что в композере редактора
+     (dl-desktop-chat.css). Пользователь видит один и тот же чат в двух местах.
+   • Ровность: высоты и радиусы заданы здесь и только здесь, hover не двигает
+     элементы по вертикали — строка не «дышит» под курсором.
+   ========================================================================= */
+
+/* ---------- 1. Общее для всех ширин: отправка всегда видима ------------- */
+/* Раньше кнопка появлялась только с классом .on, то есть строка действий
+   меняла состав по мере ввода и «прыгала». В настоящем чате кнопка отправки
+   на месте всегда — просто неактивна, пока нечего отправлять. */
+.prompt-box #heroSendBtn.hero-send,
+.prompt-box #heroSendBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prompt-box #heroSendBtn.hero-send:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ---------- 2. Десктоп: мышь и не-телефонная ширина --------------------- */
+@media (min-width: 901px) {
+
+  html:not(.dl-phone) .prompt-box.dl-cmp {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  /* Поле ввода — главный элемент, ему принадлежит вся ширина. */
+  html:not(.dl-phone) .prompt-box.dl-cmp .pi {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 6px 6px 0;
+    border: 0;
+    background: transparent;
+    outline: none;
+    resize: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.55;
+    min-height: 52px;
+    max-height: 220px;
+  }
+
+  /* Строка действий = колонка из двух осмысленных рядов. */
+  html:not(.dl-phone) .prompt-box.dl-cmp .prompt-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: nowrap;
+  }
+
+  /* Ряд 1: инструменты слева, отправка справа. Всегда одна линия. */
+  html:not(.dl-phone) .prompt-box.dl-cmp .dl-cmp-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  html:not(.dl-phone) .prompt-box.dl-cmp .dl-cmp-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* min-width:0 даёт пилюле сжаться, а не выталкивать отправку за край. */
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Единая шкала 38px на всю строку — источник «ровности». */
+  html:not(.dl-phone) .prompt-box.dl-cmp .hero-icon-btn,
+  html:not(.dl-phone) .prompt-box.dl-cmp .hero-model,
+  html:not(.dl-phone) .prompt-box.dl-cmp #heroSendBtn.hero-send {
+    box-sizing: border-box;
+    height: 38px;
+    min-height: 0;
+    flex: 0 0 auto;
+  }
+
+  html:not(.dl-phone) .prompt-box.dl-cmp .hero-icon-btn {
+    width: 38px;
+    padding: 0;
+    border-radius: 10px;
+  }
+
+  /* Пилюля модели: длинное имя обрезается многоточием, а не растягивает ряд. */
+  html:not(.dl-phone) .prompt-box.dl-cmp .hero-model {
+    flex: 0 1 auto;
+    max-width: 230px;
+    padding: 0 11px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    line-height: 1;
+    overflow: hidden;
+  }
+
+  html:not(.dl-phone) .prompt-box.dl-cmp .hero-model .ml {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  html:not(.dl-phone) .prompt-box.dl-cmp .hero-model .mav,
+  html:not(.dl-phone) .prompt-box.dl-cmp .hero-model .ch {
+    flex: 0 0 auto;
+  }
+
+  /* Отправка — правый край ряда. Круг против прямоугольников инструментов:
+     форма сама сообщает, что это действие другого типа. */
+  html:not(.dl-phone) .prompt-box.dl-cmp #heroSendBtn.hero-send {
+    width: 38px;
+    margin-left: auto;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  html:not(.dl-phone) .prompt-box.dl-cmp #heroSendBtn.hero-send svg {
+    width: 16px;
+    height: 16px;
+    margin-left: -2px;
+    margin-top: 1px;
+    display: block;
+  }
+
+  /* Hover не смещает элементы: строка обязана стоять ровно всегда. */
+  html:not(.dl-phone) .prompt-box.dl-cmp .dl-cmp-bar .hero-icon-btn:hover,
+  html:not(.dl-phone) .prompt-box.dl-cmp .dl-cmp-bar .hero-model:hover {
+    transform: none;
+  }
+
+  /* Ряд 2: альтернативный сценарий. Отделён hairline — это другой уровень,
+     а не сосед отправки по важности. */
+  html:not(.dl-phone) .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    width: auto;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  html:not(.dl-phone) .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt .btn-grad,
+  html:not(.dl-phone) .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt .btn-line,
+  html:not(.dl-phone) .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt .btn-solid {
+    box-sizing: border-box;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    white-space: nowrap;
+  }
+
+  /* Строка-подсказка под композером — на десктопе Enter отправляет. */
+  html:not(.dl-phone) .prompt-box.dl-cmp .dl-cmp-hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--faint);
+    white-space: nowrap;
+    flex: 1 1 auto;
+    text-align: left;
+  }
+
+  /* Меню моделей открывается под пилюлей, а не под краем блока. */
+  html:not(.dl-phone) .prompt-box.dl-cmp #heroModelMenu {
+    left: 12px;
+    top: calc(100% + 8px);
+  }
+}
+
+/* ---------- 3. Телефон: та же логика, пальцевые 44px -------------------- */
+@media (max-width: 900px) {
+
+  .prompt-box.dl-cmp .dl-cmp-bar .hero-icon-btn,
+  .prompt-box.dl-cmp .dl-cmp-bar .hero-model,
+  .prompt-box.dl-cmp #heroSendBtn.hero-send {
+    box-sizing: border-box;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .prompt-box.dl-cmp .dl-cmp-bar .hero-icon-btn {
+    width: 44px;
+    padding: 0;
+    border-radius: 12px;
+  }
+
+  .prompt-box.dl-cmp #heroSendBtn.hero-send {
+    width: 44px;
+    margin-left: auto;
+    padding: 0;
+    border-radius: 50%;
+    flex: 0 0 auto;
+  }
+
+  .prompt-box.dl-cmp .dl-cmp-hint {
+    display: none;
+  }
+
+  .prompt-box.dl-cmp .prompt-actions.dl-cmp-alt {
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt-box.dl-cmp * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

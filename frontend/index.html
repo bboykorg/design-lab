@@ -14,7 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600;1,700&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
 :root{
-  --bg:#09090a;--bg-2:#0d0d0f;
+  --bg:#000000;--bg-2:#0a0a0a;
   --surface:rgba(255,255,255,.024);--surface-2:rgba(255,255,255,.05);--surface-3:rgba(255,255,255,.08);
   --border:rgba(205,208,219,.12);--border-2:rgba(205,208,219,.20);--border-3:rgba(205,208,219,.34);
   --text:#f1f2f4;--muted:rgba(241,242,244,.70);--faint:rgba(241,242,244,.52);
@@ -43,8 +43,8 @@ img{display:block;max-width:100%}
 :focus-visible{outline:2px solid var(--silver);outline-offset:2px;border-radius:6px}
 
 .bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.bg-fx .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(201,204,216,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(201,204,216,.055) 1px,transparent 1px);background-size:74px 74px;-webkit-mask-image:radial-gradient(ellipse 135% 105% at 50% 28%,#000 58%,rgba(0,0,0,.5) 100%);mask-image:radial-gradient(ellipse 135% 105% at 50% 28%,#000 58%,rgba(0,0,0,.5) 100%)}
-.bg-fx .halo{position:absolute;left:50%;top:-240px;transform:translateX(-50%);width:900px;height:560px;background:radial-gradient(ellipse at 50% 50%,rgba(210,213,225,.07),transparent 66%);filter:blur(28px)}
+.bg-fx .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:74px 74px;-webkit-mask-image:radial-gradient(ellipse 135% 105% at 50% 28%,#000 58%,rgba(0,0,0,.5) 100%);mask-image:radial-gradient(ellipse 135% 105% at 50% 28%,#000 58%,rgba(0,0,0,.5) 100%)}
+.bg-fx .halo{position:absolute;left:50%;top:-240px;transform:translateX(-50%);width:900px;height:560px;background:radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.06),transparent 66%);filter:blur(28px)}
 
 /* ambient cursor light + custom cursor */
 #cursorGlow{position:fixed;top:0;left:0;width:460px;height:460px;margin:-230px 0 0 -230px;border-radius:50%;background:radial-gradient(circle,rgba(200,208,238,.12),rgba(200,208,238,0) 62%);z-index:0;pointer-events:none;display:none;will-change:transform;filter:blur(4px)}
@@ -224,9 +224,9 @@ body.cursor-down #cursorDot{width:12px;height:12px}
 .silver-glow{background:linear-gradient(110deg,#eef0f6 0%,#c8cbd4 24%,#ffffff 50%,#aeb2bf 74%,#eef0f6 100%);background-size:220% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 10px rgba(214,220,240,.55));animation:sheen 5s linear infinite,glowPulse 4s ease-in-out infinite}
 .silver-soft{color:var(--silver-bright);text-shadow:0 0 14px rgba(210,216,240,.4)}
 .bg-fx .aurora{position:absolute;border-radius:50%;filter:blur(72px);opacity:.5;mix-blend-mode:screen;will-change:transform}
-.bg-fx .a1{width:520px;height:520px;left:-130px;top:-90px;background:radial-gradient(circle,rgba(150,170,220,.30),transparent 68%);animation:drift1 22s ease-in-out infinite alternate,auroraBreathe 11s ease-in-out infinite}
-.bg-fx .a2{width:620px;height:620px;right:-170px;top:30px;background:radial-gradient(circle,rgba(120,190,210,.20),transparent 66%);animation:drift2 28s ease-in-out infinite alternate,auroraBreathe 14s ease-in-out -4s infinite}
-.bg-fx .a3{width:480px;height:480px;left:42%;top:540px;background:radial-gradient(circle,rgba(210,214,235,.16),transparent 70%);animation:drift3 32s ease-in-out infinite alternate,auroraBreathe 16s ease-in-out -8s infinite}
+.bg-fx .a1{width:520px;height:520px;left:-130px;top:-90px;background:radial-gradient(circle,rgba(255,255,255,.10),transparent 68%);animation:drift1 22s ease-in-out infinite alternate,auroraBreathe 11s ease-in-out infinite}
+.bg-fx .a2{width:620px;height:620px;right:-170px;top:30px;background:radial-gradient(circle,rgba(255,255,255,.07),transparent 66%);animation:drift2 28s ease-in-out infinite alternate,auroraBreathe 14s ease-in-out -4s infinite}
+.bg-fx .a3{width:480px;height:480px;left:42%;top:540px;background:radial-gradient(circle,rgba(255,255,255,.06),transparent 70%);animation:drift3 32s ease-in-out infinite alternate,auroraBreathe 16s ease-in-out -8s infinite}
 @keyframes drift1{0%{transform:translate3d(0,0,0) scale(1)}35%{transform:translate3d(96px,34px,0) scale(1.09)}70%{transform:translate3d(52px,104px,0) scale(1.05)}100%{transform:translate3d(150px,90px,0) scale(1.16)}}
 @keyframes drift2{0%{transform:translate3d(0,0,0) scale(1)}40%{transform:translate3d(-58px,86px,0) scale(1.12)}75%{transform:translate3d(-120px,42px,0) scale(1.04)}100%{transform:translate3d(-130px,110px,0) scale(1.1)}}
 @keyframes drift3{0%{transform:translate3d(0,0,0) scale(1)}30%{transform:translate3d(64px,-18px,0) scale(1.14)}65%{transform:translate3d(28px,-72px,0) scale(1.08)}100%{transform:translate3d(90px,-80px,0) scale(1.22)}}
@@ -239,7 +239,7 @@ body.cursor-down #cursorDot{width:12px;height:12px}
 .bg-fx .stars .st{position:absolute;border-radius:50%;background:rgba(232,236,250,.95);box-shadow:0 0 6px rgba(210,216,240,.85);opacity:0;animation:twinkle linear infinite,floaty ease-in-out infinite}
 @keyframes twinkle{0%,100%{opacity:.12}50%{opacity:.9}}
 @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}
-.bg-fx .scanline{position:absolute;left:0;right:0;top:0;height:38%;background:linear-gradient(180deg,rgba(200,208,238,.055),transparent);animation:scan 11s ease-in-out infinite}
+.bg-fx .scanline{position:absolute;left:0;right:0;top:0;height:38%;background:linear-gradient(180deg,rgba(255,255,255,.04),transparent);animation:scan 11s ease-in-out infinite}
 @keyframes scan{0%{transform:translateY(-45%);opacity:0}25%{opacity:.7}100%{transform:translateY(280%);opacity:0}}
 .sec-title{background-image:var(--chrome-h);background-size:220% auto;-webkit-background-clip:text;background-clip:text;animation:sheen 7s linear infinite}
 .reveal{opacity:0}
@@ -1065,7 +1065,7 @@ document.getElementById('modal').addEventListener('click',function(e){if(e.targe
 .pricing .plan:nth-child(2){animation-delay:.1s}.pricing .plan:nth-child(3){animation-delay:.2s}
 
 /* alive background: 4th aurora, comets, grain, parallax hooks */
-.bg-fx .a4{width:560px;height:560px;left:12%;bottom:-240px;top:auto;background:radial-gradient(circle,rgba(168,178,228,.15),transparent 68%);animation:drift1 30s ease-in-out infinite alternate,auroraBreathe 13s ease-in-out -6s infinite}
+.bg-fx .a4{width:560px;height:560px;left:12%;bottom:-240px;top:auto;background:radial-gradient(circle,rgba(255,255,255,.05),transparent 70%);animation:drift1 30s ease-in-out infinite alternate,auroraBreathe 13s ease-in-out -6s infinite}
 .bg-fx .comets{position:absolute;inset:0}
 .bg-fx .comets i{position:absolute;width:150px;height:1.5px;border-radius:999px;background:linear-gradient(90deg,rgba(238,240,246,.95),transparent);filter:drop-shadow(0 0 6px rgba(214,220,240,.9));opacity:0;animation:comet 9s linear infinite}
 .bg-fx .comets i:nth-child(1){top:13%;left:66%;animation-delay:2.2s}
