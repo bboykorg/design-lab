@@ -3,30 +3,40 @@
    2) в списке моделей вместо значка могло стоять слово undefined;
    3) после входа аккаунт в бургер-меню появлялся только после перезагрузки;
    4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
-   5) всплывающие панели (меню, карточка аккаунта) делаются непрозрачными. */
+   5) на телефоне всплывающие окна (профиль, меню, листы) делаются непрозрачными.
+      На компьютере оформление не меняется: там прозрачность читаемости не мешает. */
 (function () {
   'use strict';
   if (window.__dlMobileFixes) return;
   window.__dlMobileFixes = true;
 
+  var PHONE_MAX = 760;
   var INSTALL = ['установить приложение', 'install app', 'установить апп'];
   var REFRESH = [
     'refreshAuthUI', 'updateAuthUI', 'renderAuth', 'syncAuth', 'applyAuth',
     'renderProfile', 'refreshProfile', 'loadProfile', 'updateProfile', 'fetchProfile',
     'dlRefreshProfile', 'dlRenderProfile', 'buildMobileMenu', 'renderMobileMenu',
     'dlBuildMenu', 'renderMenu', 'renderAccount', 'updateAccount', 'renderHeader',
-    'updateHeader', 'renderNav', 'boot', 'initAuth'
+    'updateHeader', 'renderNav', 'initAuth'
   ];
   var MARK = 'data-dl-removed';
   var SOLID = 'data-dl-solid';
   var RELOADED = 'dl_auth_reloaded';
+  var BASE = '#0b0b0b';
 
+  /* Стили в медиазапросе: на пк они просто не применяются. */
   var style = document.createElement('style');
   style.textContent =
     '[' + MARK + ']{display:none!important}' +
-    '[' + SOLID + ']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}';
+    '@media (max-width:' + PHONE_MAX + 'px){' +
+    '[' + SOLID + ']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}' +
+    '}';
   (document.head || document.documentElement).appendChild(style);
 
+  function phone() {
+    if (document.documentElement.classList.contains('dl-phone')) return true;
+    return (window.innerWidth || 9999) <= PHONE_MAX;
+  }
   function text(node) {
     return String(node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
   }
@@ -106,39 +116,56 @@
     });
   }
 
-  /* Полупрозрачные панели нечитаемы на телефоне: сквозь карточку аккаунта
-     просвечивает страница. Цвет сохраняем, убираем только прозрачность.
-     Затемняющие подложки во весь экран не трогаем. */
+  /* На телефоне окно профиля занимает весь экран, и сквозь него видна страница:
+     текст и поля читаются плохо. Делаем фон плотным и убираем размытие.
+     Свой цвет панели сохраняем; если фона нет вовсе — подкладываем базовый тёмный. */
   var PANEL = '[role="dialog"],[class*="sheet"],[class*="modal"],[class*="menu"],' +
     '[class*="drawer"],[class*="popover"],[class*="dropdown"],[class*="account"],' +
     '[class*="profile"],[id*="menu"],[id*="modal"],[id*="sheet"],[id*="account"],[id*="profile"]';
   function solidify() {
+    if (!phone()) return;
     var list;
     try { list = document.querySelectorAll(PANEL); } catch (e) { return; }
-    var vw = window.innerWidth || 0;
-    var vh = window.innerHeight || 0;
     Array.prototype.forEach.call(list, function (el) {
-      if (el.hasAttribute(SOLID)) return;
+      if (el.hasAttribute(SOLID) || el === document.body) return;
       var box;
       try { box = el.getBoundingClientRect(); } catch (e) { return; }
       if (box.width < 40 || box.height < 40) return;
-      /* Подложка на весь экран — ей прозрачность нужна. */
-      if (vw && vh && box.width >= vw * .96 && box.height >= vh * .96) return;
       var css = window.getComputedStyle(el);
       if (css.display === 'none' || css.visibility === 'hidden') return;
-      var bg = css.backgroundColor || '';
-      var rgba = bg.match(/^rgba?\(([^)]+)\)$/);
-      if (!rgba) return;
-      var parts = rgba[1].split(',');
-      if (parts.length < 4) return;
-      var alpha = parseFloat(parts[3]);
-      /* Полностью прозрачный — это оболочка без фона, её не трогаем. */
-      if (!(alpha > 0 && alpha < 1)) return;
+      /* Статичные блоки в потоке страницы не трогаем — только всплывающие. */
+      var pos = css.position;
+      if (pos !== 'fixed' && pos !== 'absolute' && pos !== 'sticky') return;
+
+      var rgba = String(css.backgroundColor || '').match(/^rgba?\(([^)]+)\)$/);
+      var alpha = 1;
+      var tone = BASE;
+      if (rgba) {
+        var parts = rgba[1].split(',');
+        alpha = parts.length > 3 ? parseFloat(parts[3]) : 1;
+        if (alpha > 0) {
+          tone = 'rgb(' + parts[0].trim() + ',' + parts[1].trim() + ',' + parts[2].trim() + ')';
+        }
+      }
+      var blurred = /blur/.test(String(css.backdropFilter || css.webkitBackdropFilter || ''));
+      if (alpha >= 1 && !blurred) return;
+
       el.setAttribute(SOLID, '1');
-      el.style.setProperty('background-color',
-        'rgb(' + parts[0].trim() + ',' + parts[1].trim() + ',' + parts[2].trim() + ')', 'important');
+      el.style.setProperty('background-color', tone, 'important');
       el.style.setProperty('backdrop-filter', 'none', 'important');
       el.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+    });
+  }
+  /* При смене ширины (поворот, окно на пк) возвращаем исходное оформление. */
+  function unsolidify() {
+    if (phone()) return;
+    var list;
+    try { list = document.querySelectorAll('[' + SOLID + ']'); } catch (e) { return; }
+    Array.prototype.forEach.call(list, function (el) {
+      el.removeAttribute(SOLID);
+      el.style.removeProperty('background-color');
+      el.style.removeProperty('backdrop-filter');
+      el.style.removeProperty('-webkit-backdrop-filter');
     });
   }
 
@@ -175,7 +202,6 @@
     seen = now;
     run();
     if (refresh()) { setTimeout(run, 400); return; }
-    /* Ни одной подходящей функции нет — обновляем страницу один раз за сеанс. */
     var once;
     try { once = sessionStorage.getItem(RELOADED); } catch (e) { once = '1'; }
     if (once) return;
@@ -193,7 +219,6 @@
     window.addEventListener('focus', soon);
     document.addEventListener('visibilitychange', soon);
 
-    /* Запись токена — самый ранний признак успешного входа. */
     try {
       ['setItem', 'removeItem', 'clear'].forEach(function (name) {
         var base = Storage.prototype[name];
@@ -208,11 +233,10 @@
       });
     } catch (e) {}
 
-    /* А если токен живёт только в памяти — ловим сам ответ на вход. */
     try {
       if (typeof window.fetch === 'function' && !window.fetch.__dlWrapped) {
         var base = window.fetch;
-        var patched = function (input, init) {
+        var patched = function (input) {
           var url = '';
           try { url = typeof input === 'string' ? input : (input && input.url) || ''; } catch (e) {}
           var auth = /(login|signin|sign-in|register|signup|auth|session|profile|me)\b/i.test(url);
@@ -234,6 +258,7 @@
     dropInstall();
     dropVendorHeads();
     dropUndefined();
+    unsolidify();
     solidify();
   }
   function start() {
@@ -246,6 +271,7 @@
         pending = setTimeout(function () { pending = null; run(); }, 150);
       }).observe(document.documentElement, { childList: true, subtree: true });
     }
+    window.addEventListener('resize', function () { unsolidify(); solidify(); });
     setInterval(run, 1500);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
