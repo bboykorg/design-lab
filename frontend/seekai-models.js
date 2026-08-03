@@ -1,11 +1,12 @@
-/* SeekAI (https://seekai.cc) — новый шлюз.
+/* SeekAI (https://seekai.cc) — дополнительные модели.
 
    Логика разделена между фронтом и бэком:
    • Модели, которых на сайте ещё нет, добавляются здесь и ходят в SeekAI напрямую.
-   • Модели-дубли (claude-opus-4-8, claude-opus-5, claude-sonnet-5, deepseek-v4-flash)
-     не трогаем: они работают через свой шлюз, а backend/seekai.py сам
-     переключает их на ключи SeekAI, как только лимиты основного провайдера
-     заканчиваются. Пользователь этого не замечает.
+   • Модели-дубли не трогаем: backend/seekai.py сам переключает их на SeekAI,
+     когда лимиты основного провайдера заканчиваются.
+
+   Название провайдера в списке моделей не показывается: группы в меню только
+   по тарифам (FREE / PRO), их ставит model-plan-groups.js.
 
    Важно: MODELS/AV/FALLBACK_ORDER объявлены через const в index.html, поэтому
    их нет в window — обращаемся к ним по имени, как это делает models-patch.js. */
@@ -13,7 +14,6 @@
   'use strict';
   if (window.__dlSeekaiPatched) return;
 
-  var GROUP = 'SeekAI';
   var GW = { url: 'https://seekai.cc/v1/chat/completions', host: 'seekai.cc' };
 
   var NEW = {
@@ -29,10 +29,10 @@
   };
 
   // Монохромные аватарки — без цветных логотипов, как и весь интерфейс.
-  var LETTERS = { openai: 'G', anthropic: 'C', deepseek: 'D', xai: 'X', qwen: 'Q' };
+  var LETTERS = { openai: 'G', anthropic: 'C', deepseek: 'D', xai: '✕', qwen: 'Q' };
   function avatar(letter) {
     return '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">' +
-      '<text x="12" y="17" text-anchor="middle" font-size="14" font-weight="700" ' +
+      '<text x="12" y="17" text-anchor="middle" font-size="13" font-weight="700" ' +
       'font-family="Manrope,sans-serif" fill="#fff">' + letter + '</text></svg>';
   }
 
@@ -42,6 +42,7 @@
     if (!models || typeof models !== 'object') return false;
 
     try { avatars = AV; } catch (e) { avatars = null; }
+    if (!avatars && window.AV) avatars = window.AV;
     if (avatars) {
       Object.keys(LETTERS).forEach(function (brand) {
         if (!avatars[brand]) avatars[brand] = avatar(LETTERS[brand]);
@@ -50,9 +51,13 @@
 
     Object.keys(NEW).forEach(function (id) {
       var m = NEW[id];
+      // Значок кладём и рядом с моделью: если меню берёт его оттуда, а не из AV,
+      // в списке не появится undefined вместо символа.
+      var icon = avatar(LETTERS[m.brand] || '•');
       models[id] = {
         name: m.name, desc: m.desc, provider: 'seekai',
-        model: m.model, brand: m.brand, group: GROUP, gw: GW
+        model: m.model, brand: m.brand, gw: GW,
+        av: icon, icon: icon
       };
     });
 

@@ -1,11 +1,15 @@
 """SeekAI (https://seekai.cc) — резервный и основной шлюз к моделям.
 
 Зачем нужен отдельный модуль:
-- у SeekAI три ключа, они крутятся по кругу (round-robin);
+- ключи SeekAI крутятся по кругу (round-robin);
 - часть моделей уже есть на сайте через другие шлюзы. Для них SeekAI
   включается только тогда, когда «родной» шлюз перестал отвечать
   (кончились лимиты, ключ отозван, провайдер лёг);
 - часть моделей есть только у SeekAI — они идут напрямую.
+
+Ключи берутся ТОЛЬКО из переменных окружения SEEKAI_API_KEYS / SEEKAI_API_KEY,
+точно так же, как у остальных провайдеров. В коде ключей нет.
+Если переменная не задана, шлюз просто выключен.
 
 Состояние «шлюз выдохся» держим в памяти процесса с TTL: как только основной
 шлюз вернул 401/402/403/429 или 5xx, помечаем пару (провайдер, модель) как
@@ -19,13 +23,6 @@ import time
 BASE_URL = os.getenv("SEEKAI_BASE_URL", "https://seekai.cc/v1").rstrip("/")
 ENDPOINT = BASE_URL + "/chat/completions"
 ENV_NAMES = "SEEKAI_API_KEYS,SEEKAI_API_KEY"
-
-# Ключи из ТЗ. Переменная окружения SEEKAI_API_KEYS всегда важнее.
-DEFAULT_KEYS = (
-    "sk-YPx2rbM4H40bWLgZxneDDK352voIvODgYSZB46JGojG3AGTN",
-    "sk-0Q0l1OxfEpj7zhMu6rSG7j1UMXn1wgYCPJbz2JGQ1fI6JdKm",
-    "sk-V0iRlWo0lpTLidZM5sHngiqToJ9AFHMJiBRPZ2ORuzTn9G4s",
-)
 
 # Модели, которые есть ТОЛЬКО у SeekAI — сразу идут туда.
 OWN_MODELS = {
@@ -73,11 +70,11 @@ _lock = threading.Lock()
 
 
 def keys():
-    """Ключи SeekAI: сначала из окружения, иначе встроенные."""
+    """Ключи SeekAI из окружения. Пусто — значит шлюз выключен."""
     found = []
     for name in ENV_NAMES.split(","):
         found += [key.strip() for key in os.getenv(name.strip(), "").split(",") if key.strip()]
-    return found or list(DEFAULT_KEYS)
+    return found
 
 
 def enabled() -> bool:
