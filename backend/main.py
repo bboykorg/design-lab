@@ -85,7 +85,8 @@ _PATCH_SCRIPTS = (
     # Доска + ИИ: дизайн-скиллы в промпте схемы, ремонт JSON, честный фолбэк.
     "dl-board-ai.js",
     # Самым последним: точечные фиксы интерфейса — убрана кнопка установки
-    # приложения, подменён undefined в значках моделей, меню обновляется после входа.
+    # приложения, подменён undefined в значках моделей, меню обновляется после входа,
+    # на телефоне всплывающие окна непрозрачные.
     "dl-mobile-fixes.js",
 )
 
@@ -120,15 +121,30 @@ _PATCH_STYLES = (
 )
 _index_cache = None
 
+
+def _version(name: str) -> str:
+    """Метка версии файла для адреса подключения.
+
+    Без неё браузер (особенно мобильный Safari и Chrome на Android) держит
+    старый .js/.css в кэше и после деплоя показывает прежнее поведение:
+    выглядит так, будто правки не выкатились. Меняется файл — меняется адрес.
+    """
+    try:
+        stat = (config.FRONTEND_DIR / name).stat()
+        return str(int(stat.st_mtime))[-8:] + "-" + str(stat.st_size)
+    except OSError:
+        return "0"
+
+
 def _build_index() -> str:
     raw = (config.FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
     missing = [
-        f'<link rel="stylesheet" href="/{name}">'
+        f'<link rel="stylesheet" href="/{name}?v={_version(name)}">'
         for name in _PATCH_STYLES
         if name not in raw
     ]
     missing += [
-        f'<script src="/{name}"></script>'
+        f'<script src="/{name}?v={_version(name)}"></script>'
         for name in _PATCH_SCRIPTS
         if name not in raw
     ]
@@ -147,7 +163,8 @@ def index():
             _index_cache = _build_index()
         except OSError:
             raise HTTPException(status_code=404, detail="frontend/index.html not found")
-    return HTMLResponse(_index_cache)
+    # Сама страница не кэшируется: в ней лежат адреса со свежими версиями.
+    return HTMLResponse(_index_cache, headers={"Cache-Control": "no-store, must-revalidate"})
 
 if config.FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(config.FRONTEND_DIR), html=True), name="frontend")
