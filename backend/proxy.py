@@ -359,6 +359,13 @@ async def proxy(request: Request, user=Depends(require_user)):
     seek_ready = bool(seek_model and seekai.enabled())
     seek_host = (urlparse(seekai.ENDPOINT).hostname or "").lower()
 
+    # Имена моделей на сайте и в каталоге SeekAI совпадают не всегда
+    # (у них есть и gpt-5.6, и gpt-5-6-terra). Раньше перевод имени делался
+    # только для резервных запросов, а собственные модели SeekAI уходили как есть
+    # и получали «model not found», после чего сайт молча брал следующую модель.
+    if provider == "seekai" and seek_model and seek_model != model:
+        body = _set_model(body, seek_model)
+
     # Если родной шлюз уже помечен как выдохшийся — сразу идём в SeekAI.
     skip_primary = provider != "seekai" and seek_ready and seekai.is_exhausted(provider, model)
 
@@ -477,7 +484,10 @@ async def _seekai_catalog():
                 "body": response.text[:300]}
     ids = sorted(str(item.get("id", "")) for item in items if isinstance(item, dict))
     known = set(ids)
-    missing_own = sorted(name for name in seekai.OWN_MODELS if name not in known)
+    missing_own = sorted(
+        name for name in seekai.OWN_MODELS
+        if (seekai.target_model(name) or name) not in known
+    )
     missing_failover = sorted(
         {target for target in seekai.FALLBACK_MODEL.values() if target not in known}
     )
