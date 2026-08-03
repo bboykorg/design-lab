@@ -5,19 +5,20 @@
    4) в списке моделей нет названий провайдеров — только FREE и PRO;
    5) на телефоне всплывающие окна делаются непрозрачными; на компьютере оформление не меняется.
 
-   Две важные перемены против прежней версии:
+   СОСТОЯНИЕ ВХОДА — три значения, а не два.
+   Прошлая версия считала человека вошедшим ТОЛЬКО после успешного
+   /api/auth/me. Пока ответ шёл (или если сервис ответил 500/502/503),
+   кнопка «Войти» уже убиралась, а «Профиль» ещё не рисовался — в шапке
+   не оставалось ничего. Теперь:
+     • есть токен и сервер не сказал 401 — человек считается вошедшим;
+     • 401/403 — сессия закончилась, кэш ника чистится;
+     • 500/502/503 или обрыв сети — состояние НЕ меняется.
+   И если на странице вообще нет ни кнопки входа, ни выхода, кнопка
+   «Профиль» добавляется сама — в шапку или в открытое меню.
 
-   — Вход определяется ТОЛЬКО успешным ответом /api/auth/me. Раньше хватало
-     сохранённого ника в dl_nick_cache, поэтому после выхода и перезагрузки
-     «Войти» снова превращалось в «Профиль» без живой сессии. Ник теперь —
-     только подпись, не признак входа.
-
-   — Нет постоянного скана страницы. Прежние setInterval(run, 1500) и
-     setInterval(check, 500) обходили почти весь DOM вместе с текстовыми узлами и
-     работали вечно — на слабом телефоне это подтормаживание и батарея.
-     Теперь работа запускается по событиям: вход, выход, клик (открытие меню),
-     появление новых узлов в DOM, поворот экрана.
-     Поиск undefined тоже сужен до списков моделей, а не всего документа. */
+   Нет постоянного скана страницы: прежние setInterval(run,1500) и
+   setInterval(check,500) обходили весь DOM вместе с текстовыми узлами.
+   Работа идёт по событиям: вход, выход, клик, новые узлы, поворот. */
 (function () {
   'use strict';
   if (window.__dlMobileFixes) return;
@@ -42,6 +43,9 @@
   var style = document.createElement('style');
   style.textContent =
     '[' + MARK + ']{display:none!important}' +
+    '[' + ACCT + '="made"]{display:inline-flex;align-items:center;justify-content:center;' +
+    'padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.18);' +
+    'background:rgba(255,255,255,.08);color:inherit;font:inherit;cursor:pointer}' +
     '@media (max-width:' + PHONE_MAX + 'px){' +
     '[' + SOLID + ']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}' +
     '}';
@@ -101,9 +105,7 @@
     });
   }
 
-  /* --- undefined вместо значка модели --------------------------------
-     Смотрим только внутри списков моделей: полный обход текстовых узлов
-     страницы был самой дорогой частью слоя. */
+  /* --- undefined вместо значка модели (только в списках моделей) --- */
   var SYMBOL = [
     { mark: 'grok', sign: '\u2715' }, { mark: 'gpt', sign: 'G' },
     { mark: 'claude', sign: 'C' }, { mark: 'opus', sign: 'C' },
@@ -143,13 +145,11 @@
     });
   }
 
-  /* --- Состояние входа -------------------------------------------
-     Единственный источник правды — ответ /api/auth/me. Токен в хранилище
-     только повод спросить сервер, а не доказательство живой сессии. */
+  /* --- Состояние входа ------------------------------------------- */
   var TOKEN_KEYS = ['dl_token', 'dl_auth_token', 'auth_token', 'authToken', 'access_token', 'token', 'dlToken'];
   var nick = '';
   try { nick = String(localStorage.getItem(NICK_CACHE) || ''); } catch (e) { nick = ''; }
-  var authed = false;      // подтверждено сервером
+  var confirmed = null;   // true — сервер подтвердил, false — 401, null — неизвестно
   var asking = false;
 
   function setNick(value) {
@@ -171,17 +171,19 @@
     }
     return '';
   }
+
+  /* Токен есть и сервер не сказал 401 — показываем профиль. Временная
+     ошибка сервиса не должна выкидывать человека из интерфейса. */
   function signedIn() {
-    return authed;
+    if (confirmed === false) return false;
+    return confirmed === true || !!token();
   }
 
-  /* Запрос /api/auth/me. Вызывается по событиям, а не по таймеру. */
   function verify(then) {
     if (asking) return;
     var key = token();
     if (!key) {
-      if (authed || nick) { authed = false; forgetNick(); run(); }
-      authed = false;
+      if (confirmed !== false) { confirmed = false; forgetNick(); run(); }
       if (then) then(false);
       return;
     }
@@ -192,34 +194,39 @@
           asking = false;
           if (!res) return;
           if (res.status === 401 || res.status === 403) {
-            authed = false;
+            confirmed = false;
             forgetNick();
             run();
             if (then) then(false);
             return;
           }
-          if (!res.ok) { if (then) then(authed); return; }
+          if (!res.ok) {
+            // 500/502/503 — сервис временно недоступен, состояние не трогаем.
+            run();
+            if (then) then(signedIn());
+            return;
+          }
           return res.json().then(function (data) {
-            authed = true;
+            confirmed = true;
             if (data) setNick(data.username || data.login || data.nickname || data.name || '');
             run();
             if (then) then(true);
           }, function () {
-            authed = true;
+            confirmed = true;
             run();
             if (then) then(true);
           });
         })
-        .catch(function () { asking = false; });
+        .catch(function () {
+          asking = false;
+          run();
+        });
     } catch (e) { asking = false; }
   }
 
-  /* --- Кнопка профиля ---------------------------------------------
-     Кнопки «Выйти — логин» и «Войти» рисует чужой слой. Любую из них
-     заменяем на свою кнопку «Профиль» на том же месте и только потом
-     убираем исходную: иначе при пересборке меню могло не остаться
-     ни одной кнопки. Выход внутри окна профиля не трогаем. */
+  /* --- Кнопка профиля ---------------------------------------------- */
   var LOGOUT = /^\u0432\u044b\u0439\u0442\u0438(\s*[\u2014\u2013-]\s*(.+))?$/i;
+
   function openProfile(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (typeof window.dlProfile === 'function') { window.dlProfile(); return; }
@@ -249,21 +256,56 @@
       if (inProfilePanel(el)) return;
       var hit = LOGOUT.exec(raw(el));
       if (!hit) return;
-      if (hit[2] && authed) setNick(hit[2]);
+      if (hit[2]) setNick(hit[2]);
       replaceWithProfile(el);
       el.setAttribute(MARK, 'logout');
       if (el.parentElement) el.parentElement.removeChild(el);
     });
   }
 
-  /* --- Кнопки входа у вошедшего пользователя ------------------------
-     Шапка и бургер-меню рисуют «Войти» / «Начать бесплатно» всегда.
-     У вошедшего такая кнопка становится кнопкой профиля.
-     Призывы в теле страницы (тарифы, главный экран) не трогаем. */
+  /* Страховка: если после всех замен ни одной кнопки аккаунта не
+     осталось — ставим свою в шапку или в открытое меню. */
+  function visible(el) {
+    try {
+      var box = el.getBoundingClientRect();
+      return box.width > 0 && box.height > 0;
+    } catch (e) { return false; }
+  }
+  function accountHost() {
+    var spots = document.querySelectorAll(
+      '[' + ACCT + '="host"],header nav,header,nav,[class*="drawer"],[class*="burger"],' +
+      '[class*="menu"],[id*="menu"],[class*="topbar"]'
+    );
+    for (var i = 0; i < spots.length; i++) {
+      if (visible(spots[i])) return spots[i];
+    }
+    return null;
+  }
+  function ensureProfileButton() {
+    if (!signedIn()) {
+      var made = document.querySelectorAll('[' + ACCT + '="made"]');
+      Array.prototype.forEach.call(made, function (el) {
+        if (el.parentElement) el.parentElement.removeChild(el);
+      });
+      return;
+    }
+    var exists = document.querySelector('[' + ACCT + '="open"],[' + ACCT + '="made"]');
+    if (exists && visible(exists)) return;
+    if (exists && exists.parentElement) exists.parentElement.removeChild(exists);
+    var host = accountHost();
+    if (!host) return;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute(ACCT, 'made');
+    button.textContent = '\u041f\u0440\u043e\u0444\u0438\u043b\u044c';
+    button.addEventListener('click', openProfile);
+    host.appendChild(button);
+  }
+
+  /* --- Кнопки входа у вошедшего пользователя ----------------------- */
   var SIGNIN = [
     '\u0432\u043e\u0439\u0442\u0438', '\u0432\u0445\u043e\u0434', '\u0432\u043e\u0439\u0442\u0438 \u0432 \u0430\u043a\u043a\u0430\u0443\u043d\u0442', '\u0432\u043e\u0439\u0442\u0438 \u0432 \u043f\u0440\u043e\u0444\u0438\u043b\u044c',
     '\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044f', '\u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f', '\u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0430\u043a\u043a\u0430\u0443\u043d\u0442',
-    '\u043d\u0430\u0447\u0430\u0442\u044c \u0431\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u043e', '\u043f\u043e\u043f\u0440\u043e\u0431\u043e\u0432\u0430\u0442\u044c \u0431\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u043e',
     'sign in', 'sign up', 'log in', 'login'
   ];
   var BARS = 'header,nav,[' + ACCT + '="host"],' +
@@ -278,8 +320,8 @@
     var list;
     try { list = document.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
     Array.prototype.forEach.call(list, function (el) {
-      if (el.getAttribute(ACCT) === 'open' || el.hasAttribute(MARK)) return;
-      if (inProfilePanel(el)) return;
+      if (el.getAttribute(ACCT) === 'open' || el.getAttribute(ACCT) === 'made') return;
+      if (el.hasAttribute(MARK) || inProfilePanel(el)) return;
       var value = text(el).replace(/\s*[\u2192>\u203a]+$/, '').trim();
       if (SIGNIN.indexOf(value) < 0) return;
       if (!inBar(el)) return;
@@ -294,7 +336,7 @@
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
   function dropNickRow() {
-    if (!nick || !authed) return;
+    if (!nick || !signedIn()) return;
     var low = escape(nick.toLowerCase());
     var plain = new RegExp('^' + low + '$', 'i');
     var numbered = new RegExp('^\\d{1,2}\\s*[.)\u00b7-]?\\s*' + low + '$', 'i');
@@ -302,7 +344,8 @@
     var list;
     try { list = document.querySelectorAll('a,button,li,[role="button"],[role="menuitem"]'); } catch (e) { return; }
     Array.prototype.forEach.call(list, function (el) {
-      if (el.hasAttribute(MARK) || el.getAttribute(ACCT) === 'open') return;
+      if (el.hasAttribute(MARK)) return;
+      if (el.getAttribute(ACCT) === 'open' || el.getAttribute(ACCT) === 'made') return;
       if (inProfilePanel(el)) return;
       var value = text(el);
       if (value.length > 40) return;
@@ -393,15 +436,16 @@
   var lastToken = token();
   var checking = null;
 
-  /* Вызывается только когда что-то произошло: запись в хранилище,
-     ответ на запрос входа, возврат на вкладку. Постоянного таймера нет. */
   function check() {
     var now = token();
     if (now === lastToken) return;
     lastToken = now;
     if (!now) {
-      authed = false;
+      confirmed = false;
       forgetNick();
+      run();
+    } else {
+      confirmed = null;
       run();
     }
     verify(function () {
@@ -458,7 +502,6 @@
     } catch (e) {}
   }
 
-  /* Один проход по странице. Запускается по событиям и не чаще чем раз в 200 мс. */
   var running = null;
   function runNow() {
     dropInstall();
@@ -467,6 +510,7 @@
     accountButton();
     dropSignIn();
     dropNickRow();
+    ensureProfileButton();
     unsolidify();
     solidify();
   }
@@ -494,7 +538,6 @@
       }).observe(document.documentElement, { childList: true, subtree: true });
     }
 
-    // Открытие меню, бургера и списка моделей — это всегда клик.
     document.addEventListener('click', run, true);
     window.addEventListener('hashchange', run);
     window.addEventListener('resize', function () { unsolidify(); solidify(); });
