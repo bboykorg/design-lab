@@ -1,30 +1,33 @@
 /* Без автоподмены модели.
 
-   Раньше было так: если выбранная модель не ответила, сайт сам брал следующую
-   из цепочки FALLBACK_ORDER. Со стороны это выглядело как «выбрал Terra —
-   ответил Opus», причём в Network никакого «переключения» не видно: вся логика
-   живёт в браузере. Теперь модель меняет только человек.
+   Задача: если выбранная модель не ответила, сайт не подставляет другую
+   тихонько — решение остаётся за человеком.
 
-   Что делает файл:
-   1) чистит FALLBACK_ORDER — подставлять больше нечего (список сохранён
-      в window.__dlFallbackOrder, чтобы поведение можно было вернуть одной строкой);
-   2) ставит заслон на pickModel: вызов без живого клика/касания игнорируется;
-   3) показывает ПРИЧИНУ отказа: код и короткий текст ошибки провайдера,
-      а полный текст кладёт в window.__dlLastModelError для разбора.
+   Почему ЦЕПОЧКА НЕ ОБНУЛЯЕТСЯ. Первая версия вычищала FALLBACK_ORDER
+   полностью. Но часть кода (в частности доска) не берёт текущую модель напрямую,
+   а идёт по этому списку. Пустой список — ноль кандидатов, и доска уходила в
+   демо-режим с текстом «не смог связаться ни с одной моделью», не отправив
+   ни одного запроса — в Network было пусто.
 
-   Тело ответа читаем только у КЛОНА и только у неудачных ответов, чтобы поток
-   успешной генерации не ломался.
+   Решение: в цепочке всегда ровно один элемент — та модель, которую выбрал
+   пользователь. Код, который перебирает список, продолжает работать и шлёт
+   запрос, но перейти ему не на что. Исходный порядок лежит в
+   window.__dlFallbackOrder — поведение легко вернуть.
 
-   Ничего не блокируется и не затемняется: все кнопки остаются кликабельными.
-   Резерв на сервере (другой шлюз для ТОЙ ЖЕ модели) не трогаем — он не меняет
-   то, что выбрал пользователь. */
+   Ещё две вещи:
+   — машинный вызов pickModel (без живого клика) игнорируется;
+   — при ошибке видна причина: код и текст ответа провайдера,
+     полный текст кладётся в window.__dlLastModelError.
+
+   Ничего не блокируется и не затемняется. Серверный резерв (другой шлюз для
+   ТОЙ ЖЕ модели) не трогаем: он выбор пользователя не меняет. */
 (function () {
   'use strict';
   if (window.__dlNoAutoSwitch) return;
   window.__dlNoAutoSwitch = true;
 
   var GESTURE_MS = 2500;   // сколько времени клик считается живым
-  var BOOT_MS = 8000;      // на старте страницы разрешаем восстановление выбора
+  var BOOT_MS = 8000;      // на старте разрешаем восстановление выбора
   var NOTE_MS = 6000;      // не чаще одной подсказки в этот интервал
 
   var bootAt = Date.now();
@@ -59,17 +62,36 @@
   }
   window.dlModelNote = note;
 
-  // 1. Цепочка автоподмены. FALLBACK_ORDER объявлён через const в index.html,
-  // переприсвоить его нельзя, но сам массив изменяем — просто опустошаем его.
-  // Делаем это повторно: seekai-models.js добавляет туда свои модели позже.
-  function clearChain() {
+  function chainRef() {
     var chain;
     try { chain = FALLBACK_ORDER; } catch (e) { chain = window.FALLBACK_ORDER; }
-    if (!chain || !chain.splice) return;
-    if (chain.length) {
-      if (!window.__dlFallbackOrder) window.__dlFallbackOrder = chain.slice();
-      chain.splice(0, chain.length);
+    return (chain && chain.splice) ? chain : null;
+  }
+
+  function currentKey() {
+    var key = '';
+    try { key = window.currentModel || ''; } catch (e) { key = ''; }
+    if (!key) {
+      try { key = localStorage.getItem('dl_model') || ''; } catch (e) { key = ''; }
     }
+    return key;
+  }
+
+  // 1. В цепочке держим ровно одну запись — выбранную модель.
+  function pinChain() {
+    var chain = chainRef();
+    if (!chain) return;
+    if (!window.__dlFallbackOrder && chain.length > 1) {
+      window.__dlFallbackOrder = chain.slice();
+    }
+    var key = currentKey();
+    if (!key) {
+      // Выбор ещё не известен: оставляем первый элемент, чтобы список не был пуст.
+      if (chain.length > 1) chain.splice(1, chain.length - 1);
+      return;
+    }
+    if (chain.length === 1 && chain[0] === key) return;
+    chain.splice(0, chain.length, key);
   }
 
   // 2. Заслон на машинный вызов pickModel.
@@ -100,6 +122,7 @@
   }
 
   // 3. Ошибка запроса к модели — говорим о ней вслух и с причиной.
+  // Читаем только клон и только у неудачных ответов — поток генерации цел.
   function watchFetch() {
     var original = window.fetch;
     if (typeof original !== 'function' || original.__dlModelWatch) return;
@@ -115,7 +138,7 @@
           var copy = null;
           try { copy = response.clone(); } catch (e) { copy = null; }
           if (!copy) {
-            window.__dlLastModelError = { status: status, text: '' };
+            window.__dlLastModelError = { status: status, text: '', at: Date.now() };
             note('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b\u0430 (\u043a\u043e\u0434 ' + status +
               '). \u0412\u044b\u0431\u0435\u0440\u0438 \u0434\u0440\u0443\u0433\u0443\u044e \u043c\u043e\u0434\u0435\u043b\u044c \u0432\u0440\u0443\u0447\u043d\u0443\u044e.');
             return;
@@ -136,7 +159,7 @@
   }
 
   function run() {
-    clearChain();
+    pinChain();
     guardPick();
     watchFetch();
   }
@@ -144,7 +167,7 @@
   run();
   setTimeout(run, 300);
   setTimeout(run, 1200);
-  setInterval(run, 1500);
+  setInterval(run, 900);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   window.addEventListener('load', run);
 })();
