@@ -1,13 +1,12 @@
 /* Design Lab — редактирование блоков включается сразу при входе в режим дизайна.
 
-   Движок редактора (подсветка при наведении, рамки, перетаскивание) запускается
-   в момент первого открытия панели с блоками, поэтому до этого сайт выглядел
-   мёртвым. Здесь панель открывается автоматически один раз — тот же самый клик,
-   который раньше делал пользователь. Если после её закрытия редактирование
-   остаётся живым, панель снова прячется, чтобы не занимать место; если движок
-   завязан на видимость панели — она остаётся открытой.
+   Движок редактора (подсветка, рамки, перетаскивание) стартует в момент первого
+   открытия панели с блоками, поэтому скрипт нажимает штатную кнопку за пользователя.
 
-   Ничего не блокируется и не затемняется: скрипт только жмёт на штатную кнопку. */
+   Важно: нажатие ровно ОДНО и только если панель закрыта. Прошлая версия
+   открывала и тут же закрывала панель, а проверка режима могла дёргаться — получалось
+   мигание. Теперь панель просто остаётся открытой, а закрыть её можно вручную:
+   повторно скрипт её не откроет до следующей загрузки сайта в кадре. */
 (function () {
   'use strict';
   if (window.__dlDesignAutoArm) return;
@@ -21,13 +20,13 @@
     '[data-panel="blocks"]', '[data-dl-blocks]'
   ].join(',');
   var TOGGLE_TEXT = /^(\+?\s*)?(блоки|блок|добавить блок|элементы|компоненты|blocks|elements|components)$/i;
-  var MARKS = '[data-dl-editable],[data-sf-id],[data-sf],[contenteditable="true"],[class*="sf-sel"],[class*="sf-hover"]';
 
-  var armed = false;
-  var busy = false;
+  /* Одна попытка на загрузку сайта в кадре — без автоповторов. */
+  var done = false;
 
   function inDesign() {
     try { if (typeof boardMode !== 'undefined' && boardMode === 'design') return true; } catch (e) {}
+    if (window.boardMode === 'design') return true;
     var btn = document.getElementById('modeDesignBtn');
     if (btn) {
       var cls = ' ' + (btn.className || '') + ' ';
@@ -36,7 +35,7 @@
     }
     return false;
   }
-  function visible(el) {
+  function shown(el) {
     if (!el) return false;
     var rect = el.getBoundingClientRect();
     return rect.width > 40 && rect.height > 40 && el.offsetParent !== null;
@@ -44,8 +43,7 @@
   function panel() {
     var list = document.querySelectorAll(PANEL);
     for (var i = 0; i < list.length; i++) {
-      if (list[i].id === 'pvFrame') continue;
-      return list[i];
+      if (list[i].id !== 'pvFrame') return list[i];
     }
     return null;
   }
@@ -55,67 +53,31 @@
     if (direct) return direct;
     var list = document.querySelectorAll('button,a,[role="button"],.btn,[class*="btn"]');
     for (var i = 0; i < list.length; i++) {
-      var el = list[i];
-      if (!visible(el) && el.offsetParent === null) continue;
-      if (TOGGLE_TEXT.test(text(el))) return el;
+      if (TOGGLE_TEXT.test(text(list[i]))) return list[i];
     }
     return null;
   }
-  function frameDoc() {
-    var frame = document.getElementById('pvFrame');
-    if (!frame) return null;
-    try { return frame.contentDocument; } catch (e) { return null; }
-  }
-  /* Живой ли редактор: если движок запущен, он размечает блоки своими атрибутами. */
-  function marks() {
-    var doc = frameDoc();
-    if (!doc || !doc.body) return 0;
-    try { return doc.body.querySelectorAll(MARKS).length; } catch (e) { return 0; }
-  }
-
-  function click(el) {
-    if (!el) return;
-    try {
-      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-    } catch (e) {
-      try { el.click(); } catch (e2) {}
-    }
-  }
-
   function arm() {
-    if (busy || armed) return;
+    if (done || !inDesign()) return;
     var box = panel();
-    if (box && visible(box)) { armed = true; return; }
+    if (box && shown(box)) { done = true; return; }
     var button = toggle();
     if (!button) return;
-    busy = true;
-    click(button);
-    setTimeout(function () {
-      var opened = panel();
-      if (!opened || !visible(opened)) { busy = false; return; }
-      var before = marks();
-      /* Прячем панель обратно и проверяем, осталось ли редактирование живым. */
-      click(button);
-      setTimeout(function () {
-        var after = marks();
-        if (before > 0 && after === 0) click(button);
-        armed = true;
-        busy = false;
-      }, 220);
-    }, 260);
-  }
-
-  function tick() {
-    if (inDesign()) arm();
-    else armed = false;
+    done = true;
+    try {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    } catch (e) {
+      try { button.click(); } catch (e2) {}
+    }
   }
 
   document.addEventListener('click', function (event) {
     var target = event.target;
-    if (target && (target.id === 'modeDesignBtn' || (target.closest && target.closest('#modeDesignBtn')))) {
-      armed = false;
-      setTimeout(tick, 120);
-      setTimeout(tick, 600);
+    if (!target || !target.closest) return;
+    /* Ручное закрытие панели уважаем: больше не открываем её сами. */
+    if (target.closest('#modeDesignBtn')) {
+      setTimeout(arm, 150);
+      setTimeout(arm, 700);
     }
   }, true);
 
@@ -124,12 +86,16 @@
     var el = document.getElementById('pvFrame');
     if (!el || el === frame) return;
     frame = el;
-    el.addEventListener('load', function () { armed = false; setTimeout(tick, 300); });
+    el.addEventListener('load', function () {
+      done = false;
+      setTimeout(arm, 350);
+      setTimeout(arm, 1200);
+    });
   }
 
-  setInterval(function () { watchFrame(); tick(); }, 500);
+  setInterval(function () { watchFrame(); arm(); }, 1000);
   watchFrame();
-  tick();
-  document.addEventListener('DOMContentLoaded', tick);
-  window.addEventListener('load', tick);
+  setTimeout(arm, 400);
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(arm, 400); });
+  window.addEventListener('load', function () { setTimeout(arm, 400); });
 })();

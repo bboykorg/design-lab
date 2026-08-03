@@ -59,6 +59,8 @@ _PATCH_SCRIPTS = (
     "design-resize-free.js",
     # Режим дизайна сразу запускает движок редактирования блоков.
     "design-autoarm.js",
+    # Чистка следов выделения перед сохранением сайта.
+    "design-clean-save.js",
     "design-inert.js", "session-restore.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
     "seekai-models.js",
