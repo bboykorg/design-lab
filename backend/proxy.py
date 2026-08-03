@@ -448,9 +448,53 @@ async def vyce_check(_admin=Depends(admin_only)):
     return await _probe(_VYCE_BASE, _VYCE_ENV, ("models", "me"))
 
 
+async def _seekai_catalog():
+    """Полный список моделей шлюза и сверка с нашими именами.
+
+    Обычная проверка режет тело ответа на 500 символах, и по ней невозможно
+    понять, есть ли у провайдера конкретная модель. Здесь возвращаем
+    только идентификаторы и сразу показываем, каких из наших имён там нет.
+    """
+    pool = seekai.keys()
+    if not pool:
+        return {"ok": False, "reason": "no_key"}
+    host = (urlparse(seekai.BASE_URL).hostname or "").lower()
+    headers = _headers_for(host, pool[0], "bearer")
+    url = seekai.BASE_URL + "/models"
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
+            response = await client.get(url, headers=headers)
+    except httpx.HTTPError as exc:
+        return {"ok": False, "reason": "network_error", "message": f"{type(exc).__name__}: {exc}".rstrip()}
+    try:
+        data = response.json()
+    except ValueError:
+        return {"ok": False, "reason": "bad_json", "status": response.status_code,
+                "body": response.text[:300]}
+    items = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return {"ok": False, "reason": "unexpected_shape", "status": response.status_code,
+                "body": response.text[:300]}
+    ids = sorted(str(item.get("id", "")) for item in items if isinstance(item, dict))
+    known = set(ids)
+    missing_own = sorted(name for name in seekai.OWN_MODELS if name not in known)
+    missing_failover = sorted(
+        {target for target in seekai.FALLBACK_MODEL.values() if target not in known}
+    )
+    return {
+        "ok": True,
+        "status": response.status_code,
+        "count": len(ids),
+        "ids": ids,
+        "missingOwnModels": missing_own,
+        "missingFailoverTargets": missing_failover,
+    }
+
+
 @router.get("/seekai/check")
 async def seekai_check(_admin=Depends(admin_only)):
     """Состояние SeekAI + список провайдеров, у которых кончились лимиты."""
     report = await _probe(seekai.BASE_URL, seekai.ENV_NAMES)
     report["failover"] = seekai.status()
+    report["catalog"] = await _seekai_catalog()
     return report
