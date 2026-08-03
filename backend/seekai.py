@@ -7,6 +7,13 @@
   (кончились лимиты, ключ отозван, провайдер лёг);
 - часть моделей есть только у SeekAI — они идут напрямую.
 
+ИМЕНА МОДЕЛЕЙ. Идентификаторы на сайте и в каталоге SeekAI совпадают не всегда:
+у них часть моделей через точку (gpt-5.6, gpt-5.6-sol), а часть — через дефис
+(gpt-5-6-terra). Поэтому ЛЮБОЕ наше имя переводится через target_model() перед
+отправкой — и для резерва, и для собственных моделей SeekAI. Раньше свои
+модели уходили как есть, и gpt-5-6 / gpt-5-6-sol получали «model not found»,
+а сайт молча уходил на следующую модель из цепочки.
+
 Ключи берутся ТОЛЬКО из переменных окружения SEEKAI_API_KEYS / SEEKAI_API_KEY,
 точно так же, как у остальных провайдеров. В коде ключей нет.
 Если переменная не задана, шлюз просто выключен.
@@ -25,20 +32,22 @@ ENDPOINT = BASE_URL + "/chat/completions"
 ENV_NAMES = "SEEKAI_API_KEYS,SEEKAI_API_KEY"
 
 # Модели, которые есть ТОЛЬКО у SeekAI — сразу идут туда.
+# Это имена НА САЙТЕ; как они называются у провайдера — см. FALLBACK_MODEL.
 OWN_MODELS = {
     "gpt-5-5",
     "gpt-5-6",
     "gpt-5-6-terra",
     "gpt-5-6-sol",
+    "gpt-5-6-luna",
     "grok-4-5",
-    "qwen-3-max",
     "deepseek-v4-pro",
     "claude-fable-5",
     "claude-opus-4-7",
 }
 
 # Модель на сайте -> как она называется в SeekAI.
-# Используется, когда основной шлюз для этой модели перестал работать.
+# Здесь же лежат исправления расхождений в написании (точка против дефиса),
+# сверенные с живым каталогом /v1/models.
 FALLBACK_MODEL = {
     "claude-opus-4-8": "claude-opus-4-8",
     "claude-opus-4-8-thinking": "claude-opus-4-8",
@@ -50,15 +59,20 @@ FALLBACK_MODEL = {
     "deepseek-v4-flash": "deepseek-v4-flash",
     "DeepSeek-V4-Flash": "deepseek-v4-flash",
     "deepseek-v4-pro": "deepseek-v4-pro",
-    "gpt-5.6-sol": "gpt-5-6-sol",
-    "gpt-5-6-sol": "gpt-5-6-sol",
-    "gpt-5.6": "gpt-5-6",
-    "gpt-5-6": "gpt-5-6",
+    # У SeekAI эти две — через точку.
+    "gpt-5.6": "gpt-5.6",
+    "gpt-5-6": "gpt-5.6",
+    "gpt-5.6-sol": "gpt-5.6-sol",
+    "gpt-5-6-sol": "gpt-5.6-sol",
+    # А эти две — через дефис.
     "gpt-5.6-terra": "gpt-5-6-terra",
     "gpt-5-6-terra": "gpt-5-6-terra",
+    "gpt-5.6-luna": "gpt-5-6-luna",
+    "gpt-5-6-luna": "gpt-5-6-luna",
     "gpt-5-5": "gpt-5-5",
     "grok-4-5": "grok-4-5",
-    "qwen-3-max": "qwen-3-max",
+    "glm-5.2": "glm-5-2",
+    "kiwi::glm-5.2": "glm-5-2",
 }
 
 # Коды, после которых основной шлюз считается «выдохшимся».
