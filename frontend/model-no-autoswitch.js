@@ -9,8 +9,11 @@
    1) чистит FALLBACK_ORDER — подставлять больше нечего (список сохранён
       в window.__dlFallbackOrder, чтобы поведение можно было вернуть одной строкой);
    2) ставит заслон на pickModel: вызов без живого клика/касания игнорируется;
-   3) когда запрос к модели вернул ошибку, показывает понятную подсказку
-      «модель не ответила, выбери другую» вместо тихой подмены.
+   3) показывает ПРИЧИНУ отказа: код и короткий текст ошибки провайдера,
+      а полный текст кладёт в window.__dlLastModelError для разбора.
+
+   Тело ответа читаем только у КЛОНА и только у неудачных ответов, чтобы поток
+   успешной генерации не ломался.
 
    Ничего не блокируется и не затемняется: все кнопки остаются кликабельными.
    Резерв на сервере (другой шлюз для ТОЙ ЖЕ модели) не трогаем — он не меняет
@@ -20,7 +23,7 @@
   if (window.__dlNoAutoSwitch) return;
   window.__dlNoAutoSwitch = true;
 
-  var GESTURE_MS = 2500;   // сколько времени клик считается ·живым·
+  var GESTURE_MS = 2500;   // сколько времени клик считается живым
   var BOOT_MS = 8000;      // на старте страницы разрешаем восстановление выбора
   var NOTE_MS = 6000;      // не чаще одной подсказки в этот интервал
 
@@ -47,12 +50,12 @@
     box.textContent = text;
     box.setAttribute('data-dl-model-note', '1');
     box.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);' +
-      'z-index:99999;max-width:min(420px,92vw);padding:12px 16px;border-radius:12px;' +
+      'z-index:99999;max-width:min(460px,92vw);padding:12px 16px;border-radius:12px;' +
       'background:#0f1116;color:#fff;font:14px/1.4 Manrope,system-ui,sans-serif;' +
       'border:1px solid rgba(255,255,255,.14);box-shadow:0 10px 30px rgba(0,0,0,.35);' +
       'pointer-events:none;';
     document.body.appendChild(box);
-    setTimeout(function () { box.remove(); }, 4500);
+    setTimeout(function () { box.remove(); }, 5500);
   }
   window.dlModelNote = note;
 
@@ -85,8 +88,18 @@
     window.pickModel = guarded;
   }
 
-  // 3. Ошибка запроса к модели — говорим об этом вслух.
-  // Тело ответа не читаем и не клонируем — только смотрим код, чтобы не ломать поток.
+  function shorten(text) {
+    var out = String(text || '').replace(/\s+/g, ' ').trim();
+    try {
+      var data = JSON.parse(out);
+      var message = (data && data.error && (data.error.message || data.error)) ||
+        (data && data.detail) || (data && data.message) || '';
+      if (message) out = String(message);
+    } catch (e) { /* не JSON — оставляем как есть */ }
+    return out.length > 160 ? out.slice(0, 160) + '\u2026' : out;
+  }
+
+  // 3. Ошибка запроса к модели — говорим о ней вслух и с причиной.
   function watchFetch() {
     var original = window.fetch;
     if (typeof original !== 'function' || original.__dlModelWatch) return;
@@ -97,10 +110,23 @@
       var result = original.apply(this, arguments);
       if (watched && result && result.then) {
         result.then(function (response) {
-          if (response && !response.ok) {
-            note('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b\u0430 (\u043a\u043e\u0434 ' + response.status +
+          if (!response || response.ok) return;
+          var status = response.status;
+          var copy = null;
+          try { copy = response.clone(); } catch (e) { copy = null; }
+          if (!copy) {
+            window.__dlLastModelError = { status: status, text: '' };
+            note('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b\u0430 (\u043a\u043e\u0434 ' + status +
               '). \u0412\u044b\u0431\u0435\u0440\u0438 \u0434\u0440\u0443\u0433\u0443\u044e \u043c\u043e\u0434\u0435\u043b\u044c \u0432\u0440\u0443\u0447\u043d\u0443\u044e.');
+            return;
           }
+          copy.text().then(function (text) {
+            var reason = shorten(text);
+            window.__dlLastModelError = { status: status, text: reason, at: Date.now() };
+            note('\u041c\u043e\u0434\u0435\u043b\u044c \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b\u0430 (\u043a\u043e\u0434 ' + status + ')' +
+              (reason ? ': ' + reason : '') +
+              '. \u0412\u044b\u0431\u0435\u0440\u0438 \u0434\u0440\u0443\u0433\u0443\u044e \u043c\u043e\u0434\u0435\u043b\u044c \u0432\u0440\u0443\u0447\u043d\u0443\u044e.');
+          }, function () { });
         }, function () { });
       }
       return result;
