@@ -2,25 +2,29 @@
    1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
    2) в списке моделей вместо значка могло стоять слово undefined;
    3) после входа аккаунт в бургер-меню появлялся только после перезагрузки;
-   4) в списке моделей не должно быть названий провайдеров — только FREE и PRO. */
+   4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
+   5) всплывающие панели (меню, карточка аккаунта) делаются непрозрачными. */
 (function () {
   'use strict';
   if (window.__dlMobileFixes) return;
   window.__dlMobileFixes = true;
 
   var INSTALL = ['установить приложение', 'install app', 'установить апп'];
-  var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
   var REFRESH = [
     'refreshAuthUI', 'updateAuthUI', 'renderAuth', 'syncAuth', 'applyAuth',
-    'renderProfile', 'refreshProfile', 'loadProfile', 'updateProfile',
+    'renderProfile', 'refreshProfile', 'loadProfile', 'updateProfile', 'fetchProfile',
     'dlRefreshProfile', 'dlRenderProfile', 'buildMobileMenu', 'renderMobileMenu',
-    'dlBuildMenu', 'renderMenu'
+    'dlBuildMenu', 'renderMenu', 'renderAccount', 'updateAccount', 'renderHeader',
+    'updateHeader', 'renderNav', 'boot', 'initAuth'
   ];
   var MARK = 'data-dl-removed';
+  var SOLID = 'data-dl-solid';
   var RELOADED = 'dl_auth_reloaded';
 
   var style = document.createElement('style');
-  style.textContent = '[' + MARK + ']{display:none!important}';
+  style.textContent =
+    '[' + MARK + ']{display:none!important}' +
+    '[' + SOLID + ']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}';
   (document.head || document.documentElement).appendChild(style);
 
   function text(node) {
@@ -47,22 +51,18 @@
     });
   }
 
-  /* Заголовки с названием провайдера в списке моделей не нужны:
-     деление только по тарифам. Сами модели остаются на месте. */
+  /* Заголовки с названием провайдера в списке моделей не нужны. */
   var VENDOR = [
     'seekai', 'seek ai', 'gorouter', 'kiwillm', 'kiwi', 'vyce', 'vyce ai',
     'cerebras', 'openrouter', 'bigmodel', 'z.ai'
   ];
   function dropVendorHeads() {
     var list;
-    try {
-      list = document.querySelectorAll('.mh,#modelMenu div,#modelMenu span');
-    } catch (e) { return; }
+    try { list = document.querySelectorAll('.mh,.mg,#modelMenu div,#modelMenu span'); } catch (e) { return; }
     Array.prototype.forEach.call(list, function (el) {
       if (el.hasAttribute(MARK)) return;
       var value = text(el).replace(/[·|•:—-]+$/, '').trim();
       if (VENDOR.indexOf(value) < 0) return;
-      /* Не трогаем строки выбора модели — только подписи-разделители. */
       if (el.className && String(el.className).indexOf('mopt') >= 0) return;
       if (el.querySelector && el.querySelector('.mopt')) return;
       if (el.getAttribute && el.getAttribute('onclick')) return;
@@ -73,16 +73,11 @@
 
   /* Значок модели не нашёлся — в разметку попало слово undefined. */
   var SYMBOL = [
-    { mark: 'grok', sign: '✕' },
-    { mark: 'gpt', sign: 'G' },
-    { mark: 'claude', sign: 'C' },
-    { mark: 'opus', sign: 'C' },
-    { mark: 'fable', sign: 'C' },
-    { mark: 'deepseek', sign: 'D' },
-    { mark: 'qwen', sign: 'Q' },
-    { mark: 'glm', sign: 'Z' },
-    { mark: 'mistral', sign: 'M' },
-    { mark: 'gemma', sign: 'G' }
+    { mark: 'grok', sign: '✕' }, { mark: 'gpt', sign: 'G' },
+    { mark: 'claude', sign: 'C' }, { mark: 'opus', sign: 'C' },
+    { mark: 'fable', sign: 'C' }, { mark: 'deepseek', sign: 'D' },
+    { mark: 'qwen', sign: 'Q' }, { mark: 'glm', sign: 'Z' },
+    { mark: 'mistral', sign: 'M' }, { mark: 'gemma', sign: 'G' }
   ];
   function signFor(row) {
     var value = text(row);
@@ -92,6 +87,7 @@
     return '•';
   }
   function dropUndefined() {
+    if (!document.body) return;
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
     var hits = [];
     var node;
@@ -110,15 +106,57 @@
     });
   }
 
-  /* Вход и выход должны сразу отражаться в меню, без ручной перезагрузки. */
-  function token() {
-    for (var i = 0; i < TOKEN_KEYS.length; i++) {
+  /* Полупрозрачные панели нечитаемы на телефоне: сквозь карточку аккаунта
+     просвечивает страница. Цвет сохраняем, убираем только прозрачность.
+     Затемняющие подложки во весь экран не трогаем. */
+  var PANEL = '[role="dialog"],[class*="sheet"],[class*="modal"],[class*="menu"],' +
+    '[class*="drawer"],[class*="popover"],[class*="dropdown"],[class*="account"],' +
+    '[class*="profile"],[id*="menu"],[id*="modal"],[id*="sheet"],[id*="account"],[id*="profile"]';
+  function solidify() {
+    var list;
+    try { list = document.querySelectorAll(PANEL); } catch (e) { return; }
+    var vw = window.innerWidth || 0;
+    var vh = window.innerHeight || 0;
+    Array.prototype.forEach.call(list, function (el) {
+      if (el.hasAttribute(SOLID)) return;
+      var box;
+      try { box = el.getBoundingClientRect(); } catch (e) { return; }
+      if (box.width < 40 || box.height < 40) return;
+      /* Подложка на весь экран — ей прозрачность нужна. */
+      if (vw && vh && box.width >= vw * .96 && box.height >= vh * .96) return;
+      var css = window.getComputedStyle(el);
+      if (css.display === 'none' || css.visibility === 'hidden') return;
+      var bg = css.backgroundColor || '';
+      var rgba = bg.match(/^rgba?\(([^)]+)\)$/);
+      if (!rgba) return;
+      var parts = rgba[1].split(',');
+      if (parts.length < 4) return;
+      var alpha = parseFloat(parts[3]);
+      /* Полностью прозрачный — это оболочка без фона, её не трогаем. */
+      if (!(alpha > 0 && alpha < 1)) return;
+      el.setAttribute(SOLID, '1');
+      el.style.setProperty('background-color',
+        'rgb(' + parts[0].trim() + ',' + parts[1].trim() + ',' + parts[2].trim() + ')', 'important');
+      el.style.setProperty('backdrop-filter', 'none', 'important');
+      el.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+    });
+  }
+
+  /* Вход и выход должны сразу отражаться в меню.
+     Ключ токена угадывать бессмысленно — смотрим на всё хранилище сразу. */
+  var AUTHY = /(token|auth|user|profile|session|login|jwt|nick|account|plan)/i;
+  function snapshot() {
+    var parts = [];
+    [localStorage, sessionStorage].forEach(function (store) {
       try {
-        var value = localStorage.getItem(TOKEN_KEYS[i]);
-        if (value) return value;
-      } catch (e) { return ''; }
-    }
-    return '';
+        for (var i = 0; i < store.length; i++) {
+          var key = store.key(i);
+          if (!key || !AUTHY.test(key)) continue;
+          parts.push(key + '=' + String(store.getItem(key) || '').slice(0, 64));
+        }
+      } catch (e) {}
+    });
+    return parts.sort().join('|');
   }
   function refresh() {
     var done = false;
@@ -128,30 +166,75 @@
     });
     return done;
   }
+
+  var seen = snapshot();
+  var checking = null;
+  function check() {
+    var now = snapshot();
+    if (now === seen) return;
+    seen = now;
+    run();
+    if (refresh()) { setTimeout(run, 400); return; }
+    /* Ни одной подходящей функции нет — обновляем страницу один раз за сеанс. */
+    var once;
+    try { once = sessionStorage.getItem(RELOADED); } catch (e) { once = '1'; }
+    if (once) return;
+    try { sessionStorage.setItem(RELOADED, '1'); } catch (e) {}
+    setTimeout(function () { location.reload(); }, 400);
+  }
+  function soon() {
+    if (checking) return;
+    checking = setTimeout(function () { checking = null; check(); }, 120);
+  }
+
   function watchAuth() {
-    var seen = token();
-    if (seen) { try { sessionStorage.removeItem(RELOADED); } catch (e) {} }
-    setInterval(function () {
-      var now = token();
-      if (now === seen) return;
-      seen = now;
-      if (refresh()) return;
-      /* У редактора нет подходящей функции — обновляем страницу один раз. */
-      var once;
-      try { once = sessionStorage.getItem(RELOADED); } catch (e) { once = '1'; }
-      if (once) return;
-      try { sessionStorage.setItem(RELOADED, '1'); } catch (e) {}
-      setTimeout(function () { location.reload(); }, 350);
-    }, 500);
-    window.addEventListener('storage', function (event) {
-      if (TOKEN_KEYS.indexOf(event.key) >= 0) refresh();
-    });
+    setInterval(check, 500);
+    window.addEventListener('storage', soon);
+    window.addEventListener('focus', soon);
+    document.addEventListener('visibilitychange', soon);
+
+    /* Запись токена — самый ранний признак успешного входа. */
+    try {
+      ['setItem', 'removeItem', 'clear'].forEach(function (name) {
+        var base = Storage.prototype[name];
+        if (typeof base !== 'function' || base.__dlWrapped) return;
+        var wrapped = function () {
+          var out = base.apply(this, arguments);
+          soon();
+          return out;
+        };
+        wrapped.__dlWrapped = true;
+        Storage.prototype[name] = wrapped;
+      });
+    } catch (e) {}
+
+    /* А если токен живёт только в памяти — ловим сам ответ на вход. */
+    try {
+      if (typeof window.fetch === 'function' && !window.fetch.__dlWrapped) {
+        var base = window.fetch;
+        var patched = function (input, init) {
+          var url = '';
+          try { url = typeof input === 'string' ? input : (input && input.url) || ''; } catch (e) {}
+          var auth = /(login|signin|sign-in|register|signup|auth|session|profile|me)\b/i.test(url);
+          return base.apply(this, arguments).then(function (res) {
+            if (auth && res && res.ok) {
+              setTimeout(function () { refresh(); run(); }, 250);
+              setTimeout(soon, 700);
+            }
+            return res;
+          });
+        };
+        patched.__dlWrapped = true;
+        window.fetch = patched;
+      }
+    } catch (e) {}
   }
 
   function run() {
     dropInstall();
     dropVendorHeads();
     dropUndefined();
+    solidify();
   }
   function start() {
     run();
