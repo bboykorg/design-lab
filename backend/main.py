@@ -64,6 +64,9 @@ _PATCH_SCRIPTS = (
     "design-inert.js", "session-restore.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
     "seekai-models.js",
+    # После seekai-models.js: отключение автоподмены модели. Цепочка
+    # FALLBACK_ORDER чистится уже после того, как в неё добавили свои модели.
+    "model-no-autoswitch.js",
     # Единый движок прокрутки. Обязан идти ДО dl-mobile.js: мобильное меню
     # строит пункты поверх уже рабочего window.dlScrollToId / scrollTo2.
     "dl-scroll.js",
