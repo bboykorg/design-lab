@@ -1,7 +1,8 @@
 /* Точечные исправления поверх всех остальных слоёв:
    1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) в меню есть отдельный вход в профиль, а никнейм в кнопках не дублируется;
+   3) в меню остаётся одна кнопка «Профиль»: выход есть внутри самого профиля,
+      а две кнопки ещё и мелькали подписью при каждой пересборке меню;
    4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
    5) на телефоне всплывающие окна (профиль, меню, листы) делаются непрозрачными.
       На компьютере оформление не меняется. */
@@ -39,6 +40,9 @@
   }
   function text(node) {
     return String(node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+  function inProfilePanel(el) {
+    try { return !!el.closest('[data-dl-profile-panel]'); } catch (e) { return false; }
   }
 
   /* --- Кнопка установки приложения ------------------------------------ */
@@ -116,23 +120,24 @@
     });
   }
 
-  /* --- Вход в профиль рядом с кнопкой выхода -----------------------
-     Никнейм в подписи кнопок не нужен: он уже виден в самом профиле,
-     а в меню только удлинял кнопки и ломал строку на узком экране. */
+  /* --- Аккаунт в меню -------------------------------------------------
+     Раньше здесь была кнопка «Выйти — логин». Её подпись пересобиралась
+     собственным слоем меню, и подпись мелькала при каждой пересборке.
+     Поэтому кнопку выхода из меню убираем целиком: выход есть внутри профиля.
+     Кнопку выхода в самом окне профиля не трогаем. */
   var LOGOUT = /^выйти(\s*[—–-]\s*.+)?$/i;
-  var NICKED = /^(\s*)выйти\s*[—–-]\s*.+$/i;
   function openProfile(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (typeof window.dlProfile === 'function') { window.dlProfile(); return; }
     location.hash = '#profile';
   }
-  function addAccountButton() {
+  function accountButton() {
     var list;
     try { list = document.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
     Array.prototype.forEach.call(list, function (el) {
       if (el.getAttribute(ACCT) === 'open' || el.hasAttribute(MARK)) return;
+      if (inProfilePanel(el)) return;
       if (!LOGOUT.test(text(el))) return;
-      el.setAttribute(ACCT, 'logout');
 
       var host = el.parentElement;
       if (host && !host.querySelector('[' + ACCT + '="open"]')) {
@@ -147,19 +152,9 @@
         host.insertBefore(button, el);
       }
 
-      /* Подпись кнопки выхода — просто «Выйти», без логина.
-         Меняем только текстовый узел, чтобы не снести значки внутри. */
-      trimNick(el);
+      el.setAttribute(MARK, 'logout');
+      if (el.parentElement) el.parentElement.removeChild(el);
     });
-  }
-  function trimNick(el) {
-    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-    var node;
-    while ((node = walker.nextNode())) {
-      var value = String(node.nodeValue || '');
-      if (!NICKED.test(value.replace(/\s+/g, ' ').trim())) continue;
-      node.nodeValue = value.replace(/выйти\s*[—–-]\s*.+$/i, 'Выйти');
-    }
   }
 
   /* --- Непрозрачные всплывающие окна на телефоне ------------------ */
@@ -308,7 +303,7 @@
     dropInstall();
     dropVendorHeads();
     dropUndefined();
-    addAccountButton();
+    accountButton();
     unsolidify();
     solidify();
   }
