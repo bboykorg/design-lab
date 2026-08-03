@@ -55,6 +55,8 @@ _PATCH_SCRIPTS = (
     "model-access-lock.js", "ai-creative-prompt.js", "plans-patch.js", "plan-lock-ui.js",
     "profile-patch.js", "profile-id-patch.js",
     "ui-cleanup.js", "iframe-cursor-bridge.js", "design-edit-fix.js", "design-text-scale.js",
+    # Снятие чужих ограничений ширины при растяжке блока в режиме дизайна.
+    "design-resize-free.js",
     "design-inert.js", "session-restore.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
     "seekai-models.js",
