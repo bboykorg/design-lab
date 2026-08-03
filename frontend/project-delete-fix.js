@@ -11,6 +11,13 @@
    её пересоздание глохнут, локальные копии чистятся, а список перечитывается
    с сервера. Ответ 404 на DELETE тоже считается удалением: проекта уже нет.
 
+   ВАЖНО про purge(). Раньше он сносил ЛЮБОЙ ключ dl_*, в тексте которого
+   встречался удалённый id. А соседний слой project-dedupe.js как раз хранит
+   список удалённых id в dl_dead_projects — то есть ключ, в котором этот id
+   обязан лежать. Получалось самоуничтожение: только что поставленная
+   могильная плита тут же стиралась, и после перезагрузки сайт возвращался.
+   Теперь служебные ключи учёта в списке исключений.
+
    Ничего не блокируется и не затемняется: все кнопки остаются рабочими. */
 (function () {
   'use strict';
@@ -18,7 +25,11 @@
   window.__dlProjectDelete = true;
 
   var BLOCK_MS = 120000;   // сколько держим удалённый id в стоп-листе
-  var COPY_MS = 4000;      // окно, в котором глушим создание копии без id
+  var COPY_MS = 20000;     // окно, в котором глушим создание копии без id
+
+  // Собственные ключи учёта удалённых проектов. Их чистка равносильна
+  // забыванию того, что проект вообще был удалён.
+  var KEEP = ['dl_dead_projects', 'dl_dead_names', 'dl_auto_projects', 'dl_live_project'];
 
   var gone = {};
   var lastDelete = 0;
@@ -30,15 +41,17 @@
     return !!at && (Date.now() - at) < BLOCK_MS;
   }
 
-  // Следы удалённого проекта в местном хранилище. Трогаем только наши ключи (dl_*)
-  // и только те, в которых встречается именно этот id.
+  // Следы удалённого проекта в местном хранилище. Трогаем только наши ключи (dl_*),
+  // только те, в которых встречается именно этот id, и никогда — списки учёта.
   function purge(id) {
     if (!id) return;
     var keys = [];
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var key = localStorage.key(i);
-        if (key && key.indexOf('dl_') === 0) keys.push(key);
+        if (!key || key.indexOf('dl_') !== 0) continue;
+        if (KEEP.indexOf(key) >= 0) continue;
+        keys.push(key);
       }
       keys.forEach(function (key) {
         var value = localStorage.getItem(key) || '';
@@ -80,6 +93,7 @@
     refresh();
     setTimeout(function () { dropCard(id); refresh(); }, 300);
     setTimeout(function () { dropCard(id); refresh(); }, 1200);
+    setTimeout(function () { dropCard(id); refresh(); }, 3000);
   }
 
   function blocked() {

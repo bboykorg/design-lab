@@ -21,7 +21,14 @@
       похожими названиями не трогаются: удалять лишнее опаснее, чем оставить.
 
    4. Список с сервера чистится от удалённых id, если запрос на удаление
-      не дошёл, и удаление повторяется тихо в фоне. */
+      не дошёл, и удаление повторяется тихо в фоне.
+
+   5. Имя удалённого сайта ненадолго помечается как удалённое. Это главная
+      причина возврата сайта на главную: удалённый проект оставался открыт
+      в редакторе, связка имя→id вместе с ним стиралась, и следующий автосейв
+      уходил без id — то есть создавал тот же сайт заново, уже с другим id,
+      который ни в одном стоп-листе не числится. Окно короткое, чтобы новый
+      сайт с тем же названием можно было создать сразу после. */
 (function () {
   'use strict';
   if (window.__dlProjectDedupe) return;
@@ -29,8 +36,10 @@
 
   var AUTO_KEY = 'dl_auto_projects';    // что создал автосейв: id -> {name, at}
   var DEAD_KEY = 'dl_dead_projects';    // удалённые id -> метка времени
+  var NAME_KEY = 'dl_dead_names';       // имена удалённых -> метка времени
   var LIVE_KEY = 'dl_live_project';     // имя -> id открытого сейчас сайта
-  var DEAD_MS = 30 * 24 * 3600 * 1000;  // сколько помним удалённые
+  var DEAD_MS = 30 * 24 * 3600 * 1000;  // сколько помним удалённые id
+  var NAME_MS = 60000;                  // сколько глушим воскрешение по имени
 
   /* ------------------------------------------------------------ хранение */
 
@@ -61,6 +70,29 @@
     return !!id && Object.prototype.hasOwnProperty.call(dead(), id);
   }
 
+  function deadNames() {
+    var data = read(NAME_KEY);
+    var now = Date.now();
+    var changed = false;
+    Object.keys(data).forEach(function (name) {
+      if (now - (data[name] || 0) > NAME_MS) { delete data[name]; changed = true; }
+    });
+    if (changed) write(NAME_KEY, data);
+    return data;
+  }
+
+  function isDeadName(name) {
+    if (!name) return false;
+    return Object.prototype.hasOwnProperty.call(deadNames(), name);
+  }
+
+  function markDeadName(name) {
+    if (!name) return;
+    var data = deadNames();
+    data[name] = Date.now();
+    write(NAME_KEY, data);
+  }
+
   function markDead(id) {
     if (!id) return;
     var data = dead();
@@ -73,12 +105,19 @@
 
     var live = read(LIVE_KEY);
     Object.keys(live).forEach(function (name) {
-      if (live[name] === id) delete live[name];
+      if (live[name] === id) {
+        delete live[name];
+        // Связка имя→id ушла вместе с проектом, а редактор об этом не знает и
+        // продолжает автосохранение. Без этой пометки следующий автосейв
+        // воскрешает сайт под новым id.
+        markDeadName(name);
+      }
     });
     write(LIVE_KEY, live);
   }
 
   window.__dlDeadProjects = dead;
+  window.__dlDeadNames = deadNames;
 
   /* ----------------------------------------------------------- тело запроса */
 
@@ -104,6 +143,13 @@
     return name.replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
+  function goneResponse() {
+    return Promise.resolve(new Response(
+      JSON.stringify({ detail: '\u041f\u0440\u043e\u0435\u043a\u0442 \u0443\u0434\u0430\u043b\u0451\u043d' }),
+      { status: 404, headers: { 'Content-Type': 'application/json' } }
+    ));
+  }
+
   /* ------------------------------------------------------- уборка автокопий */
 
   var base = window.fetch;
@@ -124,7 +170,7 @@
   }
 
   function sweep(list) {
-    // Если сервер всё ещё отдаёт удалённое — добиваем тихо в фоне.
+    // Если сервер всę1 ещё отдаёт удалённое — добиваем тихо в фоне.
     list.forEach(function (item) {
       var id = item && item.id;
       if (!id || !isDead(id)) return;
@@ -168,6 +214,7 @@
         out.then(function (response) {
           if (response && (response.ok || response.status === 404)) {
             markDead(pid);
+            if (copyName) markDeadName(copyName);
             removeCopies(copyName);
           }
         }, function () { });
@@ -184,10 +231,13 @@
 
         if (id && isDead(id)) {
           // Отложенный автосейв уже удалённого сайта.
-          return Promise.resolve(new Response(
-            JSON.stringify({ detail: '\u041f\u0440\u043e\u0435\u043a\u0442 \u0443\u0434\u0430\u043b\u0451\u043d' }),
-            { status: 404, headers: { 'Content-Type': 'application/json' } }
-          ));
+          return goneResponse();
+        }
+
+        if (!id && isDeadName(name)) {
+          // Автосейв сайта, который только что удалили, но он остался открыт
+          // в редакторе. Пропустить — значит создать его заново под новым id.
+          return goneResponse();
         }
 
         if (!id && name) {
@@ -201,13 +251,13 @@
             result.then(function (response) {
               if (!response || !response.ok) return;
               response.clone().json().then(function (data) {
-                var fresh = data && typeof data.id === 'string' ? data.id : '';
-                if (!fresh) return;
-                var live = read(LIVE_KEY);
-                live[name] = fresh;
-                write(LIVE_KEY, live);
+                var freshId = data && typeof data.id === 'string' ? data.id : '';
+                if (!freshId) return;
+                var liveMap = read(LIVE_KEY);
+                liveMap[name] = freshId;
+                write(LIVE_KEY, liveMap);
                 var made = read(AUTO_KEY);
-                made[fresh] = { name: name, at: Date.now() };
+                made[freshId] = { name: name, at: Date.now() };
                 write(AUTO_KEY, made);
               }, function () { });
             }, function () { });
@@ -219,6 +269,13 @@
           var live2 = read(LIVE_KEY);
           live2[name] = id;
           write(LIVE_KEY, live2);
+          // Сайт с таким именем снова живой и сохраняется по своему id —
+          // запрет по имени больше не нужен.
+          if (isDeadName(name)) {
+            var names = deadNames();
+            delete names[name];
+            write(NAME_KEY, names);
+          }
         }
       }
     }
