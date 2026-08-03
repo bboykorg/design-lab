@@ -32,6 +32,11 @@
     '\u0431\u0435\u0437 \u0441\u0441\u044b\u043b\u043e\u043a, \u0431\u0435\u0437 \u043f\u043e\u044f\u0441\u043d\u0435\u043d\u0438\u0439 \u0434\u043e \u0438 \u043f\u043e\u0441\u043b\u0435 JSON. ' +
     '\u0421\u043e\u0432\u0435\u0442\u044b, \u0441\u0442\u0430\u0442\u044c\u0438 \u0438 \u0440\u0430\u0437\u0431\u043e\u0440\u044b \u043d\u0435 \u043d\u0443\u0436\u043d\u044b: \u0442\u0432\u043e\u0439 \u043e\u0442\u0432\u0435\u0442 \u0447\u0438\u0442\u0430\u0435\u0442 \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430, \u0430 \u043d\u0435 \u0447\u0435\u043b\u043e\u0432\u0435\u043a.';
 
+  // Важно: только готовые выражения, без сборки в строке. Одна лишняя
+  // скобка в литерале роняет весь файл на разборе, и слой просто не работает.
+  var HAS_JSON = /json/i;
+  var HAS_SCHEMA = /\bops\b|\bblocks\b|\bschema\b|\u0441\u0445\u0435\u043c/i;
+
   function boardRequest(data) {
     if (!data || !Array.isArray(data.messages) || !data.messages.length) return false;
     // Признак запроса доски: в системной части описана схема блоков.
@@ -39,7 +44,7 @@
       var item = data.messages[i] || {};
       if (item.role !== 'system') continue;
       var text = typeof item.content === 'string' ? item.content : '';
-      if (/json/i.test(text) && /(\bops\b|\bblocks\b|\bschema\b|\u0441\u0445\u0435\u043c/i).test(text)) return true;
+      if (HAS_JSON.test(text) && HAS_SCHEMA.test(text)) return true;
     }
     return false;
   }
