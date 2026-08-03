@@ -1,8 +1,8 @@
 /* Точечные исправления поверх всех остальных слоёв:
    1) кнопка «Установить приложение» убрана — на телефоне она перекрывала интерфейс;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) в меню остаётся одна кнопка «Профиль»: выход есть внутри самого профиля,
-      а две кнопки ещё и мелькали подписью при каждой пересборке меню;
+   3) в меню остаётся одна кнопка «Профиль»: кнопка выхода и строка с логином
+      из списка убираются — выход есть внутри самого профиля;
    4) в списке моделей не должно быть названий провайдеров — только FREE и PRO;
    5) на телефоне всплывающие окна (профиль, меню, листы) делаются непрозрачными.
       На компьютере оформление не меняется. */
@@ -24,6 +24,7 @@
   var SOLID = 'data-dl-solid';
   var ACCT = 'data-dl-account';
   var RELOADED = 'dl_auth_reloaded';
+  var NICK_CACHE = 'dl_nick_cache';
   var BASE = '#0f1116';
 
   var style = document.createElement('style');
@@ -40,6 +41,9 @@
   }
   function text(node) {
     return String(node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+  function raw(node) {
+    return String(node.textContent || '').replace(/\s+/g, ' ').trim();
   }
   function inProfilePanel(el) {
     try { return !!el.closest('[data-dl-profile-panel]'); } catch (e) { return false; }
@@ -120,12 +124,50 @@
     });
   }
 
+  /* --- Логин текущего пользователя ----------------------------------- */
+  var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
+  var nick = '';
+  try { nick = String(localStorage.getItem(NICK_CACHE) || ''); } catch (e) { nick = ''; }
+  var asked = false;
+
+  function setNick(value) {
+    value = String(value || '').trim();
+    if (!value || value.length > 32 || value === nick) return;
+    nick = value;
+    try { localStorage.setItem(NICK_CACHE, value); } catch (e) {}
+  }
+  function token() {
+    for (var i = 0; i < TOKEN_KEYS.length; i++) {
+      try {
+        var value = localStorage.getItem(TOKEN_KEYS[i]) || sessionStorage.getItem(TOKEN_KEYS[i]);
+        if (value) return value;
+      } catch (e) {}
+    }
+    return '';
+  }
+  function askNick() {
+    if (asked || nick) return;
+    var key = token();
+    if (!key) return;
+    asked = true;
+    try {
+      fetch('/api/profile', { headers: { Authorization: 'Bearer ' + key } })
+        .then(function (res) { return res && res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          setNick(data.username || data.login || data.nickname || data.name || '');
+          run();
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+
   /* --- Аккаунт в меню -------------------------------------------------
-     Раньше здесь была кнопка «Выйти — логин». Её подпись пересобиралась
-     собственным слоем меню, и подпись мелькала при каждой пересборке.
-     Поэтому кнопку выхода из меню убираем целиком: выход есть внутри профиля.
-     Кнопку выхода в самом окне профиля не трогаем. */
-  var LOGOUT = /^выйти(\s*[—–-]\s*.+)?$/i;
+     Раньше здесь была кнопка «Выйти — логин» и отдельная строка списка
+     с логином. Обе пересобирались чужим слоем и мелькали при загрузке.
+     Оставляем только свою кнопку «Профиль». Кнопку выхода внутри
+     самого окна профиля не трогаем. */
+  var LOGOUT = /^выйти(\s*[—–-]\s*(.+))?$/i;
   function openProfile(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (typeof window.dlProfile === 'function') { window.dlProfile(); return; }
@@ -137,7 +179,9 @@
     Array.prototype.forEach.call(list, function (el) {
       if (el.getAttribute(ACCT) === 'open' || el.hasAttribute(MARK)) return;
       if (inProfilePanel(el)) return;
-      if (!LOGOUT.test(text(el))) return;
+      var hit = LOGOUT.exec(raw(el));
+      if (!hit) return;
+      if (hit[2]) setNick(hit[2]);
 
       var host = el.parentElement;
       if (host && !host.querySelector('[' + ACCT + '="open"]')) {
@@ -154,6 +198,36 @@
 
       el.setAttribute(MARK, 'logout');
       if (el.parentElement) el.parentElement.removeChild(el);
+    });
+  }
+
+  /* --- Строка списка с логином («05 korg») --------------------------- */
+  function dropNickRow() {
+    if (!nick) { askNick(); return; }
+    var low = nick.toLowerCase();
+    var plain = new RegExp('^' + low.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
+    var numbered = new RegExp('^\\d{1,2}\\s*[.)·-]?\\s*' + low.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
+
+    var list;
+    try { list = document.querySelectorAll('a,button,li,[role="button"],[role="menuitem"]'); } catch (e) { return; }
+    Array.prototype.forEach.call(list, function (el) {
+      if (el.hasAttribute(MARK) || el.getAttribute(ACCT) === 'open') return;
+      if (inProfilePanel(el)) return;
+      var value = text(el);
+      if (value.length > 40) return;
+      if (!plain.test(value) && !numbered.test(value)) return;
+
+      var target = el;
+      for (var i = 0; i < 3; i++) {
+        var up = target.parentElement;
+        if (!up) break;
+        var upper = text(up);
+        if (upper.length > 40) break;
+        if (!plain.test(upper) && !numbered.test(upper)) break;
+        target = up;
+      }
+      target.setAttribute(MARK, 'nick');
+      if (target.parentElement) target.parentElement.removeChild(target);
     });
   }
 
@@ -223,7 +297,7 @@
       try {
         for (var i = 0; i < store.length; i++) {
           var key = store.key(i);
-          if (!key || !AUTHY.test(key)) continue;
+          if (!key || key === NICK_CACHE || !AUTHY.test(key)) continue;
           parts.push(key + '=' + String(store.getItem(key) || '').slice(0, 64));
         }
       } catch (e) {}
@@ -245,6 +319,13 @@
     var now = snapshot();
     if (now === seen) return;
     seen = now;
+    if (!token()) {
+      nick = '';
+      asked = false;
+      try { localStorage.removeItem(NICK_CACHE); } catch (e) {}
+    } else {
+      asked = false;
+    }
     run();
     if (refresh()) { setTimeout(run, 400); return; }
     var once;
@@ -304,10 +385,12 @@
     dropVendorHeads();
     dropUndefined();
     accountButton();
+    dropNickRow();
     unsolidify();
     solidify();
   }
   function start() {
+    askNick();
     run();
     watchAuth();
     var pending = null;
