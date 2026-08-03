@@ -64,10 +64,13 @@ _PATCH_SCRIPTS = (
     "design-inert.js", "session-restore.js",
     "proxy-auth-patch.js", "auth-error-patch.js",
     "seekai-models.js",
-    # После seekai-models.js: отключение автоподмены модели. Цепочка
-    # FALLBACK_ORDER пришпиливается к выбранной модели уже после того,
-    # как в неё добавили свои модели.
+    # После seekai-models.js: запрет автоподмены модели. Цепочка
+    # FALLBACK_ORDER НЕ укорачивается (это дважды выключало запросы
+    # целиком) — имя модели правится в теле каждого запроса.
     "model-no-autoswitch.js",
+    # Модель по умолчанию: DeepSeek, а на бесплатном тарифе GPT-OSS 120B.
+    # Идёт после всех патчей, которые добавляют и разрешают модели.
+    "model-default.js",
     # Отмена текущего запроса к модели: кнопка «Остановить» и Escape.
     "request-cancel.js",
     # Порядок моделей в списке: DeepSeek → GLM → Anthropic → OpenAI,
