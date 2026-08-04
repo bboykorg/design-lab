@@ -6,7 +6,16 @@
    угадываются по классам, а берутся из вычисленных стилей: тёмные фоны
    становятся фоном палитры, насыщенные — акцентом, текст подбирается по
    контрасту к новому фону. Любой выбор обратим: «Без палитры» возвращает
-   исходные цвета, так как старые inline-стили сохраняются рядом. */
+   исходные цвета, так как старые inline-стили сохраняются рядом.
+
+   Почему в сохранённом проекте фон раньше не менялся: цвета палитры
+   запекались в сохраняемый HTML — вместе с inline-стилями !important и со
+   служебным тегом <style>. При открытии проекта слой видел свой тег
+   на месте и считал, что перекрашивать нечего. Теперь:
+     • в теге стилей записан id палитры, и при несовпадении сайт перекрашивается;
+     • перед применением следы любой прежней палитры полностью снимаются;
+     • window.dlStripPalette(root) убирает цвета палитры перед сохранением,
+       чтобы в проекте лежали исходные цвета, а палитра накладывалась сверху. */
 (function () {
   'use strict';
   if (window.__dlPalettes) return;
@@ -16,21 +25,23 @@
   var MARK = 'data-dl-pal';
   var KEEP = 'data-dl-pal-keep';
   var STYLE_ID = 'dl-pal-style';
+  var STYLE_MARK = 'data-dl-pal-style';
+  var VAR_MARK = '--dl-bg:';
   var MAX_NODES = 5000;
 
   var PALETTES = [
-    { id: 'sunfire', name: 'Жёлтый и красный', bg: '#1b0f08', surface: '#2a1710', surface2: '#3a2115', text: '#ffeccd', muted: '#d7a273', accent: '#ffc93c', accent2: '#e63946', border: '#4b2b18' },
-    { id: 'ocean', name: 'Ночной океан', bg: '#061726', surface: '#0c2438', surface2: '#123048', text: '#e6f2ff', muted: '#8fb3ce', accent: '#38bdf8', accent2: '#6366f1', border: '#1c3d58' },
-    { id: 'emerald', name: 'Изумруд', bg: '#06170f', surface: '#0b2418', surface2: '#113222', text: '#e4fff1', muted: '#8ec9ab', accent: '#34d399', accent2: '#a3e635', border: '#1b4230' },
-    { id: 'sunset', name: 'Закат', bg: '#1a0d16', surface: '#2a1424', surface2: '#3a1c31', text: '#ffe8f3', muted: '#d197b5', accent: '#fb7185', accent2: '#fbbf24', border: '#4a2440' },
-    { id: 'lavender', name: 'Лаванда', bg: '#120f22', surface: '#1c1833', surface2: '#272145', text: '#ece9ff', muted: '#a6a0cc', accent: '#a78bfa', accent2: '#f472b6', border: '#332c57' },
-    { id: 'graphite', name: 'Графит', bg: '#0d0f12', surface: '#15181d', surface2: '#1e232a', text: '#e8ecf2', muted: '#9aa4b2', accent: '#e5e7eb', accent2: '#64748b', border: '#2a313a' },
-    { id: 'neon', name: 'Неон', bg: '#0a0a14', surface: '#12122a', surface2: '#1a1a3d', text: '#eafaff', muted: '#93a3c9', accent: '#22d3ee', accent2: '#f0abfc', border: '#26264f' },
-    { id: 'cherry', name: 'Вишня', bg: '#170a10', surface: '#241019', surface2: '#331723', text: '#ffe9ee', muted: '#cf98a8', accent: '#f43f5e', accent2: '#fda4af', border: '#43202f' },
-    { id: 'coffee', name: 'Кофе', bg: '#161009', surface: '#231a10', surface2: '#322517', text: '#f6ead9', muted: '#c0a583', accent: '#d9a441', accent2: '#8d6e4a', border: '#40311e' },
-    { id: 'mint', name: 'Мятная (светлая)', bg: '#f3fbf7', surface: '#ffffff', surface2: '#e4f5ec', text: '#0f2a20', muted: '#4c7a68', accent: '#0f9d76', accent2: '#f59e0b', border: '#cbe7db' },
-    { id: 'sand', name: 'Песок (светлая)', bg: '#faf6ef', surface: '#ffffff', surface2: '#f1e8da', text: '#2a2118', muted: '#7c6a56', accent: '#c2703b', accent2: '#2f6f6b', border: '#e4d7c3' },
-    { id: 'sky', name: 'Небо (светлая)', bg: '#f4f8ff', surface: '#ffffff', surface2: '#e6efff', text: '#101c33', muted: '#54688c', accent: '#2563eb', accent2: '#f472b6', border: '#cddcf5' }
+    { id: 'sunfire', name: '\u0416\u0451\u043b\u0442\u044b\u0439 \u0438 \u043a\u0440\u0430\u0441\u043d\u044b\u0439', bg: '#1b0f08', surface: '#2a1710', surface2: '#3a2115', text: '#ffeccd', muted: '#d7a273', accent: '#ffc93c', accent2: '#e63946', border: '#4b2b18' },
+    { id: 'ocean', name: '\u041d\u043e\u0447\u043d\u043e\u0439 \u043e\u043a\u0435\u0430\u043d', bg: '#061726', surface: '#0c2438', surface2: '#123048', text: '#e6f2ff', muted: '#8fb3ce', accent: '#38bdf8', accent2: '#6366f1', border: '#1c3d58' },
+    { id: 'emerald', name: '\u0418\u0437\u0443\u043c\u0440\u0443\u0434', bg: '#06170f', surface: '#0b2418', surface2: '#113222', text: '#e4fff1', muted: '#8ec9ab', accent: '#34d399', accent2: '#a3e635', border: '#1b4230' },
+    { id: 'sunset', name: '\u0417\u0430\u043a\u0430\u0442', bg: '#1a0d16', surface: '#2a1424', surface2: '#3a1c31', text: '#ffe8f3', muted: '#d197b5', accent: '#fb7185', accent2: '#fbbf24', border: '#4a2440' },
+    { id: 'lavender', name: '\u041b\u0430\u0432\u0430\u043d\u0434\u0430', bg: '#120f22', surface: '#1c1833', surface2: '#272145', text: '#ece9ff', muted: '#a6a0cc', accent: '#a78bfa', accent2: '#f472b6', border: '#332c57' },
+    { id: 'graphite', name: '\u0413\u0440\u0430\u0444\u0438\u0442', bg: '#0d0f12', surface: '#15181d', surface2: '#1e232a', text: '#e8ecf2', muted: '#9aa4b2', accent: '#e5e7eb', accent2: '#64748b', border: '#2a313a' },
+    { id: 'neon', name: '\u041d\u0435\u043e\u043d', bg: '#0a0a14', surface: '#12122a', surface2: '#1a1a3d', text: '#eafaff', muted: '#93a3c9', accent: '#22d3ee', accent2: '#f0abfc', border: '#26264f' },
+    { id: 'cherry', name: '\u0412\u0438\u0448\u043d\u044f', bg: '#170a10', surface: '#241019', surface2: '#331723', text: '#ffe9ee', muted: '#cf98a8', accent: '#f43f5e', accent2: '#fda4af', border: '#43202f' },
+    { id: 'coffee', name: '\u041a\u043e\u0444\u0435', bg: '#161009', surface: '#231a10', surface2: '#322517', text: '#f6ead9', muted: '#c0a583', accent: '#d9a441', accent2: '#8d6e4a', border: '#40311e' },
+    { id: 'mint', name: '\u041c\u044f\u0442\u043d\u0430\u044f (\u0441\u0432\u0435\u0442\u043b\u0430\u044f)', bg: '#f3fbf7', surface: '#ffffff', surface2: '#e4f5ec', text: '#0f2a20', muted: '#4c7a68', accent: '#0f9d76', accent2: '#f59e0b', border: '#cbe7db' },
+    { id: 'sand', name: '\u041f\u0435\u0441\u043e\u043a (\u0441\u0432\u0435\u0442\u043b\u0430\u044f)', bg: '#faf6ef', surface: '#ffffff', surface2: '#f1e8da', text: '#2a2118', muted: '#7c6a56', accent: '#c2703b', accent2: '#2f6f6b', border: '#e4d7c3' },
+    { id: 'sky', name: '\u041d\u0435\u0431\u043e (\u0441\u0432\u0435\u0442\u043b\u0430\u044f)', bg: '#f4f8ff', surface: '#ffffff', surface2: '#e6efff', text: '#101c33', muted: '#54688c', accent: '#2563eb', accent2: '#f472b6', border: '#cddcf5' }
   ];
 
   /* --- Цвет: разбор и меры ---------------------------------------- */
@@ -76,9 +87,13 @@
     el.setAttribute(MARK, '1');
     el.setAttribute(KEEP, el.getAttribute('style') || '');
   }
-  function restore(doc) {
+
+  /* Снятие следов палитры с любого корня: и у живого документа,
+     и у копии перед сохранением. */
+  function strip(root) {
+    if (!root || !root.querySelectorAll) return root;
     var list;
-    try { list = doc.querySelectorAll('[' + MARK + ']'); } catch (e) { return; }
+    try { list = root.querySelectorAll('[' + MARK + ']'); } catch (e) { list = []; }
     Array.prototype.forEach.call(list, function (el) {
       var old = el.getAttribute(KEEP) || '';
       if (old) el.setAttribute('style', old);
@@ -86,9 +101,16 @@
       el.removeAttribute(MARK);
       el.removeAttribute(KEEP);
     });
-    var style = doc.getElementById(STYLE_ID);
-    if (style && style.parentNode) style.parentNode.removeChild(style);
+    var styles;
+    try { styles = root.querySelectorAll('style'); } catch (e) { styles = []; }
+    Array.prototype.forEach.call(styles, function (node) {
+      var own = node.id === STYLE_ID || node.hasAttribute(STYLE_MARK) ||
+        String(node.textContent || '').indexOf(VAR_MARK) >= 0;
+      if (own && node.parentNode) node.parentNode.removeChild(node);
+    });
+    return root;
   }
+  window.dlStripPalette = strip;
 
   function baseStyle(pal) {
     return ':root{--dl-bg:' + pal.bg + ';--dl-surface:' + pal.surface + ';--dl-text:' + pal.text +
@@ -97,19 +119,29 @@
       ';--card:' + pal.surface + ';--panel:' + pal.surface + ';--text:' + pal.text +
       ';--fg:' + pal.text + ';--muted:' + pal.muted + ';--accent:' + pal.accent +
       ';--primary:' + pal.accent + ';--secondary:' + pal.accent2 + ';--border:' + pal.border + '}' +
-      'html,body{background:' + pal.bg + '!important;color:' + pal.text + '!important}' +
+      'html,body{background:' + pal.bg + '!important;background-image:none!important;color:' + pal.text + '!important}' +
       '::selection{background:' + pal.accent + ';color:' + readable(pal.accent, pal) + '}' +
       '::-webkit-scrollbar-thumb{background:' + pal.border + '}';
   }
 
   function apply(doc, pal) {
     if (!doc || !doc.body) return false;
-    restore(doc);
+    strip(doc);
 
     var style = doc.createElement('style');
     style.id = STYLE_ID;
+    style.setAttribute(STYLE_MARK, pal.id);
     style.textContent = baseStyle(pal);
     (doc.head || doc.documentElement).appendChild(style);
+
+    /* Фон самого body часто прибит inline в сохранённом проекте. */
+    [doc.documentElement, doc.body].forEach(function (el) {
+      if (!el) return;
+      remember(el);
+      setProp(el, 'background-color', pal.bg);
+      setProp(el, 'background-image', 'none');
+      setProp(el, 'color', pal.text);
+    });
 
     var nodes;
     try { nodes = doc.body.querySelectorAll('*'); } catch (e) { return false; }
@@ -211,17 +243,27 @@
     if (!node) return null;
     try { return node.contentDocument || null; } catch (e) { return null; }
   }
+  function appliedId(doc) {
+    var node = doc.getElementById(STYLE_ID);
+    if (!node) return null;
+    return node.getAttribute(STYLE_MARK) || '';
+  }
   function paint(force) {
     var doc = frameDoc();
     if (!doc || !doc.body) return;
     var pal = palById(chosen);
-    if (!pal) return;
-    if (!force && doc.getElementById(STYLE_ID)) return;
+    if (!pal) {
+      /* Палитра выключена, а в сохранённом HTML остались старые цвета. */
+      if (appliedId(doc) !== null) strip(doc);
+      return;
+    }
+    /* Главное: если в документе лежит ДРУГАЯ палитра — перекрашиваем. */
+    if (!force && appliedId(doc) === pal.id) return;
     apply(doc, pal);
   }
   function clear() {
     var doc = frameDoc();
-    if (doc) restore(doc);
+    if (doc) strip(doc);
   }
 
   /* --- Панель выбора -------------------------------------------- */
@@ -240,12 +282,12 @@
 
     var head = document.createElement('div');
     css(head, 'font-weight:600;margin:0 0 10px;font-size:15px');
-    head.textContent = 'Цветовая схема сайта';
+    head.textContent = '\u0426\u0432\u0435\u0442\u043e\u0432\u0430\u044f \u0441\u0445\u0435\u043c\u0430 \u0441\u0430\u0439\u0442\u0430';
     panel.appendChild(head);
 
     var note = document.createElement('div');
     css(note, 'color:#9aa4b2;font-size:12px;margin:0 0 12px');
-    note.textContent = 'Применяется сразу к текущему сайту в предпросмотре.';
+    note.textContent = '\u041f\u0440\u0438\u043c\u0435\u043d\u044f\u0435\u0442\u0441\u044f \u0441\u0440\u0430\u0437\u0443 \u043a \u0442\u0435\u043a\u0443\u0449\u0435\u043c\u0443 \u0441\u0430\u0439\u0442\u0443 \u0432 \u043f\u0440\u0435\u0434\u043f\u0440\u043e\u0441\u043c\u043e\u0442\u0440\u0435.';
     panel.appendChild(note);
 
     PALETTES.forEach(function (pal) {
@@ -281,7 +323,7 @@
     css(reset,
       'width:100%;margin-top:4px;padding:9px 10px;border-radius:12px;border:1px solid #242a34;' +
       'background:#0f1116;color:#9aa4b2;cursor:pointer');
-    reset.textContent = 'Без палитры';
+    reset.textContent = '\u0411\u0435\u0437 \u043f\u0430\u043b\u0438\u0442\u0440\u044b';
     reset.addEventListener('click', function () {
       chosen = '';
       try { localStorage.removeItem(KEY); } catch (e) {}
@@ -311,7 +353,7 @@
       'padding:10px 14px;border-radius:999px;border:1px solid #2a313c;background:#151a22;color:#e8ecf2;' +
       'cursor:pointer;box-shadow:0 12px 30px rgba(0,0,0,.4);' +
       'font:14px/1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif');
-    button.textContent = 'Палитра';
+    button.textContent = '\u041f\u0430\u043b\u0438\u0442\u0440\u0430';
     button.addEventListener('click', function (event) {
       event.preventDefault();
       event.stopPropagation();

@@ -11,7 +11,9 @@
      • если проект удалён, слепок выбрасывается и ничего не восстанавливается;
      • восстановление не трогает признак черновика и не запускает автосохранение —
        проект запишется только после реальной правки;
-     • всплывающего «Восстановлен последний сайт» больше нет. */
+     • всплывающего «Восстановлен последний сайт» больше нет;
+     • цвета палитры в слепок не попадают — иначе после перезагрузки
+       фон оставался старым и новая палитра как будто не работала. */
 (function () {
   'use strict';
   if (window.__dlSessionRestore) return;
@@ -95,7 +97,8 @@
     if (text.length < 40) return true;
     return BLANK.some(function (mark) { return text.indexOf(mark) >= 0; });
   }
-  /* Режим дизайна прячет обработчики и ссылки; в слепке они возвращаются. */
+  /* Режим дизайна прячет обработчики и ссылки; в слепке они возвращаются.
+     Цвета палитры снимаются: палитра — настройка просмотра, не содержимое. */
   function clean(doc) {
     var clone = doc.documentElement.cloneNode(true);
     var list;
@@ -115,6 +118,9 @@
       if (el.getAttribute('contenteditable') === 'true') el.removeAttribute('contenteditable');
       if (el.hasAttribute('data-dl-selected')) el.removeAttribute('data-dl-selected');
     });
+    try {
+      if (typeof window.dlStripPalette === 'function') window.dlStripPalette(clone);
+    } catch (e) {}
     return clone;
   }
   function grab() {
