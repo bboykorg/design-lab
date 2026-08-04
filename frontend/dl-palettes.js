@@ -6,6 +6,10 @@
    считаются автоматически смешением. Разметка сайта заранее неизвестна,
    поэтому цвета берутся из вычисленных стилей.
 
+   Палитра принадлежит проекту, а не браузеру. Выбор запоминается рядом с id
+   проекта, поэтому новый сайт открывается вообще без палитры, а не в цветах
+   предыдущего, и каждый сохранённый сайт возвращается в своей схеме.
+
    Границы карточек. Если блок выделялся фоном, рамкой или тенью, ему
    гарантируется видимость: фон берётся на шаг светлее родительского,
    а обводка рисуется внутренней тенью — она не занимает места и потому
@@ -27,7 +31,8 @@
   if (window.__dlPalettes) return;
   window.__dlPalettes = true;
 
-  var KEY = 'dl_palette';
+  var MAP_KEY = 'dl_palette_by_id';   // id проекта -> выбранная схема
+  var OLD_KEY = 'dl_palette';         // наследие: одна схема на весь браузер
   var OWN_KEY = 'dl_palette_own';
   var OWN_ID = 'own';
   var GROUP = 'data-dl-pal-i';
@@ -373,9 +378,38 @@
     });
   }
 
-  /* --- Состояние и кадр предпросмотра ------------------------------ */
-  var chosen = '';
-  try { chosen = String(localStorage.getItem(KEY) || ''); } catch (e) { chosen = ''; }
+  /* --- Выбор палитры хранится у проекта --------------------------- */
+  function readMap() {
+    try {
+      var data = JSON.parse(localStorage.getItem(MAP_KEY) || 'null');
+      return (data && typeof data === 'object') ? data : {};
+    } catch (e) { return {}; }
+  }
+  function writeMap(data) {
+    try { localStorage.setItem(MAP_KEY, JSON.stringify(data)); } catch (e) {}
+  }
+  /* Общий ключ прошлых версий больше не читается: из-за него новый сайт
+     открывался в цветах предыдущего. */
+  try { localStorage.removeItem(OLD_KEY); } catch (e) {}
+
+  function projId() {
+    var cur = window.current;
+    if (!cur || typeof cur !== 'object') return '';
+    return typeof cur.id === 'string' ? cur.id : '';
+  }
+
+  var curId = projId();
+  var chosen = curId ? (readMap()[curId] || '') : '';
+
+  function remember() {
+    var id = projId();
+    if (!id) return;
+    var map = readMap();
+    if (chosen) map[id] = chosen;
+    else delete map[id];
+    writeMap(map);
+    curId = id;
+  }
 
   function palById(id) {
     if (id === OWN_ID) return ownPalette();
@@ -419,6 +453,23 @@
     if (doc) strip(doc);
   }
 
+  /* Смена проекта: новый сайт без палитры, сохранённый — в своей схеме. */
+  function follow() {
+    var id = projId();
+    if (id === curId) return;
+    if (id && !curId && chosen) {
+      /* Только что созданный сайт получил id — выбор остаётся за ним. */
+      curId = id;
+      remember();
+      return;
+    }
+    curId = id;
+    chosen = id ? (readMap()[id] || '') : '';
+    refreshMarks();
+    if (chosen) paint(true);
+    else clear();
+  }
+
   /* --- Панель выбора -------------------------------------------- */
   var button = null;
   var panel = null;
@@ -441,6 +492,13 @@
       dots.appendChild(dot);
     });
     return dots;
+  }
+
+  function choose(id) {
+    chosen = id;
+    remember();
+    paint(true);
+    refreshMarks();
   }
 
   function buildOwnSection() {
@@ -488,12 +546,7 @@
     var label = document.createElement('span');
     label.textContent = '\u041f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u044c \u0441\u0432\u043e\u0438 \u0446\u0432\u0435\u0442\u0430';
     ownRow.appendChild(label);
-    ownRow.addEventListener('click', function () {
-      chosen = OWN_ID;
-      try { localStorage.setItem(KEY, chosen); } catch (e) {}
-      paint(true);
-      refreshMarks();
-    });
+    ownRow.addEventListener('click', function () { choose(OWN_ID); });
     box.appendChild(ownRow);
 
     return box;
@@ -520,7 +573,7 @@
 
     var note = document.createElement('div');
     css(note, 'color:#9aa4b2;font-size:12px;margin:0 0 12px');
-    note.textContent = '\u041f\u0440\u0438\u043c\u0435\u043d\u044f\u0435\u0442\u0441\u044f \u0441\u0440\u0430\u0437\u0443 \u043a \u0442\u0435\u043a\u0443\u0449\u0435\u043c\u0443 \u0441\u0430\u0439\u0442\u0443 \u0432 \u043f\u0440\u0435\u0434\u043f\u0440\u043e\u0441\u043c\u043e\u0442\u0440\u0435.';
+    note.textContent = '\u0421\u0445\u0435\u043c\u0430 \u0437\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u0435\u0442\u0441\u044f \u0434\u043b\u044f \u044d\u0442\u043e\u0433\u043e \u0441\u0430\u0439\u0442\u0430. \u041d\u043e\u0432\u044b\u0439 \u043f\u0440\u043e\u0435\u043a\u0442 \u043d\u0430\u0447\u0438\u043d\u0430\u0435\u0442\u0441\u044f \u0431\u0435\u0437 \u043f\u0430\u043b\u0438\u0442\u0440\u044b.';
     panel.appendChild(note);
 
     panel.appendChild(buildOwnSection());
@@ -534,12 +587,7 @@
       var label = document.createElement('span');
       label.textContent = pal.name;
       row.appendChild(label);
-      row.addEventListener('click', function () {
-        chosen = pal.id;
-        try { localStorage.setItem(KEY, chosen); } catch (e) {}
-        paint(true);
-        refreshMarks();
-      });
+      row.addEventListener('click', function () { choose(pal.id); });
       panel.appendChild(row);
     });
 
@@ -551,7 +599,7 @@
     reset.textContent = '\u0411\u0435\u0437 \u043f\u0430\u043b\u0438\u0442\u0440\u044b';
     reset.addEventListener('click', function () {
       chosen = '';
-      try { localStorage.removeItem(KEY); } catch (e) {}
+      remember();
       clear();
       refreshMarks();
     });
@@ -604,6 +652,7 @@
 
   function tick() {
     if (!button) return;
+    follow();
     var on = visible();
     button.style.display = on ? 'inline-flex' : 'none';
     if (!on && panel) panel.style.display = 'none';
@@ -615,7 +664,7 @@
     tick();
     setInterval(tick, 700);
     var node = frame();
-    if (node) node.addEventListener('load', function () { setTimeout(function () { paint(true); }, 60); });
+    if (node) node.addEventListener('load', function () { setTimeout(function () { follow(); paint(true); }, 60); });
     if (window.MutationObserver) {
       var pending = null;
       new MutationObserver(function () {
