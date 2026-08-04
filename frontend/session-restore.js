@@ -1,13 +1,25 @@
-/* Design Lab — keep the edited site through a page reload.
-   The HTML is read straight out of the preview frame and written back into it,
-   so nothing depends on the editor's internal variables. The blank starter
-   canvas is never saved, and an already opened project is never overwritten. */
+/* Design Lab — сайт в редакторе переживает перезагрузку страницы.
+   HTML берётся прямо из кадра предпросмотра и туда же возвращается, поэтому
+   ничего не зависит от внутренних переменных редактора. Пустой холст не
+   сохраняется, открытый проект не перезаписывается.
+
+   Почему раньше появлялись копии и возвращались удалённые проекты:
+   слепок хранил только HTML, без привязки к проекту, и при восстановлении
+   ставился признак черновика — автосохранение создавало НОВЫЙ проект,
+   даже если исходный только что удалили. Теперь:
+     • вместе с HTML запоминается id проекта;
+     • если проект удалён, слепок выбрасывается и ничего не восстанавливается;
+     • восстановление не трогает признак черновика и не запускает автосохранение —
+       проект запишется только после реальной правки;
+     • всплывающего «Восстановлен последний сайт» больше нет. */
 (function () {
   'use strict';
   if (window.__dlSessionRestore) return;
   window.__dlSessionRestore = true;
 
-  var KEY = 'dl_session_v2';
+  var KEY = 'dl_session_v3';
+  var OLD_KEYS = ['dl_session_v2', 'dl_session'];
+  var DEAD_KEY = 'dl_dead_projects';
   var MAX_CHARS = 2000000;
   var MIN_CHARS = 400;
   var SAVE_MS = 2500;
@@ -15,10 +27,15 @@
   var WATCH_MS = 900;
   var WATCH_TRIES = 20;
   var INERT = 'data-dl-inert-';
-  var BLANK = ['чистый холст', 'опиши сайт в чате', 'начнём с чистого листа'];
+  var BLANK = ['\u0447\u0438\u0441\u0442\u044b\u0439 \u0445\u043e\u043b\u0441\u0442', '\u043e\u043f\u0438\u0448\u0438 \u0441\u0430\u0439\u0442 \u0432 \u0447\u0430\u0442\u0435', '\u043d\u0430\u0447\u043d\u0451\u043c \u0441 \u0447\u0438\u0441\u0442\u043e\u0433\u043e \u043b\u0438\u0441\u0442\u0430'];
 
   var lastSaved = null;
   var restored = false;
+
+  /* Старые слепки без id — именно они плодили копии. Убираем. */
+  OLD_KEYS.forEach(function (name) {
+    try { localStorage.removeItem(name); } catch (e) {}
+  });
 
   function read() {
     try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; }
@@ -26,6 +43,44 @@
   function write(data) {
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
   }
+  function forget() {
+    lastSaved = null;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  }
+
+  /* Список удалённых проектов ведёт project-dedupe.js. */
+  function deadIds() {
+    var out = {};
+    var data = null;
+    try { data = JSON.parse(localStorage.getItem(DEAD_KEY) || 'null'); } catch (e) { data = null; }
+    if (data && typeof data === 'object') {
+      if (Object.prototype.toString.call(data) === '[object Array]') {
+        data.forEach(function (id) { if (id) out[String(id)] = 1; });
+      } else {
+        Object.keys(data).forEach(function (id) { if (id) out[String(id)] = 1; });
+      }
+    }
+    try {
+      if (typeof window.__dlDeletedProjects === 'object' && window.__dlDeletedProjects) {
+        Object.keys(window.__dlDeletedProjects).forEach(function (id) { out[String(id)] = 1; });
+      }
+    } catch (e) {}
+    return out;
+  }
+  function isDead(id) {
+    if (!id) return false;
+    return !!deadIds()[String(id)];
+  }
+
+  function projectId() {
+    try {
+      if (window.current && typeof window.current === 'object' && window.current.id) {
+        return String(window.current.id);
+      }
+    } catch (e) {}
+    return '';
+  }
+
   function frame() { return document.getElementById('pvFrame'); }
   function frameDoc() {
     var el = frame();
@@ -40,7 +95,7 @@
     if (text.length < 40) return true;
     return BLANK.some(function (mark) { return text.indexOf(mark) >= 0; });
   }
-  /* Design mode stashes handlers and links away; the saved copy keeps them. */
+  /* Режим дизайна прячет обработчики и ссылки; в слепке они возвращаются. */
   function clean(doc) {
     var clone = doc.documentElement.cloneNode(true);
     var list;
@@ -58,6 +113,7 @@
       });
       if (el.hasAttribute('data-dl-editable')) el.removeAttribute('data-dl-editable');
       if (el.getAttribute('contenteditable') === 'true') el.removeAttribute('contenteditable');
+      if (el.hasAttribute('data-dl-selected')) el.removeAttribute('data-dl-selected');
     });
     return clone;
   }
@@ -71,21 +127,28 @@
   }
 
   function save() {
+    var id = projectId();
+    if (isDead(id)) { forget(); return; }
     var html = grab();
-    if (!html || html === lastSaved) return;
-    if (write({ html: html, at: Date.now() })) lastSaved = html;
+    if (!html) return;
+    var previous = read();
+    if (html === lastSaved && previous && previous.id === id) return;
+    if (write({ html: html, id: id, at: Date.now() })) lastSaved = html;
   }
-  function tellApp(html) {
+
+  /* При восстановлении НЕ выставляем scratch и не зовём автосохранение:
+     иначе редактор считает сайт новым и создаёт лишний проект. */
+  function tellApp(html, id) {
     try {
       if (window.current && typeof window.current === 'object') {
         window.current.html = html;
-        if (typeof window.current.scratch === 'boolean') window.current.scratch = true;
+        if (id && !window.current.id) window.current.id = id;
       }
     } catch (e) {}
     var area = document.getElementById('codeTa');
     if (area && !area.value) area.value = html;
   }
-  function put(html) {
+  function put(html, id) {
     var el = frame();
     if (!el) return false;
     var done = ['renderHtml', 'renderHtmlLive'].some(function (name) {
@@ -95,29 +158,30 @@
     if (!done) {
       try { el.removeAttribute('src'); el.srcdoc = html; done = true; } catch (e) { return false; }
     }
-    tellApp(html);
+    tellApp(html, id);
     return done;
   }
   function tryRestore(saved) {
     var doc = frameDoc();
     if (!doc) return false;
-    /* A template or saved project is already open: leave it alone. */
+    /* Шаблон или сохранённый проект уже открыт — не трогаем. */
     if (!isBlank(doc)) { restored = true; return true; }
-    if (!put(saved.html)) return false;
+    var here = projectId();
+    /* Слепок от другого проекта, чем открытый сейчас — не подменяем. */
+    if (here && saved.id && here !== saved.id) { restored = true; return true; }
+    if (!put(saved.html, saved.id)) return false;
     lastSaved = saved.html;
     restored = true;
-    if (typeof window.toast === 'function') {
-      try { window.toast('Восстановлен последний сайт'); } catch (e) {}
-    }
     return true;
   }
 
   function start() {
     var saved = read();
+    if (saved && saved.html && isDead(saved.id)) { forget(); saved = null; }
     if (saved && saved.html) {
       setTimeout(function () {
         if (tryRestore(saved)) return;
-        /* The editor may still be booting or the frame may reload once. */
+        /* Редактор может ещё грузиться или кадр один раз перезагружается. */
         var tries = 0;
         var wait = setInterval(function () {
           tries++;
@@ -134,6 +198,13 @@
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'hidden') save();
     });
+    /* Проект удалили в этой же вкладке — слепок больше не нужен. */
+    window.addEventListener('storage', function (event) {
+      if (event && event.key && event.key !== DEAD_KEY) return;
+      var now = read();
+      if (now && isDead(now.id)) forget();
+    });
+    window.dlForgetSession = forget;
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
