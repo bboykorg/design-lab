@@ -4,36 +4,41 @@
    цветовых схем и перекрашивает сайт внутри #pvFrame. Разметка сайта
    заранее неизвестна, поэтому цвета берутся из вычисленных стилей.
 
-   Почему блоки съезжали к левому краю и почему больше не будут:
+   Почему блоки съезжали к левому краю и как это закрыто насовсем:
 
-   1) Никакие CSS-переменные больше не подменяются. Шаблоны держат в --panel,
-      --card, --border и прочих не только цвета, но и ширины, отступы,
-      сокращённые записи. Подмена такого значения цветом делала max-width
-      невалидным — контейнер растягивался на всю ширину и верстка съезжала.
-      Перекраска обходится без них: цвета ставятся каждому элементу адресно.
-   2) Правятся и откатываются только цветовые свойства. Атрибут style целиком
-      не запоминается и не возвращается: там живут размеры блоков и кегль,
-      выставленные в режиме дизайна.
-   3) После перекраски сверяется геометрия. Если что-то всё же сдвинулось,
-      палитра сама откатывается и накладывается бережно (только фон и текст),
-      а если и так не вышло — полностью снимается. Верстка важнее цвета.
+   Палитра больше НИЧЕГО не пишет в атрибут style. Раньше каждому
+   элементу прописывались inline-цвета, а через тот же атрибут работают
+   свободное растягивание блоков и масштаб текста в режиме дизайна.
+   Те слои видели чужую правку и пересчитывали ширины уже ПОСЛЕ
+   перекраски — поэтому мгновенная проверка геометрии ничего не ловила,
+   а контейнер терял ограничение ширины и верстка разъезжалась.
 
-   «Без палитры» возвращает исходные цвета. window.dlStripPalette(root) снимает
-   палитру перед сохранением, чтобы цвета не запекались в проект. */
+   Как сделано теперь:
+     • элементам ставится один служебный атрибут-номер группы цвета;
+     • сами цвета живут в одной таблице стилей внутри сайта;
+     • CSS-переменные шаблона не подменяются — в них бывают размеры;
+     • геометрия сверяется сразу, через 0,5 с и через 1,5 с — если вё же
+       что-то сдвинулось, палитра сама переходит в бережный режим,
+       а потом снимается совсем. Верстка важнее цвета.
+
+   window.dlStripPalette(root) снимает палитру перед сохранением, чтобы цвета
+   не запекались в проект; он же чистит inline-следы старых версий. */
 (function () {
   'use strict';
   if (window.__dlPalettes) return;
   window.__dlPalettes = true;
 
   var KEY = 'dl_palette';
-  var MARK = 'data-dl-pal';
-  var KEEP = 'data-dl-pal-keep';
+  var GROUP = 'data-dl-pal-i';
+  var OLD_MARK = 'data-dl-pal';
+  var OLD_KEEP = 'data-dl-pal-keep';
   var STYLE_ID = 'dl-pal-style';
   var STYLE_MARK = 'data-dl-pal-style';
   var VAR_MARK = '--dl-bg:';
   var MAX_NODES = 5000;
-  var PROBE_NODES = 80;
+  var PROBE_NODES = 120;
   var SHIFT_PX = 2;
+  var LATE_MS = [500, 1500];
 
   var PALETTES = [
     { id: 'sunfire', name: '\u0416\u0451\u043b\u0442\u044b\u0439 \u0438 \u043a\u0440\u0430\u0441\u043d\u044b\u0439', bg: '#1b0f08', surface: '#2a1710', surface2: '#3a2115', text: '#ffeccd', muted: '#d7a273', accent: '#ffc93c', accent2: '#e63946', border: '#4b2b18' },
@@ -84,54 +89,41 @@
     return lum(hexRgb(hex)) > 0.55 ? '#10141a' : pal.text;
   }
 
-  /* --- Правка только цветовых свойств --------------------------- */
-  function savedMap(el) {
-    var raw = el.getAttribute(KEEP);
-    if (!raw) return {};
-    if (raw.charAt(0) !== '{') return { __legacy: raw };
-    try {
-      var data = JSON.parse(raw);
-      return data && typeof data === 'object' ? data : {};
-    } catch (e) { return {}; }
-  }
-  function touch(el, prop, value) {
-    var saved = savedMap(el);
-    if (saved.__legacy === undefined && !(prop in saved)) {
-      var was = el.style.getPropertyValue(prop);
-      if (was && el.style.getPropertyPriority(prop)) was += ' !important';
-      saved[prop] = was || '';
-      el.setAttribute(KEEP, JSON.stringify(saved));
-    } else if (saved.__legacy === undefined) {
-      el.setAttribute(KEEP, JSON.stringify(saved));
-    }
-    el.setAttribute(MARK, '1');
-    el.style.setProperty(prop, value, 'important');
-  }
-  function untouch(el) {
-    var saved = savedMap(el);
-    if (saved.__legacy !== undefined) {
-      /* Старый формат из уже сохранённых проектов. */
-      if (saved.__legacy) el.setAttribute('style', saved.__legacy);
-      else el.removeAttribute('style');
-    } else {
-      Object.keys(saved).forEach(function (prop) {
-        el.style.removeProperty(prop);
-        var was = String(saved[prop] || '');
-        if (!was) return;
-        var bang = / !important$/i.test(was);
-        el.style.setProperty(prop, was.replace(/ !important$/i, ''), bang ? 'important' : '');
-      });
-      if (!el.getAttribute('style')) el.removeAttribute('style');
-    }
-    el.removeAttribute(MARK);
-    el.removeAttribute(KEEP);
-  }
-
+  /* --- Снятие палитры ------------------------------------------- */
   function strip(root) {
     if (!root || !root.querySelectorAll) return root;
-    var list;
-    try { list = root.querySelectorAll('[' + MARK + ']'); } catch (e) { list = []; }
-    Array.prototype.forEach.call(list, function (el) { untouch(el); });
+    var groups;
+    try { groups = root.querySelectorAll('[' + GROUP + ']'); } catch (e) { groups = []; }
+    Array.prototype.forEach.call(groups, function (el) { el.removeAttribute(GROUP); });
+
+    /* Наследие старых версий: inline-цвета и слепок атрибута style. */
+    var old;
+    try { old = root.querySelectorAll('[' + OLD_MARK + ']'); } catch (e) { old = []; }
+    Array.prototype.forEach.call(old, function (el) {
+      var raw = el.getAttribute(OLD_KEEP);
+      if (raw && raw.charAt(0) === '{') {
+        var data = {};
+        try { data = JSON.parse(raw) || {}; } catch (e) { data = {}; }
+        Object.keys(data).forEach(function (prop) {
+          el.style.removeProperty(prop);
+          var was = String(data[prop] || '');
+          if (!was) return;
+          var bang = / !important$/i.test(was);
+          el.style.setProperty(prop, was.replace(/ !important$/i, ''), bang ? 'important' : '');
+        });
+        if (!el.getAttribute('style')) el.removeAttribute('style');
+      } else if (raw) {
+        el.setAttribute('style', raw);
+      } else {
+        ['background-color', 'background-image', 'color', 'border-color', 'box-shadow'].forEach(function (prop) {
+          el.style.removeProperty(prop);
+        });
+        if (!el.getAttribute('style')) el.removeAttribute('style');
+      }
+      el.removeAttribute(OLD_MARK);
+      el.removeAttribute(OLD_KEEP);
+    });
+
     var styles;
     try { styles = root.querySelectorAll('style'); } catch (e) { styles = []; }
     Array.prototype.forEach.call(styles, function (node) {
@@ -143,7 +135,7 @@
   }
   window.dlStripPalette = strip;
 
-  /* Слепок геометрии: положение и ширина крупных узлов. */
+  /* --- Слепок геометрии --------------------------------------- */
   function shape(doc) {
     var out = [];
     var nodes;
@@ -165,30 +157,20 @@
     return false;
   }
 
-  function baseStyle(pal) {
-    /* Только то, что точно не влияет на раскладку. Никаких переменных. */
-    return '::selection{background:' + pal.accent + ';color:' + readable(pal.accent, pal) + '}' +
-      '::-webkit-scrollbar-thumb{background:' + pal.border + '}';
-  }
-
+  /* --- Перекраска таблицей стилей ---------------------------- */
   function apply(doc, pal, safe) {
     if (!doc || !doc.body) return false;
     strip(doc);
-
-    var style = doc.createElement('style');
-    style.id = STYLE_ID;
-    style.setAttribute(STYLE_MARK, pal.id);
-    style.textContent = baseStyle(pal);
-    (doc.head || doc.documentElement).appendChild(style);
 
     var nodes;
     try { nodes = doc.body.querySelectorAll('*'); } catch (e) { return false; }
     var limit = Math.min(nodes.length, MAX_NODES);
 
-    /* --- Фаза 1: только чтение --------------------------------- */
-    var plan = [];
+    var rules = [];
+    var index = {};
     var bgOf = new WeakMap();
     bgOf.set(doc.body, pal.bg);
+    var marks = [];
 
     for (var i = 0; i < limit; i++) {
       var el = nodes[i];
@@ -216,13 +198,12 @@
         } else {
           ownBg = pal.surface2;
         }
-        props.push(['background-color', ownBg]);
+        props.push('background-color:' + ownBg + '!important');
       }
 
       var image = String(cs.backgroundImage || '');
       if (!safe && image.indexOf('gradient') >= 0) {
-        props.push(['background-image',
-          'linear-gradient(135deg,' + pal.accent + ',' + pal.accent2 + ')']);
+        props.push('background-image:linear-gradient(135deg,' + pal.accent + ',' + pal.accent2 + ')!important');
         ownBg = ownBg || pal.accent;
       }
 
@@ -248,41 +229,69 @@
         } else {
           tone = readable(under, pal);
         }
-        props.push(['color', tone]);
+        props.push('color:' + tone + '!important');
       }
 
       if (!safe) {
         var width = parseFloat(cs.borderTopWidth) || parseFloat(cs.borderBottomWidth) ||
           parseFloat(cs.borderLeftWidth) || parseFloat(cs.borderRightWidth) || 0;
-        if (width > 0) props.push(['border-color', pal.border]);
+        if (width > 0) props.push('border-color:' + pal.border + '!important');
         if (String(cs.boxShadow || '').indexOf('rgb') >= 0 && cs.boxShadow !== 'none') {
-          props.push(['box-shadow', '0 10px 30px rgba(0,0,0,.28)']);
+          props.push('box-shadow:0 10px 30px rgba(0,0,0,.28)!important');
         }
       }
 
-      if (props.length) plan.push({ el: el, props: props });
+      if (!props.length) continue;
+      var key = props.join(';');
+      if (!(key in index)) {
+        index[key] = rules.length;
+        rules.push(key);
+      }
+      marks.push([el, index[key]]);
     }
 
-    /* --- Фаза 2: одна волна записи ------------------------------ */
-    [doc.documentElement, doc.body].forEach(function (el) {
-      if (!el) return;
-      touch(el, 'background-color', pal.bg);
-      if (!safe) touch(el, 'background-image', 'none');
-      touch(el, 'color', pal.text);
+    /* Запись: один атрибут-номер на элемент, никаких inline-стилей. */
+    marks.forEach(function (pair) {
+      pair[0].setAttribute(GROUP, String(pair[1]));
     });
-    plan.forEach(function (item) {
-      item.props.forEach(function (pair) { touch(item.el, pair[0], pair[1]); });
+
+    var text = 'html,body{background-color:' + pal.bg + '!important;color:' + pal.text + '!important}';
+    if (!safe) text += 'html,body{background-image:none!important}';
+    text += '::selection{background:' + pal.accent + ';color:' + readable(pal.accent, pal) + '}' +
+      '::-webkit-scrollbar-thumb{background:' + pal.border + '}';
+    rules.forEach(function (body, idx) {
+      text += '[' + GROUP + '="' + idx + '"]{' + body + '}';
     });
+
+    var style = doc.createElement('style');
+    style.id = STYLE_ID;
+    style.setAttribute(STYLE_MARK, pal.id);
+    style.textContent = text;
+    (doc.head || doc.documentElement).appendChild(style);
     return true;
   }
 
-  /* Перекраска с проверкой: раскладка важнее цвета. */
+  /* Перекраска с проверками сразу и с задержкой. */
   function applyChecked(doc, pal) {
     var before = shape(doc);
     if (!apply(doc, pal, false)) return;
-    if (!moved(before, shape(doc))) return;
-    if (apply(doc, pal, true) && !moved(before, shape(doc))) return;
-    strip(doc);
+    var safeUsed = false;
+    function fix() {
+      if (!moved(before, shape(doc))) return;
+      if (!safeUsed) {
+        safeUsed = true;
+        apply(doc, pal, true);
+        if (!moved(before, shape(doc))) return;
+      }
+      strip(doc);
+    }
+    fix();
+    LATE_MS.forEach(function (wait) {
+      setTimeout(function () {
+        if (!doc.body || !doc.getElementById(STYLE_ID)) return;
+        fix();
+      }, wait);
+    });
   }
 
   /* --- Состояние и кадр предпросмотра ------------------------------ */
