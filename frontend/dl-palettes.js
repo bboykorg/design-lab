@@ -1,25 +1,24 @@
 /* Палитры для сайта пользователя.
 
-   Кнопка «Палитра» рядом с областью предпросмотра открывает набор готовых
-   цветовых схем и перекрашивает сайт внутри #pvFrame. Разметка сайта
-   заранее неизвестна, поэтому цвета берутся из вычисленных стилей.
+   Кнопка «Палитра» рядом с областью предпросмотра открывает готовые схемы
+   и раздел «Свои цвета»: фон, поверхность, текст и два акцента выбираются
+   вручную, остальные тона (вторая поверхность, приглушённый текст, граница)
+   считаются автоматически смешением. Разметка сайта заранее неизвестна,
+   поэтому цвета берутся из вычисленных стилей.
 
-   Почему блоки съезжали к левому краю и как это закрыто насовсем:
+   Границы карточек. Если блок выделялся фоном, рамкой или тенью, ему
+   гарантируется видимость: фон берётся на шаг светлее родительского,
+   а обводка рисуется внутренней тенью — она не занимает места и потому
+   не может сдвинуть верстку, в отличие от настоящего border.
 
-   Палитра больше НИЧЕГО не пишет в атрибут style. Раньше каждому
-   элементу прописывались inline-цвета, а через тот же атрибут работают
-   свободное растягивание блоков и масштаб текста в режиме дизайна.
-   Те слои видели чужую правку и пересчитывали ширины уже ПОСЛЕ
-   перекраски — поэтому мгновенная проверка геометрии ничего не ловила,
-   а контейнер терял ограничение ширины и верстка разъезжалась.
-
-   Как сделано теперь:
-     • элементам ставится один служебный атрибут-номер группы цвета;
-     • сами цвета живут в одной таблице стилей внутри сайта;
+   Почему блоки больше не съезжают к левому краю:
+     • палитра ничего не пишет в атрибут style — именно через него
+       работают растягивание блоков и масштаб текста в режиме дизайна;
+     • элементу ставится только номер цветовой группы, цвета живут
+       в одной таблице стилей внутри сайта;
      • CSS-переменные шаблона не подменяются — в них бывают размеры;
-     • геометрия сверяется сразу, через 0,5 с и через 1,5 с — если вё же
-       что-то сдвинулось, палитра сама переходит в бережный режим,
-       а потом снимается совсем. Верстка важнее цвета.
+     • геометрия сверяется сразу, через 0,5 с и через 1,5 с; при сдвиге
+       палитра сама переходит в бережный режим, а затем снимается.
 
    window.dlStripPalette(root) снимает палитру перед сохранением, чтобы цвета
    не запекались в проект; он же чистит inline-следы старых версий. */
@@ -29,6 +28,8 @@
   window.__dlPalettes = true;
 
   var KEY = 'dl_palette';
+  var OWN_KEY = 'dl_palette_own';
+  var OWN_ID = 'own';
   var GROUP = 'data-dl-pal-i';
   var OLD_MARK = 'data-dl-pal';
   var OLD_KEEP = 'data-dl-pal-keep';
@@ -55,6 +56,15 @@
     { id: 'sky', name: '\u041d\u0435\u0431\u043e (\u0441\u0432\u0435\u0442\u043b\u0430\u044f)', bg: '#f4f8ff', surface: '#ffffff', surface2: '#e6efff', text: '#101c33', muted: '#54688c', accent: '#2563eb', accent2: '#f472b6', border: '#cddcf5' }
   ];
 
+  var OWN_DEFAULT = { bg: '#101318', surface: '#191d24', text: '#eef2f8', accent: '#4f8cff', accent2: '#f59e0b' };
+  var OWN_FIELDS = [
+    { key: 'bg', label: '\u0424\u043e\u043d \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b' },
+    { key: 'surface', label: '\u0424\u043e\u043d \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a' },
+    { key: 'text', label: '\u0422\u0435\u043a\u0441\u0442' },
+    { key: 'accent', label: '\u0410\u043a\u0446\u0435\u043d\u0442' },
+    { key: 'accent2', label: '\u0412\u0442\u043e\u0440\u043e\u0439 \u0430\u043a\u0446\u0435\u043d\u0442' }
+  ];
+
   /* --- Цвет: разбор и меры ---------------------------------------- */
   function parse(value) {
     var hit = String(value || '').match(/rgba?\(([^)]+)\)/);
@@ -70,12 +80,30 @@
     return out;
   }
   function hexRgb(hex) {
-    var value = String(hex).replace('#', '');
+    var value = String(hex || '').replace('#', '');
     if (value.length === 3) {
       value = value[0] + value[0] + value[1] + value[1] + value[2] + value[2];
     }
+    if (value.length !== 6) return { r: 0, g: 0, b: 0, a: 1 };
     var num = parseInt(value, 16);
+    if (isNaN(num)) return { r: 0, g: 0, b: 0, a: 1 };
     return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255, a: 1 };
+  }
+  function toHex(color) {
+    function part(value) {
+      var num = Math.max(0, Math.min(255, Math.round(value)));
+      return (num < 16 ? '0' : '') + num.toString(16);
+    }
+    return '#' + part(color.r) + part(color.g) + part(color.b);
+  }
+  function mix(hexA, hexB, share) {
+    var a = hexRgb(hexA);
+    var b = hexRgb(hexB);
+    return toHex({
+      r: a.r + (b.r - a.r) * share,
+      g: a.g + (b.g - a.g) * share,
+      b: a.b + (b.b - a.b) * share
+    });
   }
   function lum(color) {
     return (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255;
@@ -88,6 +116,40 @@
   function readable(hex, pal) {
     return lum(hexRgb(hex)) > 0.55 ? '#10141a' : pal.text;
   }
+  function isHex(value) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || ''));
+  }
+
+  /* --- Свои цвета -------------------------------------------------- */
+  function readOwn() {
+    var data = null;
+    try { data = JSON.parse(localStorage.getItem(OWN_KEY) || 'null'); } catch (e) { data = null; }
+    var out = {};
+    OWN_FIELDS.forEach(function (field) {
+      var value = data && data[field.key];
+      out[field.key] = isHex(value) ? String(value).toLowerCase() : OWN_DEFAULT[field.key];
+    });
+    return out;
+  }
+  function writeOwn(data) {
+    try { localStorage.setItem(OWN_KEY, JSON.stringify(data)); } catch (e) {}
+  }
+  /* Остальные тона считаются смешением, чтобы выбирать надо было мало. */
+  function ownPalette() {
+    var own = readOwn();
+    return {
+      id: OWN_ID,
+      name: '\u0421\u0432\u043e\u0438 \u0446\u0432\u0435\u0442\u0430',
+      bg: own.bg,
+      surface: own.surface,
+      surface2: mix(own.surface, own.text, 0.12),
+      text: own.text,
+      muted: mix(own.text, own.bg, 0.42),
+      accent: own.accent,
+      accent2: own.accent2,
+      border: mix(own.surface, own.text, 0.24)
+    };
+  }
 
   /* --- Снятие палитры ------------------------------------------- */
   function strip(root) {
@@ -96,7 +158,7 @@
     try { groups = root.querySelectorAll('[' + GROUP + ']'); } catch (e) { groups = []; }
     Array.prototype.forEach.call(groups, function (el) { el.removeAttribute(GROUP); });
 
-    /* Наследие старых версий: inline-цвета и слепок атрибута style. */
+    /* Наследие старых версий: inline-цвета и слепки атрибута style. */
     var old;
     try { old = root.querySelectorAll('[' + OLD_MARK + ']'); } catch (e) { old = []; }
     Array.prototype.forEach.call(old, function (el) {
@@ -182,21 +244,29 @@
       try { cs = el.ownerDocument.defaultView.getComputedStyle(el); } catch (e) { continue; }
       if (!cs) continue;
 
+      /* Фон родителя в новой схеме — от него строится шаг контраста. */
+      var parentBg = null;
+      var up = el.parentElement;
+      while (up && !parentBg) { parentBg = bgOf.get(up); up = up.parentElement; }
+      parentBg = parentBg || pal.bg;
+
       var props = [];
       var ownBg = null;
+      var accentBg = false;
 
       var bg = parse(cs.backgroundColor);
       if (bg && bg.a > 0.05) {
-        var bgSat = sat(bg);
-        var bgLum = lum(bg);
-        if (bgSat > 0.3 && bgLum > 0.12) {
+        if (sat(bg) > 0.3 && lum(bg) > 0.12) {
           ownBg = (bg.r >= bg.b) ? pal.accent : pal.accent2;
-        } else if (bgLum < 0.14) {
-          ownBg = pal.bg;
-        } else if (bgLum < 0.55) {
+          accentBg = true;
+        } else if (parentBg === pal.bg) {
+          ownBg = pal.surface;
+        } else if (parentBg === pal.surface) {
+          ownBg = pal.surface2;
+        } else if (parentBg === pal.surface2) {
           ownBg = pal.surface;
         } else {
-          ownBg = pal.surface2;
+          ownBg = pal.surface;
         }
         props.push('background-color:' + ownBg + '!important');
       }
@@ -205,14 +275,10 @@
       if (!safe && image.indexOf('gradient') >= 0) {
         props.push('background-image:linear-gradient(135deg,' + pal.accent + ',' + pal.accent2 + ')!important');
         ownBg = ownBg || pal.accent;
+        accentBg = true;
       }
 
-      var under = ownBg;
-      if (!under) {
-        var up = el.parentElement;
-        while (up && !under) { under = bgOf.get(up); up = up.parentElement; }
-        under = under || pal.bg;
-      }
+      var under = ownBg || parentBg;
       bgOf.set(el, under);
 
       var fg = parse(cs.color);
@@ -233,10 +299,19 @@
       }
 
       if (!safe) {
-        var width = parseFloat(cs.borderTopWidth) || parseFloat(cs.borderBottomWidth) ||
+        var edge = parseFloat(cs.borderTopWidth) || parseFloat(cs.borderBottomWidth) ||
           parseFloat(cs.borderLeftWidth) || parseFloat(cs.borderRightWidth) || 0;
-        if (width > 0) props.push('border-color:' + pal.border + '!important');
-        if (String(cs.boxShadow || '').indexOf('rgb') >= 0 && cs.boxShadow !== 'none') {
+        if (edge > 0) props.push('border-color:' + pal.border + '!important');
+
+        var shadow = String(cs.boxShadow || '');
+        var hadShadow = shadow !== 'none' && shadow.indexOf('rgb') >= 0;
+        var card = !!ownBg && !accentBg;
+        /* Карточка без рамки теряла границы — рисуем обводку внутренней
+           тенью: она не занимает места и не сдвигает верстку. */
+        if (card && edge <= 0) {
+          props.push('box-shadow:inset 0 0 0 1px ' + pal.border +
+            ',0 10px 30px rgba(0,0,0,.18)!important');
+        } else if (hadShadow) {
           props.push('box-shadow:0 10px 30px rgba(0,0,0,.28)!important');
         }
       }
@@ -259,6 +334,10 @@
     if (!safe) text += 'html,body{background-image:none!important}';
     text += '::selection{background:' + pal.accent + ';color:' + readable(pal.accent, pal) + '}' +
       '::-webkit-scrollbar-thumb{background:' + pal.border + '}';
+    if (!safe) {
+      /* Разделители секций тоже должны быть видны. */
+      text += 'hr{border-color:' + pal.border + '!important}';
+    }
     rules.forEach(function (body, idx) {
       text += '[' + GROUP + '="' + idx + '"]{' + body + '}';
     });
@@ -299,6 +378,7 @@
   try { chosen = String(localStorage.getItem(KEY) || ''); } catch (e) { chosen = ''; }
 
   function palById(id) {
+    if (id === OWN_ID) return ownPalette();
     for (var i = 0; i < PALETTES.length; i++) {
       if (PALETTES[i].id === id) return PALETTES[i];
     }
@@ -342,8 +422,88 @@
   /* --- Панель выбора -------------------------------------------- */
   var button = null;
   var panel = null;
+  var ownRow = null;
+  var ownDots = null;
 
   function css(el, text) { el.setAttribute('style', text); }
+
+  function rowStyle(on) {
+    return 'display:flex;align-items:center;gap:10px;width:100%;margin:0 0 8px;padding:8px 10px;' +
+      'border-radius:12px;border:1px solid ' + (on ? '#5b8def' : '#242a34') + ';' +
+      'background:#171b22;color:#e8ecf2;cursor:pointer;text-align:left';
+  }
+  function dotsFor(pal) {
+    var dots = document.createElement('span');
+    css(dots, 'display:inline-flex;gap:4px;flex:0 0 auto');
+    [pal.bg, pal.accent, pal.accent2].forEach(function (tone) {
+      var dot = document.createElement('span');
+      css(dot, 'width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:' + tone);
+      dots.appendChild(dot);
+    });
+    return dots;
+  }
+
+  function buildOwnSection() {
+    var box = document.createElement('div');
+    css(box, 'margin:12px 0 8px;padding:10px;border-radius:12px;border:1px solid #242a34;background:#0f1319');
+
+    var title = document.createElement('div');
+    css(title, 'font-weight:600;margin:0 0 8px');
+    title.textContent = '\u0421\u0432\u043e\u0438 \u0446\u0432\u0435\u0442\u0430';
+    box.appendChild(title);
+
+    var own = readOwn();
+    OWN_FIELDS.forEach(function (field) {
+      var line = document.createElement('label');
+      css(line, 'display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 7px;font-size:13px;color:#c7cedb');
+      var name = document.createElement('span');
+      name.textContent = field.label;
+      line.appendChild(name);
+      var input = document.createElement('input');
+      input.setAttribute('type', 'color');
+      input.value = own[field.key];
+      css(input, 'width:44px;height:26px;padding:0;border:1px solid #2a313c;border-radius:7px;background:#171b22;cursor:pointer');
+      input.addEventListener('input', function () {
+        var data = readOwn();
+        data[field.key] = String(input.value || '').toLowerCase();
+        writeOwn(data);
+        refreshOwnDots();
+        if (chosen === OWN_ID) paint(true);
+      });
+      line.appendChild(input);
+      box.appendChild(line);
+    });
+
+    var hint = document.createElement('div');
+    css(hint, 'color:#8b95a5;font-size:12px;margin:2px 0 10px');
+    hint.textContent = '\u041e\u0441\u0442\u0430\u043b\u044c\u043d\u044b\u0435 \u0442\u043e\u043d\u0430 \u0438 \u0433\u0440\u0430\u043d\u0438\u0446\u044b \u043f\u043e\u0434\u0431\u0435\u0440\u0443\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438.';
+    box.appendChild(hint);
+
+    ownRow = document.createElement('button');
+    ownRow.setAttribute('type', 'button');
+    ownRow.setAttribute('data-dl-pal-id', OWN_ID);
+    css(ownRow, rowStyle(chosen === OWN_ID));
+    ownDots = dotsFor(ownPalette());
+    ownRow.appendChild(ownDots);
+    var label = document.createElement('span');
+    label.textContent = '\u041f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u044c \u0441\u0432\u043e\u0438 \u0446\u0432\u0435\u0442\u0430';
+    ownRow.appendChild(label);
+    ownRow.addEventListener('click', function () {
+      chosen = OWN_ID;
+      try { localStorage.setItem(KEY, chosen); } catch (e) {}
+      paint(true);
+      refreshMarks();
+    });
+    box.appendChild(ownRow);
+
+    return box;
+  }
+  function refreshOwnDots() {
+    if (!ownRow || !ownDots) return;
+    var fresh = dotsFor(ownPalette());
+    ownRow.replaceChild(fresh, ownDots);
+    ownDots = fresh;
+  }
 
   function buildPanel() {
     panel = document.createElement('div');
@@ -363,21 +523,14 @@
     note.textContent = '\u041f\u0440\u0438\u043c\u0435\u043d\u044f\u0435\u0442\u0441\u044f \u0441\u0440\u0430\u0437\u0443 \u043a \u0442\u0435\u043a\u0443\u0449\u0435\u043c\u0443 \u0441\u0430\u0439\u0442\u0443 \u0432 \u043f\u0440\u0435\u0434\u043f\u0440\u043e\u0441\u043c\u043e\u0442\u0440\u0435.';
     panel.appendChild(note);
 
+    panel.appendChild(buildOwnSection());
+
     PALETTES.forEach(function (pal) {
       var row = document.createElement('button');
       row.setAttribute('type', 'button');
-      css(row,
-        'display:flex;align-items:center;gap:10px;width:100%;margin:0 0 8px;padding:8px 10px;' +
-        'border-radius:12px;border:1px solid ' + (chosen === pal.id ? '#5b8def' : '#242a34') + ';' +
-        'background:#171b22;color:#e8ecf2;cursor:pointer;text-align:left');
-      var dots = document.createElement('span');
-      css(dots, 'display:inline-flex;gap:4px;flex:0 0 auto');
-      [pal.bg, pal.accent, pal.accent2].forEach(function (tone) {
-        var dot = document.createElement('span');
-        css(dot, 'width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:' + tone);
-        dots.appendChild(dot);
-      });
-      row.appendChild(dots);
+      row.setAttribute('data-dl-pal-id', pal.id);
+      css(row, rowStyle(chosen === pal.id));
+      row.appendChild(dotsFor(pal));
       var label = document.createElement('span');
       label.textContent = pal.name;
       row.appendChild(label);
@@ -387,7 +540,6 @@
         paint(true);
         refreshMarks();
       });
-      row.setAttribute('data-dl-pal-id', pal.id);
       panel.appendChild(row);
     });
 
