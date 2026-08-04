@@ -3,19 +3,22 @@
    Кнопка «Палитра» рядом с областью предпросмотра открывает набор готовых
    цветовых схем. Выбор сразу перекрашивает сайт внутри #pvFrame — и в шаблонах,
    и в конструкторе. Разметка сайта заранее неизвестна, поэтому цвета не
-   угадываются по классам, а берутся из вычисленных стилей: тёмные фоны
-   становятся фоном палитры, насыщенные — акцентом, текст подбирается по
-   контрасту к новому фону. Любой выбор обратим: «Без палитры» возвращает
-   исходные цвета, так как старые inline-стили сохраняются рядом.
+   угадываются по классам, а берутся из вычисленных стилей.
 
-   Почему в сохранённом проекте фон раньше не менялся: цвета палитры
-   запекались в сохраняемый HTML — вместе с inline-стилями !important и со
-   служебным тегом <style>. При открытии проекта слой видел свой тег
-   на месте и считал, что перекрашивать нечего. Теперь:
-     • в теге стилей записан id палитры, и при несовпадении сайт перекрашивается;
-     • перед применением следы любой прежней палитры полностью снимаются;
-     • window.dlStripPalette(root) убирает цвета палитры перед сохранением,
-       чтобы в проекте лежали исходные цвета, а палитра накладывалась сверху. */
+   Три правила, из-за которых раньше были баги:
+
+   1) Правятся только цветовые свойства, и откат убирает именно их. Раньше
+      целиком запоминался и возвращался атрибут style, а в нём живут и размеры
+      блоков, и кегль текста, выставленные в режиме дизайна — смена палитры
+      возвращала устаревший слепок и блоки съезжали к левому краю.
+   2) Сначала чтение всех вычисленных стилей, потом одна волна записи.
+      Смешанный порядок давал гонку, из-за которой второе нажатие «чинило» вид.
+   3) Переменная CSS переопределяется только если её текущее значение — цвет.
+      Шаблоны иногда держат в --border или --panel целые сокращённые записи
+      или размеры; подмена их цветом ломала раскладку.
+
+   «Без палитры» всегда возвращает исходные цвета. window.dlStripPalette(root)
+   снимает палитру перед сохранением, чтобы цвета не запекались в проект. */
 (function () {
   'use strict';
   if (window.__dlPalettes) return;
@@ -28,6 +31,7 @@
   var STYLE_MARK = 'data-dl-pal-style';
   var VAR_MARK = '--dl-bg:';
   var MAX_NODES = 5000;
+  var COLOR_WORDS = ['transparent', 'currentcolor', 'inherit', 'initial', 'unset', 'white', 'black'];
 
   var PALETTES = [
     { id: 'sunfire', name: '\u0416\u0451\u043b\u0442\u044b\u0439 \u0438 \u043a\u0440\u0430\u0441\u043d\u044b\u0439', bg: '#1b0f08', surface: '#2a1710', surface2: '#3a2115', text: '#ffeccd', muted: '#d7a273', accent: '#ffc93c', accent2: '#e63946', border: '#4b2b18' },
@@ -77,30 +81,62 @@
   function readable(hex, pal) {
     return lum(hexRgb(hex)) > 0.55 ? '#10141a' : pal.text;
   }
-
-  /* --- Перекраска документа --------------------------------------- */
-  function setProp(el, name, value) {
-    el.style.setProperty(name, value, 'important');
+  function colorish(value) {
+    var text = String(value || '').trim().toLowerCase();
+    if (!text) return true;
+    if (text.indexOf(' ') >= 0 && text.indexOf('(') < 0) return false;
+    if (text.charAt(0) === '#') return true;
+    if (text.indexOf('rgb') === 0 || text.indexOf('hsl') === 0) return true;
+    return COLOR_WORDS.indexOf(text) >= 0;
   }
-  function remember(el) {
-    if (el.hasAttribute(MARK)) return;
+
+  /* --- Аккуратная правка только цветовых свойств ---------------- */
+  function savedMap(el) {
+    var raw = el.getAttribute(KEEP);
+    if (!raw) return {};
+    if (raw.charAt(0) !== '{') return { __legacy: raw };
+    try {
+      var data = JSON.parse(raw);
+      return data && typeof data === 'object' ? data : {};
+    } catch (e) { return {}; }
+  }
+  function touch(el, prop, value) {
+    var saved = savedMap(el);
+    if (!(prop in saved)) {
+      var was = el.style.getPropertyValue(prop);
+      if (was && el.style.getPropertyPriority(prop)) was += ' !important';
+      saved[prop] = was || '';
+    }
     el.setAttribute(MARK, '1');
-    el.setAttribute(KEEP, el.getAttribute('style') || '');
+    el.setAttribute(KEEP, JSON.stringify(saved));
+    el.style.setProperty(prop, value, 'important');
+  }
+  function untouch(el) {
+    var saved = savedMap(el);
+    if (saved.__legacy !== undefined) {
+      /* Старый формат из ранее сохранённых проектов. */
+      if (saved.__legacy) el.setAttribute('style', saved.__legacy);
+      else el.removeAttribute('style');
+    } else {
+      Object.keys(saved).forEach(function (prop) {
+        el.style.removeProperty(prop);
+        var was = String(saved[prop] || '');
+        if (!was) return;
+        var bang = / !important$/i.test(was);
+        el.style.setProperty(prop, was.replace(/ !important$/i, ''), bang ? 'important' : '');
+      });
+      if (!el.getAttribute('style')) el.removeAttribute('style');
+    }
+    el.removeAttribute(MARK);
+    el.removeAttribute(KEEP);
   }
 
-  /* Снятие следов палитры с любого корня: и у живого документа,
-     и у копии перед сохранением. */
+  /* Снятие следов палитры с живого документа или с копии перед сохранением. */
   function strip(root) {
     if (!root || !root.querySelectorAll) return root;
     var list;
     try { list = root.querySelectorAll('[' + MARK + ']'); } catch (e) { list = []; }
-    Array.prototype.forEach.call(list, function (el) {
-      var old = el.getAttribute(KEEP) || '';
-      if (old) el.setAttribute('style', old);
-      else el.removeAttribute('style');
-      el.removeAttribute(MARK);
-      el.removeAttribute(KEEP);
-    });
+    Array.prototype.forEach.call(list, function (el) { untouch(el); });
     var styles;
     try { styles = root.querySelectorAll('style'); } catch (e) { styles = []; }
     Array.prototype.forEach.call(styles, function (node) {
@@ -112,14 +148,31 @@
   }
   window.dlStripPalette = strip;
 
-  function baseStyle(pal) {
-    return ':root{--dl-bg:' + pal.bg + ';--dl-surface:' + pal.surface + ';--dl-text:' + pal.text +
-      ';--dl-accent:' + pal.accent + ';--dl-accent-2:' + pal.accent2 + ';--dl-border:' + pal.border +
-      ';--bg:' + pal.bg + ';--background:' + pal.bg + ';--surface:' + pal.surface +
-      ';--card:' + pal.surface + ';--panel:' + pal.surface + ';--text:' + pal.text +
-      ';--fg:' + pal.text + ';--muted:' + pal.muted + ';--accent:' + pal.accent +
-      ';--primary:' + pal.accent + ';--secondary:' + pal.accent2 + ';--border:' + pal.border + '}' +
-      'html,body{background:' + pal.bg + '!important;background-image:none!important;color:' + pal.text + '!important}' +
+  function baseStyle(doc, pal) {
+    var vars = [
+      ['--dl-bg', pal.bg], ['--dl-surface', pal.surface], ['--dl-text', pal.text],
+      ['--dl-accent', pal.accent], ['--dl-accent-2', pal.accent2], ['--dl-border', pal.border],
+      ['--bg', pal.bg], ['--background', pal.bg], ['--surface', pal.surface],
+      ['--card', pal.surface], ['--panel', pal.surface], ['--text', pal.text],
+      ['--fg', pal.text], ['--muted', pal.muted], ['--accent', pal.accent],
+      ['--primary', pal.accent], ['--secondary', pal.accent2], ['--border', pal.border]
+    ];
+    var view = null;
+    try { view = doc.defaultView; } catch (e) { view = null; }
+    var root = null;
+    if (view && view.getComputedStyle) {
+      try { root = view.getComputedStyle(doc.documentElement); } catch (e) { root = null; }
+    }
+    var body = [];
+    vars.forEach(function (pair) {
+      var now = '';
+      if (root) {
+        try { now = root.getPropertyValue(pair[0]); } catch (e) { now = ''; }
+      }
+      /* Не трогаем переменные, в которых лежит не цвет (размер, сокращённая запись). */
+      if (colorish(now)) body.push(pair[0] + ':' + pair[1]);
+    });
+    return ':root{' + body.join(';') + '}' +
       '::selection{background:' + pal.accent + ';color:' + readable(pal.accent, pal) + '}' +
       '::-webkit-scrollbar-thumb{background:' + pal.border + '}';
   }
@@ -131,21 +184,15 @@
     var style = doc.createElement('style');
     style.id = STYLE_ID;
     style.setAttribute(STYLE_MARK, pal.id);
-    style.textContent = baseStyle(pal);
+    style.textContent = baseStyle(doc, pal);
     (doc.head || doc.documentElement).appendChild(style);
-
-    /* Фон самого body часто прибит inline в сохранённом проекте. */
-    [doc.documentElement, doc.body].forEach(function (el) {
-      if (!el) return;
-      remember(el);
-      setProp(el, 'background-color', pal.bg);
-      setProp(el, 'background-image', 'none');
-      setProp(el, 'color', pal.text);
-    });
 
     var nodes;
     try { nodes = doc.body.querySelectorAll('*'); } catch (e) { return false; }
     var limit = Math.min(nodes.length, MAX_NODES);
+
+    /* --- Фаза 1: только чтение вычисленных стилей ---------------- */
+    var plan = [];
     var bgOf = new WeakMap();
     bgOf.set(doc.body, pal.bg);
 
@@ -159,7 +206,9 @@
       try { cs = el.ownerDocument.defaultView.getComputedStyle(el); } catch (e) { continue; }
       if (!cs) continue;
 
+      var props = [];
       var ownBg = null;
+
       var bg = parse(cs.backgroundColor);
       if (bg && bg.a > 0.05) {
         var bgSat = sat(bg);
@@ -173,15 +222,13 @@
         } else {
           ownBg = pal.surface2;
         }
-        remember(el);
-        setProp(el, 'background-color', ownBg);
+        props.push(['background-color', ownBg]);
       }
 
       var image = String(cs.backgroundImage || '');
       if (image.indexOf('gradient') >= 0) {
-        remember(el);
-        setProp(el, 'background-image',
-          'linear-gradient(135deg,' + pal.accent + ',' + pal.accent2 + ')');
+        props.push(['background-image',
+          'linear-gradient(135deg,' + pal.accent + ',' + pal.accent2 + ')']);
         ownBg = ownBg || pal.accent;
       }
 
@@ -207,21 +254,30 @@
         } else {
           tone = readable(under, pal);
         }
-        remember(el);
-        setProp(el, 'color', tone);
+        props.push(['color', tone]);
       }
 
       var width = parseFloat(cs.borderTopWidth) || parseFloat(cs.borderBottomWidth) ||
         parseFloat(cs.borderLeftWidth) || parseFloat(cs.borderRightWidth) || 0;
-      if (width > 0) {
-        remember(el);
-        setProp(el, 'border-color', pal.border);
-      }
+      if (width > 0) props.push(['border-color', pal.border]);
+
       if (String(cs.boxShadow || '').indexOf('rgb') >= 0 && cs.boxShadow !== 'none') {
-        remember(el);
-        setProp(el, 'box-shadow', '0 10px 30px rgba(0,0,0,.28)');
+        props.push(['box-shadow', '0 10px 30px rgba(0,0,0,.28)']);
       }
+
+      if (props.length) plan.push({ el: el, props: props });
     }
+
+    /* --- Фаза 2: одна волна записи, размеры блоков не трогаем ------ */
+    [doc.documentElement, doc.body].forEach(function (el) {
+      if (!el) return;
+      touch(el, 'background-color', pal.bg);
+      touch(el, 'background-image', 'none');
+      touch(el, 'color', pal.text);
+    });
+    plan.forEach(function (item) {
+      item.props.forEach(function (pair) { touch(item.el, pair[0], pair[1]); });
+    });
     return true;
   }
 
@@ -248,18 +304,25 @@
     if (!node) return null;
     return node.getAttribute(STYLE_MARK) || '';
   }
+  function repaint(doc, pal) {
+    var view = null;
+    try { view = doc.defaultView; } catch (e) { view = null; }
+    if (view && view.requestAnimationFrame) {
+      view.requestAnimationFrame(function () { apply(doc, pal); });
+    } else {
+      apply(doc, pal);
+    }
+  }
   function paint(force) {
     var doc = frameDoc();
     if (!doc || !doc.body) return;
     var pal = palById(chosen);
     if (!pal) {
-      /* Палитра выключена, а в сохранённом HTML остались старые цвета. */
       if (appliedId(doc) !== null) strip(doc);
       return;
     }
-    /* Главное: если в документе лежит ДРУГАЯ палитра — перекрашиваем. */
     if (!force && appliedId(doc) === pal.id) return;
-    apply(doc, pal);
+    repaint(doc, pal);
   }
   function clear() {
     var doc = frameDoc();
