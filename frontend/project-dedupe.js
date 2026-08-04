@@ -1,34 +1,30 @@
 /* Лишние копии проектов и возврат удалённых после перезагрузки.
 
    На сервере POST /api/projects работает так: есть id в теле — обновляет
-   существующий проект, нет id — ВСЕГДА создаёт новый. Автосейв нового
-   сайта шлёт запрос без id, потому каждое срабатывание таймера до первого
-   ручного сохранения оставляло в базе ещё один проект с тем же именем.
-   Удаляешь один — остальные всплывают после перезагрузки.
+   существующий проект, нет id — ВСЕГДА создаёт новый. Именно на этом
+   строятся обе болезни: лишние копии и возврат удалённых сайтов.
 
-   Что делает этот слой:
+   Почему удалённые сайты возвращались снова. Прежний запрет держался
+   на имени сайта и только одну минуту. Удалённый проект оставался открыт
+   в редакторе, и первый же автосейв после этой минуты (или после
+   перезагрузки страницы, или при малейшей разнице в названии) уходил
+   без id и создавал тот же сайт заново — уже с другим id, который ни в одном
+   стоп-листе не числится.
 
-   1. Первый запрос без id пропускается, а id из ответа запоминается. Все
-      следующие автосейвы того же сайта получают этот id в тело запроса и
-      обновляют запись вместо создания копии.
+   Теперь запрет держится на отпечатке самого сайта (короткая контрольная
+   сумма его HTML), а не на имени и не на таймере:
 
-   2. Удалённые id хранятся в localStorage, а не только в памяти вкладки.
-      Раньше стоп-лист умирал вместе со страницей, и перезагрузка снова
-      показывала всё, что успел насоздавать автосейв.
+     • при сохранении запоминается отпечаток каждого проекта;
+     • при удалении отпечаток помечается как удалённый — на 30 дней,
+       а не на минуту, и перезагрузка его не стирает;
+     • любое создание без id с таким же отпечатком глохнет.
 
-   3. При удалении проекта убираются и его автокопии — НО только те, что этот
-      же слой сам и записал как автосозданные с тем же именем. Чужие сайты с
-      похожими названиями не трогаются: удалять лишнее опаснее, чем оставить.
+   Новый сайт с тем же названием при этом создаётся свободно: у него другое
+   содержимое, а значит другой отпечаток. Никакие чужие сайты не
+   удаляются: убираются только автокопии, которые этот же слой сам и
+   записал как автосозданные.
 
-   4. Список с сервера чистится от удалённых id, если запрос на удаление
-      не дошёл, и удаление повторяется тихо в фоне.
-
-   5. Имя удалённого сайта ненадолго помечается как удалённое. Это главная
-      причина возврата сайта на главную: удалённый проект оставался открыт
-      в редакторе, связка имя→id вместе с ним стиралась, и следующий автосейв
-      уходил без id — то есть создавал тот же сайт заново, уже с другим id,
-      который ни в одном стоп-листе не числится. Окно короткое, чтобы новый
-      сайт с тем же названием можно было создать сразу после. */
+   Ничего не затемняется и не блокируется в интерфейсе: все кнопки рабочие. */
 (function () {
   'use strict';
   if (window.__dlProjectDedupe) return;
@@ -36,10 +32,11 @@
 
   var AUTO_KEY = 'dl_auto_projects';    // что создал автосейв: id -> {name, at}
   var DEAD_KEY = 'dl_dead_projects';    // удалённые id -> метка времени
-  var NAME_KEY = 'dl_dead_names';       // имена удалённых -> метка времени
   var LIVE_KEY = 'dl_live_project';     // имя -> id открытого сейчас сайта
-  var DEAD_MS = 30 * 24 * 3600 * 1000;  // сколько помним удалённые id
-  var NAME_MS = 60000;                  // сколько глушим воскрешение по имени
+  var SIG_KEY = 'dl_proj_sigs';         // id -> отпечаток последнего сохранения
+  var DEAD_SIG_KEY = 'dl_dead_sigs';    // отпечатки удалённых сайтов
+  var OLD_NAME_KEY = 'dl_dead_names';   // наследие: запрет по имени, больше не нужен
+  var DEAD_MS = 30 * 24 * 3600 * 1000;  // сколько помним удалённое
 
   /* ------------------------------------------------------------ хранение */
 
@@ -55,42 +52,50 @@
     try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) { /* переполнено */ }
   }
 
-  function dead() {
-    var data = read(DEAD_KEY);
+  function sweepOld(key) {
+    var data = read(key);
     var now = Date.now();
     var changed = false;
-    Object.keys(data).forEach(function (id) {
-      if (now - (data[id] || 0) > DEAD_MS) { delete data[id]; changed = true; }
+    Object.keys(data).forEach(function (item) {
+      if (now - (data[item] || 0) > DEAD_MS) { delete data[item]; changed = true; }
     });
-    if (changed) write(DEAD_KEY, data);
+    if (changed) write(key, data);
     return data;
   }
+
+  function dead() { return sweepOld(DEAD_KEY); }
+  function deadSigs() { return sweepOld(DEAD_SIG_KEY); }
 
   function isDead(id) {
     return !!id && Object.prototype.hasOwnProperty.call(dead(), id);
   }
-
-  function deadNames() {
-    var data = read(NAME_KEY);
-    var now = Date.now();
-    var changed = false;
-    Object.keys(data).forEach(function (name) {
-      if (now - (data[name] || 0) > NAME_MS) { delete data[name]; changed = true; }
-    });
-    if (changed) write(NAME_KEY, data);
-    return data;
+  function isDeadSig(sig) {
+    return !!sig && Object.prototype.hasOwnProperty.call(deadSigs(), sig);
   }
 
-  function isDeadName(name) {
-    if (!name) return false;
-    return Object.prototype.hasOwnProperty.call(deadNames(), name);
+  /* Короткая контрольная сумма содержимого сайта. */
+  function sigOf(body) {
+    var html = body && typeof body.html === 'string' ? body.html : '';
+    if (html.length < 200) return '';
+    var hash = 5381;
+    for (var i = 0; i < html.length; i++) {
+      hash = ((hash * 33) ^ html.charCodeAt(i)) >>> 0;
+    }
+    return String(html.length) + '.' + hash.toString(36);
   }
 
-  function markDeadName(name) {
-    if (!name) return;
-    var data = deadNames();
-    data[name] = Date.now();
-    write(NAME_KEY, data);
+  function rememberSig(id, sig) {
+    if (!id || !sig) return;
+    var data = read(SIG_KEY);
+    data[id] = sig;
+    write(SIG_KEY, data);
+  }
+
+  function markDeadSig(sig) {
+    if (!sig) return;
+    var data = deadSigs();
+    data[sig] = Date.now();
+    write(DEAD_SIG_KEY, data);
   }
 
   function markDead(id) {
@@ -99,25 +104,32 @@
     data[id] = Date.now();
     write(DEAD_KEY, data);
 
+    /* Отпечаток удалённого сайта — главная защита от воскрешения. */
+    var sigs = read(SIG_KEY);
+    if (sigs[id]) {
+      markDeadSig(sigs[id]);
+      delete sigs[id];
+      write(SIG_KEY, sigs);
+    }
+
     var auto = read(AUTO_KEY);
     delete auto[id];
     write(AUTO_KEY, auto);
 
     var live = read(LIVE_KEY);
     Object.keys(live).forEach(function (name) {
-      if (live[name] === id) {
-        delete live[name];
-        // Связка имя→id ушла вместе с проектом, а редактор об этом не знает и
-        // продолжает автосохранение. Без этой пометки следующий автосейв
-        // воскрешает сайт под новым id.
-        markDeadName(name);
-      }
+      if (live[name] === id) delete live[name];
     });
     write(LIVE_KEY, live);
   }
 
   window.__dlDeadProjects = dead;
-  window.__dlDeadNames = deadNames;
+  window.__dlDeadSigs = deadSigs;
+
+  /* Старый запрет по имени больше не используется: он мешал создавать
+     новый сайт с тем же названием и при этом не спасал от воскрешения. */
+  try { localStorage.removeItem(OLD_NAME_KEY); } catch (e) { /* нет доступа */ }
+  window.__dlDeadNames = function () { return {}; };
 
   /* ----------------------------------------------------------- тело запроса */
 
@@ -170,7 +182,7 @@
   }
 
   function sweep(list) {
-    // Если сервер всę1 ещё отдаёт удалённое — добиваем тихо в фоне.
+    // Если сервер всё ещё отдаёт удалённое — добиваем тихо в фоне.
     list.forEach(function (item) {
       var id = item && item.id;
       if (!id || !isDead(id)) return;
@@ -198,7 +210,7 @@
     var one = url.match(/\/api\/projects\/([A-Za-z0-9_-]{1,64})/);
     var many = /\/api\/projects(\?|$)/.test(url);
 
-    /* Удаление: запоминаем навсегда и чистим автокопии. */
+    /* Удаление: запоминаем надолго и чистим автокопии. */
     if (method === 'DELETE' && one) {
       var pid = one[1];
       var auto = read(AUTO_KEY);
@@ -214,7 +226,6 @@
         out.then(function (response) {
           if (response && (response.ok || response.status === 404)) {
             markDead(pid);
-            if (copyName) markDeadName(copyName);
             removeCopies(copyName);
           }
         }, function () { });
@@ -228,15 +239,17 @@
       if (body) {
         var id = typeof body.id === 'string' ? body.id : '';
         var name = nameOf(body);
+        var sig = sigOf(body);
 
         if (id && isDead(id)) {
           // Отложенный автосейв уже удалённого сайта.
           return goneResponse();
         }
 
-        if (!id && isDeadName(name)) {
-          // Автосейв сайта, который только что удалили, но он остался открыт
-          // в редакторе. Пропустить — значит создать его заново под новым id.
+        if (!id && isDeadSig(sig)) {
+          // Сайт только что удалили, но он остался открыт в редакторе и
+          // продолжает автосохраняться. Пропустить — значит создать его
+          // заново под новым id.
           return goneResponse();
         }
 
@@ -244,6 +257,7 @@
           var known = read(LIVE_KEY)[name];
           if (known && !isDead(known)) {
             // Второй и дальнейшие автосейвы того же сайта: обновляем, не плодим.
+            rememberSig(known, sig);
             return original.call(this, input, withId(init, body, known));
           }
           var result = original.apply(this, arguments);
@@ -259,22 +273,19 @@
                 var made = read(AUTO_KEY);
                 made[freshId] = { name: name, at: Date.now() };
                 write(AUTO_KEY, made);
+                rememberSig(freshId, sig);
               }, function () { });
             }, function () { });
           }
           return result;
         }
 
-        if (id && name) {
-          var live2 = read(LIVE_KEY);
-          live2[name] = id;
-          write(LIVE_KEY, live2);
-          // Сайт с таким именем снова живой и сохраняется по своему id —
-          // запрет по имени больше не нужен.
-          if (isDeadName(name)) {
-            var names = deadNames();
-            delete names[name];
-            write(NAME_KEY, names);
+        if (id) {
+          rememberSig(id, sig);
+          if (name) {
+            var live2 = read(LIVE_KEY);
+            live2[name] = id;
+            write(LIVE_KEY, live2);
           }
         }
       }
