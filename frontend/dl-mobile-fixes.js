@@ -1,24 +1,20 @@
 /* Точечные исправления поверх всех остальных слоёв:
    1) кнопка «Установить приложение» убрана;
    2) в списке моделей вместо значка могло стоять слово undefined;
-   3) у вошедшего пользователя в шапке и меню стоит ровно одна кнопка «Профиль»;
+   3) у вошедшего пользователя кнопка «Профиль» стоит там, где была
+      кнопка входа/выхода — то есть в бургер-меню, и больше нигде;
+      свою кнопку в шапку слой не добавляет — именно из-за этого
+      появлялся второй «Профиль» на всю ширину экрана;
    4) в списке моделей нет названий провайдеров — только FREE и PRO;
    5) на телефоне всплывающие окна делаются непрозрачными; на компьютере оформление не меняется.
 
-   СОСТОЯНИЕ ВХОДА — три значения, а не два.
-   Прошлая версия считала человека вошедшим ТОЛЬКО после успешного
-   /api/auth/me. Пока ответ шёл (или если сервис ответил 500/502/503),
-   кнопка «Войти» уже убиралась, а «Профиль» ещё не рисовался — в шапке
-   не оставалось ничего. Теперь:
+   СОСТОЯНИЕ ВХОДА — три значения, а не два:
      • есть токен и сервер не сказал 401 — человек считается вошедшим;
      • 401/403 — сессия закончилась, кэш ника чистится;
      • 500/502/503 или обрыв сети — состояние НЕ меняется.
-   И если на странице вообще нет ни кнопки входа, ни выхода, кнопка
-   «Профиль» добавляется сама — в шапку или в открытое меню.
 
-   Нет постоянного скана страницы: прежние setInterval(run,1500) и
-   setInterval(check,500) обходили весь DOM вместе с текстовыми узлами.
-   Работа идёт по событиям: вход, выход, клик, новые узлы, поворот. */
+   Нет постоянного скана страницы: работа идёт по событиям — вход,
+   выход, клик, новые узлы, поворот экрана. */
 (function () {
   'use strict';
   if (window.__dlMobileFixes) return;
@@ -43,9 +39,6 @@
   var style = document.createElement('style');
   style.textContent =
     '[' + MARK + ']{display:none!important}' +
-    '[' + ACCT + '="made"]{display:inline-flex;align-items:center;justify-content:center;' +
-    'padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.18);' +
-    'background:rgba(255,255,255,.08);color:inherit;font:inherit;cursor:pointer}' +
     '@media (max-width:' + PHONE_MAX + 'px){' +
     '[' + SOLID + ']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}' +
     '}';
@@ -263,43 +256,14 @@
     });
   }
 
-  /* Страховка: если после всех замен ни одной кнопки аккаунта не
-     осталось — ставим свою в шапку или в открытое меню. */
-  function visible(el) {
-    try {
-      var box = el.getBoundingClientRect();
-      return box.width > 0 && box.height > 0;
-    } catch (e) { return false; }
-  }
-  function accountHost() {
-    var spots = document.querySelectorAll(
-      '[' + ACCT + '="host"],header nav,header,nav,[class*="drawer"],[class*="burger"],' +
-      '[class*="menu"],[id*="menu"],[class*="topbar"]'
-    );
-    for (var i = 0; i < spots.length; i++) {
-      if (visible(spots[i])) return spots[i];
-    }
-    return null;
-  }
-  function ensureProfileButton() {
-    if (!signedIn()) {
-      var made = document.querySelectorAll('[' + ACCT + '="made"]');
-      Array.prototype.forEach.call(made, function (el) {
-        if (el.parentElement) el.parentElement.removeChild(el);
-      });
-      return;
-    }
-    var exists = document.querySelector('[' + ACCT + '="open"],[' + ACCT + '="made"]');
-    if (exists && visible(exists)) return;
-    if (exists && exists.parentElement) exists.parentElement.removeChild(exists);
-    var host = accountHost();
-    if (!host) return;
-    var button = document.createElement('button');
-    button.type = 'button';
-    button.setAttribute(ACCT, 'made');
-    button.textContent = '\u041f\u0440\u043e\u0444\u0438\u043b\u044c';
-    button.addEventListener('click', openProfile);
-    host.appendChild(button);
+  /* Свою кнопку слой больше не добавляет. Если от прошлой версии
+     осталась вторая кнопка в шапке — убираем её. */
+  function dropExtraProfile() {
+    var made;
+    try { made = document.querySelectorAll('[' + ACCT + '="made"]'); } catch (e) { return; }
+    Array.prototype.forEach.call(made, function (el) {
+      if (el.parentElement) el.parentElement.removeChild(el);
+    });
   }
 
   /* --- Кнопки входа у вошедшего пользователя ----------------------- */
@@ -320,7 +284,7 @@
     var list;
     try { list = document.querySelectorAll('button,a,[role="button"]'); } catch (e) { return; }
     Array.prototype.forEach.call(list, function (el) {
-      if (el.getAttribute(ACCT) === 'open' || el.getAttribute(ACCT) === 'made') return;
+      if (el.getAttribute(ACCT) === 'open') return;
       if (el.hasAttribute(MARK) || inProfilePanel(el)) return;
       var value = text(el).replace(/\s*[\u2192>\u203a]+$/, '').trim();
       if (SIGNIN.indexOf(value) < 0) return;
@@ -345,7 +309,7 @@
     try { list = document.querySelectorAll('a,button,li,[role="button"],[role="menuitem"]'); } catch (e) { return; }
     Array.prototype.forEach.call(list, function (el) {
       if (el.hasAttribute(MARK)) return;
-      if (el.getAttribute(ACCT) === 'open' || el.getAttribute(ACCT) === 'made') return;
+      if (el.getAttribute(ACCT) === 'open') return;
       if (inProfilePanel(el)) return;
       var value = text(el);
       if (value.length > 40) return;
@@ -510,7 +474,7 @@
     accountButton();
     dropSignIn();
     dropNickRow();
-    ensureProfileButton();
+    dropExtraProfile();
     unsolidify();
     solidify();
   }
