@@ -1981,13 +1981,35 @@ function heroPickModel(k){
 
 /* ---------- saved projects (localStorage) ---------- */
 var PROJ_KEY='dl_projects_v1';var projId=null;var autosaveT=null;
+/* Удалённая карточка «Недавних» возвращалась сразу же после удаления.
+
+   Раздел «Недавние сайты» хранится только в браузере, а deleteProject()
+   вычёркивал запись из списка и на этом всё. Сайт, открытый в редакторе,
+   продолжал автосохраняться и записывал себя обратно: с тем же id, а после
+   перезагрузки страницы — уже с новым, потому что projId жил только в памяти
+   и терялся вместе с ней.
+
+   Поэтому теперь id открытого сайта переживает перезагрузку, а удаление его
+   карточки глушит автосохранение. Ручное «Сохранить» запрет снимает —
+   это прямая воля человека, а не фоновый автосейв. */
+var OPEN_KEY='dl_open_project_v1';var OPEN_DEAD_KEY='dl_open_deleted_v1';
+function projStoreGet(key){try{return localStorage.getItem(key)||'';}catch(e){return '';}}
+function projStoreSet(key,value){try{if(value)localStorage.setItem(key,value);else localStorage.removeItem(key);}catch(e){}}
+projId=projStoreGet(OPEN_KEY)||null;
+var projDead=projStoreGet(OPEN_DEAD_KEY)==='1';
+function setProjId(id){projId=id||null;projStoreSet(OPEN_KEY,projId);}
+function setProjDead(on){projDead=!!on;projStoreSet(OPEN_DEAD_KEY,projDead?'1':'');}
 function loadProjects(){try{var a=JSON.parse(localStorage.getItem(PROJ_KEY));return Array.isArray(a)?a:[];}catch(e){return [];}}
 function persistProjects(a){try{localStorage.setItem(PROJ_KEY,JSON.stringify(a));return true;}catch(e){if(a.length>1)return persistProjects(a.slice(0,a.length-1));return false;}}
 function projName(){var n=(document.getElementById('tplName').textContent||'').trim();return n||'\u041c\u043e\u0439 \u0441\u0430\u0439\u0442';}
 function saveProject(manual){
   if(!current||!current.html){if(manual)toast('\u041f\u043e\u043a\u0430 \u043d\u0435\u0447\u0435\u0433\u043e \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u044c \u2014 \u0441\u043d\u0430\u0447\u0430\u043b\u0430 \u0441\u0434\u0435\u043b\u0430\u0439 \u043f\u0440\u0430\u0432\u043a\u0443 \u0438\u043b\u0438 \u0441\u043e\u0437\u0434\u0430\u0439 \u0441\u0430\u0439\u0442');return;}
+  if(projDead){
+    if(!manual)return;   /* карточку удалили — фоновый автосейв её не возвращает */
+    setProjDead(false);  /* нажали «Сохранить» вручную — значит сайт снова нужен */
+  }
   var a=loadProjects();
-  if(!projId)projId='p'+Date.now()+Math.floor(Math.random()*1e4);
+  if(!projId)setProjId('p'+Date.now()+Math.floor(Math.random()*1e4));
   for(var j=a.length-1;j>=0;j--)if(a[j].id===projId)a.splice(j,1);
   a.unshift({id:projId,name:projName(),html:current.html,ts:Date.now(),model:currentModel});
   var ok=persistProjects(a.slice(0,12));
@@ -1995,12 +2017,23 @@ function saveProject(manual){
   if(manual)toast(ok?'\u041f\u0440\u043e\u0435\u043a\u0442 \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d \u2713 \u041e\u043d \u043d\u0430 \u0433\u043b\u0430\u0432\u043d\u043e\u043c \u044d\u043a\u0440\u0430\u043d\u0435':'\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u2014 \u043c\u0430\u043b\u043e \u043c\u0435\u0441\u0442\u0430 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435');
 }
 function scheduleAutosave(){clearTimeout(autosaveT);autosaveT=setTimeout(function(){saveProject(false);},1600);}
-function deleteProject(id){persistProjects(loadProjects().filter(function(p){return p.id!==id;}));renderProjects();toast('\u041f\u0440\u043e\u0435\u043a\u0442 \u0443\u0434\u0430\u043b\u0451\u043d');}
+function deleteProject(id){
+  persistProjects(loadProjects().filter(function(p){return p.id!==id;}));
+  if(projId===id){
+    /* Удалён сайт, открытый в редакторе. Гасим уже назначенный автосейв
+       и запрещаем следующие, иначе карточка вернётся через секунду. */
+    clearTimeout(autosaveT);
+    setProjId(null);
+    setProjDead(true);
+  }
+  renderProjects();
+  toast('\u041f\u0440\u043e\u0435\u043a\u0442 \u0443\u0434\u0430\u043b\u0451\u043d');
+}
 function openSavedProject(id){
   var rec=null;loadProjects().forEach(function(p){if(p.id===id)rec=p;});
   if(!rec){toast('\u041f\u0440\u043e\u0435\u043a\u0442 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d');return;}
   openUserBoard();
-  projId=rec.id;
+  setProjId(rec.id);setProjDead(false);
   current={id:null,html:rec.html,scratch:false,userFile:null};
   document.getElementById('tplName').textContent=rec.name;
   renderHtml(rec.html);
@@ -2192,7 +2225,8 @@ document.addEventListener('click',function(e){if(!e.target.closest||(!e.target.c
   ['openEditor','openScratch','openUserBoard'].forEach(function(fn){
     var o=window[fn];if(typeof o!=='function')return;
     window[fn]=function(){
-      projId=null;disarmDesign();
+      /* Новый сеанс на доске: прошлый проект отпущен, запрет автосейва снят. */
+      setProjId(null);setProjDead(false);disarmDesign();
       boardMode='preview';syncModeBtns();
       var cp=document.getElementById('codePanel');if(cp)cp.classList.remove('full');
       if(typeof toggleCode==='function')toggleCode(false);

@@ -36,7 +36,9 @@
   // забыванию того, что проект вообще был удалён.
   var KEEP = [
     'dl_dead_projects', 'dl_dead_sigs', 'dl_proj_sigs',
-    'dl_auto_projects', 'dl_live_project'
+    'dl_auto_projects', 'dl_live_project',
+    // Учёт открытого сайта в «Недавних»: id и признак «его карточку удалили».
+    'dl_open_project_v1', 'dl_open_deleted_v1'
   ];
 
   var gone = {};
