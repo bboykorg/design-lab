@@ -6,16 +6,24 @@
    считаются автоматически смешением. Разметка сайта заранее неизвестна,
    поэтому цвета берутся из вычисленных стилей.
 
-   Палитра принадлежит проекту, а не браузеру. Выбор запоминается рядом с id
-   проекта, поэтому новый сайт открывается вообще без палитры, а не в цветах
-   предыдущего, и каждый сохранённый сайт возвращается в своей схеме.
+   Палитра принадлежит проекту, а не браузеру: выбор запоминается рядом с id
+   проекта, а новый сайт начинается вообще без палитры.
+
+   Как определяется, какой сайт открыт. Одного window.current.id оказалось
+   мало: при создании нового сайта его значение может не меняться, и выбор
+   прошлого проекта оставался в памяти и возвращался после пары миганий.
+   Поэтому смена проекта ловится тремя способами сразу:
+     • window.current.id, если приложение его ведёт;
+     • запросы к /api/projects — открытие сохранённого сайта и id нового;
+     • чистый холст в предпросмотре — это всегда новый проект.
+   Пока сайт считается новым, перекраска вообще не запускается — мигания нет.
 
    Границы карточек. Если блок выделялся фоном, рамкой или тенью, ему
    гарантируется видимость: фон берётся на шаг светлее родительского,
    а обводка рисуется внутренней тенью — она не занимает места и потому
    не может сдвинуть верстку, в отличие от настоящего border.
 
-   Почему блоки больше не съезжают к левому краю:
+   Почему блоки не съезжают к левому краю:
      • палитра ничего не пишет в атрибут style — именно через него
        работают растягивание блоков и масштаб текста в режиме дизайна;
      • элементу ставится только номер цветовой группы, цвета живут
@@ -45,6 +53,13 @@
   var PROBE_NODES = 120;
   var SHIFT_PX = 2;
   var LATE_MS = [500, 1500];
+  var BLANK_TRIES = 2;                // сколько тиков пустоты считаем новым сайтом
+  var BLANK_TEXT = [
+    '\u0447\u0438\u0441\u0442\u044b\u0439 \u0445\u043e\u043b\u0441\u0442',
+    '\u043e\u043f\u0438\u0448\u0438 \u0441\u0430\u0439\u0442 \u0432 \u0447\u0430\u0442\u0435',
+    '\u043d\u0430\u0447\u043d\u0451\u043c \u0441 \u0447\u0438\u0441\u0442\u043e\u0433\u043e \u043b\u0438\u0441\u0442\u0430',
+    '\u043d\u0430\u0447\u043d\u0435\u043c \u0441 \u0447\u0438\u0441\u0442\u043e\u0433\u043e \u043b\u0438\u0441\u0442\u0430'
+  ];
 
   var PALETTES = [
     { id: 'sunfire', name: '\u0416\u0451\u043b\u0442\u044b\u0439 \u0438 \u043a\u0440\u0430\u0441\u043d\u044b\u0439', bg: '#1b0f08', surface: '#2a1710', surface2: '#3a2115', text: '#ffeccd', muted: '#d7a273', accent: '#ffc93c', accent2: '#e63946', border: '#4b2b18' },
@@ -392,23 +407,47 @@
      открывался в цветах предыдущего. */
   try { localStorage.removeItem(OLD_KEY); } catch (e) {}
 
-  function projId() {
+  function appId() {
     var cur = window.current;
     if (!cur || typeof cur !== 'object') return '';
     return typeof cur.id === 'string' ? cur.id : '';
   }
 
-  var curId = projId();
+  var curId = appId();                      // id открытого проекта, '' если новый
+  var known = curId !== '';                 // знаем ли мы, что это сохранённый сайт
   var chosen = curId ? (readMap()[curId] || '') : '';
+  var blankSeen = 0;
+
+  /* Сохранённый сайт: берём его схему. */
+  function openProject(id) {
+    if (!id || id === curId) return;
+    curId = id;
+    known = true;
+    chosen = readMap()[id] || '';
+    refreshMarks();
+    if (chosen) paint(true);
+    else clear();
+  }
+
+  /* Новый сайт: никакой палитры, даже если в прошлом проекте была выбрана. */
+  function openBlank() {
+    if (!known && curId === '' && chosen === '') return;
+    curId = '';
+    known = false;
+    chosen = '';
+    refreshMarks();
+    clear();
+  }
 
   function remember() {
-    var id = projId();
+    var id = curId || appId();
     if (!id) return;
+    curId = id;
+    known = true;
     var map = readMap();
     if (chosen) map[id] = chosen;
     else delete map[id];
     writeMap(map);
-    curId = id;
   }
 
   function palById(id) {
@@ -453,21 +492,104 @@
     if (doc) strip(doc);
   }
 
-  /* Смена проекта: новый сайт без палитры, сохранённый — в своей схеме. */
-  function follow() {
-    var id = projId();
-    if (id === curId) return;
-    if (id && !curId && chosen) {
-      /* Только что созданный сайт получил id — выбор остаётся за ним. */
-      curId = id;
-      remember();
-      return;
+  /* Чистый холст в предпросмотре — верный признак нового проекта. */
+  function blankKind(doc) {
+    if (!doc || !doc.body) return 'none';
+    var text = '';
+    try { text = String(doc.body.innerText || doc.body.textContent || '').toLowerCase(); } catch (e) { text = ''; }
+    for (var i = 0; i < BLANK_TEXT.length; i++) {
+      if (text.indexOf(BLANK_TEXT[i]) >= 0) return 'hint';
     }
-    curId = id;
-    chosen = id ? (readMap()[id] || '') : '';
-    refreshMarks();
-    if (chosen) paint(true);
-    else clear();
+    var count = 0;
+    try { count = doc.body.querySelectorAll('*').length; } catch (e) { count = 0; }
+    if (count < 4 && !text.replace(/\s+/g, '')) return 'empty';
+    return 'none';
+  }
+
+  /* Слежение за текущим проектом без опоры на одну только переменную. */
+  function follow() {
+    var doc = frameDoc();
+    var kind = blankKind(doc);
+    if (kind === 'hint') {
+      blankSeen = BLANK_TRIES;
+      openBlank();
+      return true;
+    }
+    if (kind === 'empty') {
+      blankSeen++;
+      /* Пустой кадр бывает мгновение и при открытии сохранённого сайта,
+         поэтому ждём второго подтверждения. */
+      if (blankSeen >= BLANK_TRIES) openBlank();
+      return true;
+    }
+    blankSeen = 0;
+
+    var id = appId();
+    if (id && id !== curId) {
+      if (!known && chosen) {
+        /* Новый сайт только что получил id — выбор закрепляется за ним. */
+        curId = id;
+        remember();
+      } else {
+        openProject(id);
+      }
+      return false;
+    }
+    if (!id && known) {
+      /* Приложение сбросило id — значит создаётся новый сайт. */
+      openBlank();
+      return true;
+    }
+    return false;
+  }
+
+  /* Запросы к проектам точнее всего говорят, какой сайт открыли. */
+  function hookFetch() {
+    var original = window.fetch;
+    if (typeof original !== 'function' || original.__dlPaletteHook) return;
+    var wrapped = function (input, init) {
+      var url = '';
+      var method = '';
+      try {
+        url = typeof input === 'string' ? input : (input && input.url) || '';
+        method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+      } catch (e) { url = ''; }
+
+      var one = url.match(/\/api\/projects\/([A-Za-z0-9_-]{1,64})/);
+      var many = /\/api\/projects(\?|$)/.test(url);
+      var out = original.apply(this, arguments);
+
+      if (method === 'GET' && one && out && out.then) {
+        out.then(function (response) {
+          if (response && response.ok) setTimeout(function () { openProject(one[1]); }, 0);
+        }, function () { });
+        return out;
+      }
+
+      if (method === 'POST' && many && out && out.then) {
+        var sent = '';
+        try {
+          var body = init && typeof init.body === 'string' ? JSON.parse(init.body) : null;
+          sent = body && typeof body.id === 'string' ? body.id : '';
+        } catch (e) { sent = ''; }
+        if (sent) {
+          if (!known || curId !== sent) openProject(sent);
+          return out;
+        }
+        out.then(function (response) {
+          if (!response || !response.ok) return;
+          response.clone().json().then(function (data) {
+            var fresh = data && typeof data.id === 'string' ? data.id : '';
+            if (!fresh) return;
+            if (chosen) { curId = fresh; remember(); }
+            else openProject(fresh);
+          }, function () { });
+        }, function () { });
+      }
+      return out;
+    };
+    wrapped.__dlPaletteHook = true;
+    window.fetch = wrapped;
   }
 
   /* --- Панель выбора -------------------------------------------- */
@@ -494,8 +616,11 @@
     return dots;
   }
 
+  /* Выбор вручную важнее автоматики: после клика счётчик пустоты
+     сбрасывается, чтобы схема не снималась сразу же. */
   function choose(id) {
     chosen = id;
+    blankSeen = 0;
     remember();
     paint(true);
     refreshMarks();
@@ -652,19 +777,27 @@
 
   function tick() {
     if (!button) return;
-    follow();
+    var blank = follow();
     var on = visible();
     button.style.display = on ? 'inline-flex' : 'none';
     if (!on && panel) panel.style.display = 'none';
-    if (on) paint(false);
+    /* На чистом холсте перекраска не запускается вовсе — оттуда было мигание. */
+    if (on && !blank) paint(false);
   }
 
   function start() {
+    hookFetch();
     buildButton();
     tick();
     setInterval(tick, 700);
     var node = frame();
-    if (node) node.addEventListener('load', function () { setTimeout(function () { follow(); paint(true); }, 60); });
+    if (node) {
+      node.addEventListener('load', function () {
+        setTimeout(function () {
+          if (!follow()) paint(true);
+        }, 60);
+      });
+    }
     if (window.MutationObserver) {
       var pending = null;
       new MutationObserver(function () {
