@@ -1,45 +1,34 @@
-/* Модель отвечает статьёй вместо схемы сайта.
+/* Гарантия применимого ответа для конструктора.
 
-   Симптом: запрос уходит, модель отвечает 200, в ответе аккуратный текст с
-   заголовками, списками и ссылками — и на странице не меняется ничего.
-   Причина: доска ждёт ОДИН JSON-объект со схемой блоков, а разбор прозы
-   падает. Цепочка считает это неудачей и идёт к следующей модели, та тоже
-   отвечает текстом — отсюда и список моделей в плашке отчёта.
+   Доска принимает только JSON с операциями. Иногда модель возвращает прозу
+   либо JSON из двух служебных операций (например renameProject и setTheme).
+   Интерфейс пишет «Применено операций: 2», но блоки не меняются. Теперь
+   запрос про сайт/лендинг считается созданием даже без глагола «создай», а
+   ответ без структурных операций заменяется полноценными siteOps из движка.
 
-   Лечим промптом, а не параметрами запроса: response_format поддерживают не все
-   шлюзы из цепочки, и незнакомое поле в теле запроса легко превращается в 400
-   для всех моделей сразу. Текстовое указание безопасно и обратимо.
-
-   Что делается:
-
-   1. К последнему сообщению пользователя добавляется короткое жёсткое условие
-      ответа. Последнее сообщение модели видно лучше всего — системную часть
-      длинные модели часто размывают.
-   2. Сырой ответ запоминается в window.__dlLastAnswer — чтобы было видно, что
-      именно вернула модель, а не гадать по пустому экрану.
-   3. Если модель всё равно ответила прозой, человек получает внятное
-      сообщение вместо молчания. */
+   response_format в тело запроса не добавляется: не все шлюзы его понимают. */
 (function () {
   'use strict';
   if (window.__dlBoardJsonForce) return;
   window.__dlBoardJsonForce = true;
 
   var MARK = '__dl_json_rule__';
-  var RULE = '\n\n[\u0424\u043e\u0440\u043c\u0430\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 ' + MARK + ']\n' +
-    '\u041e\u0442\u0432\u0435\u0442\u044c \u0420\u041e\u0412\u041d\u041e \u043e\u0434\u043d\u0438\u043c \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u043c JSON \u043f\u043e \u0441\u0445\u0435\u043c\u0435 \u0438\u0437 \u0441\u0438\u0441\u0442\u0435\u043c\u043d\u043e\u0433\u043e \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f. ' +
-    '\u041f\u0435\u0440\u0432\u044b\u0439 \u0441\u0438\u043c\u0432\u043e\u043b \u043e\u0442\u0432\u0435\u0442\u0430 \u2014 \u00ab{\u00bb, \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u2014 \u00ab}\u00bb. ' +
-    '\u0411\u0435\u0437 markdown, \u0431\u0435\u0437 \u043e\u0433\u0440\u0430\u0436\u0434\u0435\u043d\u0438\u0439 \u0432 \u0442\u0440\u043e\u0439\u043d\u044b\u0445 \u043a\u0430\u0432\u044b\u0447\u043a\u0430\u0445, \u0431\u0435\u0437 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u043e\u0432, \u0431\u0435\u0437 \u0441\u043f\u0438\u0441\u043a\u043e\u0432, ' +
-    '\u0431\u0435\u0437 \u0441\u0441\u044b\u043b\u043e\u043a, \u0431\u0435\u0437 \u043f\u043e\u044f\u0441\u043d\u0435\u043d\u0438\u0439 \u0434\u043e \u0438 \u043f\u043e\u0441\u043b\u0435 JSON. ' +
-    '\u0421\u043e\u0432\u0435\u0442\u044b, \u0441\u0442\u0430\u0442\u044c\u0438 \u0438 \u0440\u0430\u0437\u0431\u043e\u0440\u044b \u043d\u0435 \u043d\u0443\u0436\u043d\u044b: \u0442\u0432\u043e\u0439 \u043e\u0442\u0432\u0435\u0442 \u0447\u0438\u0442\u0430\u0435\u0442 \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430, \u0430 \u043d\u0435 \u0447\u0435\u043b\u043e\u0432\u0435\u043a.';
-
-  // Важно: только готовые выражения, без сборки в строке. Одна лишняя
-  // скобка в литерале роняет весь файл на разборе, и слой просто не работает.
+  var RULE = '\n\n[Формат ответа ' + MARK + ']\n' +
+    'Ответь РОВНО одним объектом JSON по схеме из системного сообщения. ' +
+    'Первый символ ответа — «{», последний — «}». Без markdown, без ```-ограждений, ' +
+    'без заголовков, списков, ссылок и пояснений до или после JSON. ' +
+    'Для создания сайта обязательно верни структурные операции replacePage/addPage/addNode, ' +
+    'а не только renameProject или setTheme.';
   var HAS_JSON = /json/i;
-  var HAS_SCHEMA = /\bops\b|\bblocks\b|\bschema\b|\u0441\u0445\u0435\u043c/i;
+  var HAS_SCHEMA = /\bops\b|\bblocks\b|\bschema\b|схем/i;
+  var SITE_WORD = /сайт|лендинг|страниц|портфоли|визитк|интернет-магазин|web\s*site|landing/i;
+  var STRUCTURAL = {
+    replacePage: 1, addPage: 1, addNode: 1, replaceNode: 1,
+    insertNode: 1, setPage: 1, createPage: 1
+  };
 
   function boardRequest(data) {
     if (!data || !Array.isArray(data.messages) || !data.messages.length) return false;
-    // Признак запроса доски: в системной части описана схема блоков.
     for (var i = 0; i < data.messages.length; i++) {
       var item = data.messages[i] || {};
       if (item.role !== 'system') continue;
@@ -48,7 +37,6 @@
     }
     return false;
   }
-
   function addRule(data) {
     for (var i = data.messages.length - 1; i >= 0; i--) {
       var item = data.messages[i] || {};
@@ -59,11 +47,65 @@
     }
     return false;
   }
-
   function looksJson(text) {
     var body = String(text || '').trim();
-    if (body.indexOf('```') === 0) return true;
-    return body.indexOf('{') === 0 || body.indexOf('[') === 0;
+    return body.indexOf('```') === 0 || body.indexOf('{') === 0 || body.indexOf('[') === 0;
+  }
+  function wholeSite(message) {
+    var text = String(message || '').trim();
+    if (!SITE_WORD.test(text)) return false;
+    // На стартовом экране само описание «Лендинг сервиса с тарифами» уже команда.
+    return true;
+  }
+  function hasStructure(result) {
+    var ops = result && Array.isArray(result.ops) ? result.ops : [];
+    for (var i = 0; i < ops.length; i++) {
+      var name = String((ops[i] && (ops[i].op || ops[i].type)) || '');
+      if (STRUCTURAL[name]) return true;
+    }
+    return false;
+  }
+  function localSite(message, say) {
+    var S = window.SFAI;
+    if (!S || typeof S.siteOps !== 'function') return null;
+    try {
+      var result = S.siteOps(message);
+      if (result && Array.isArray(result.ops) && result.ops.length) {
+        result.say = say || 'Собрал полноценный сайт по описанию и заменил содержимое страницы.';
+        result.__dlStructuralFallback = true;
+        return result;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /* Проверяем уже разобранный ответ непосредственно перед применением.
+     Две служебные операции больше не считаются готовым сайтом. */
+  function patchParser() {
+    var S = window.SFAI;
+    if (!S || typeof S.parseResponse !== 'function' || S.parseResponse.__dlApplyGuard) return false;
+    var original = S.parseResponse;
+    var guarded = function (text) {
+      var message = String(window.__dlBoardLastMessage || '').trim();
+      var result;
+      try { result = original.apply(this, arguments); }
+      catch (error) {
+        if (wholeSite(message)) {
+          var fromText = localSite(message, 'Модель ответила текстом; собрал применимую структуру сайта по этому описанию.');
+          if (fromText) return fromText;
+        }
+        throw error;
+      }
+      if (wholeSite(message) && !hasStructure(result)) {
+        var say = result && typeof result.say === 'string' ? result.say : '';
+        var built = localSite(message, say || 'Собрал сайт по описанию.');
+        if (built) return built;
+      }
+      return result;
+    };
+    guarded.__dlApplyGuard = true;
+    S.parseResponse = guarded;
+    return true;
   }
 
   function inspect(response) {
@@ -78,51 +120,56 @@
         model: (data && data.model) || '', at: Date.now(),
         json: looksJson(text), text: text.slice(0, 400)
       };
-      if (looksJson(text)) return;
+      // Проза для запроса о сайте теперь обрабатывается parser guard и не является ошибкой.
+      if (looksJson(text) || wholeSite(window.__dlBoardLastMessage || '')) return;
       if (typeof window.dlModelNote === 'function') {
-        window.dlModelNote(
-          '\u041c\u043e\u0434\u0435\u043b\u044c \u043e\u0442\u0432\u0435\u0442\u0438\u043b\u0430 \u0442\u0435\u043a\u0441\u0442\u043e\u043c \u0432\u043c\u0435\u0441\u0442\u043e \u0441\u0445\u0435\u043c\u044b \u0441\u0430\u0439\u0442\u0430, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043d\u0430 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 ' +
-          '\u043f\u043e\u043c\u0435\u043d\u044f\u043b\u043e\u0441\u044c. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0437\u0430\u043f\u0440\u043e\u0441 \u0438\u043b\u0438 \u0432\u044b\u0431\u0435\u0440\u0438 \u0434\u0440\u0443\u0433\u0443\u044e \u043c\u043e\u0434\u0435\u043b\u044c.'
-        );
+        window.dlModelNote('Модель ответила текстом вместо схемы. Страница не изменена.');
       }
-    }, function () { });
+    }, function () {});
   }
 
-  var original = window.fetch;
-  if (typeof original !== 'function' || original.__dlJsonForce) return;
-
-  var wrapped = function (input, init) {
-    var url = '';
-    var method = '';
-    try {
-      url = typeof input === 'string' ? input : (input && input.url) || '';
-      method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-    } catch (e) { url = ''; }
-
-    if (method !== 'POST' || url.indexOf('/api/proxy') < 0 ||
-      !init || typeof init.body !== 'string') {
-      return original.apply(this, arguments);
-    }
-
-    var args = arguments;
-    try {
-      var data = JSON.parse(init.body);
-      if (boardRequest(data) && addRule(data)) {
-        var nextInit = {};
-        Object.keys(init).forEach(function (name) { nextInit[name] = init[name]; });
-        nextInit.body = JSON.stringify(data);
-        args = [input, nextInit];
+  function wrapFetch() {
+    var original = window.fetch;
+    if (typeof original !== 'function' || original.__dlJsonForce) return;
+    var wrapped = function (input, init) {
+      var url = '', method = '';
+      try {
+        url = typeof input === 'string' ? input : (input && input.url) || '';
+        method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+      } catch (e) {}
+      if (method !== 'POST' || url.indexOf('/api/proxy') < 0 || !init || typeof init.body !== 'string') {
+        return original.apply(this, arguments);
       }
-    } catch (e) { /* чужое тело — не трогаем */ }
+      var args = arguments;
+      try {
+        var data = JSON.parse(init.body);
+        if (boardRequest(data) && addRule(data)) {
+          var nextInit = {};
+          Object.keys(init).forEach(function (name) { nextInit[name] = init[name]; });
+          nextInit.body = JSON.stringify(data);
+          args = [input, nextInit];
+        }
+      } catch (e) {}
+      var result = original.apply(this, args);
+      if (result && result.then) {
+        result.then(function (response) { if (response && response.ok) inspect(response); }, function () {});
+      }
+      return result;
+    };
+    wrapped.__dlJsonForce = true;
+    window.fetch = wrapped;
+  }
 
-    var result = original.apply(this, args);
-    if (result && result.then) {
-      result.then(function (response) {
-        if (response && response.ok) inspect(response);
-      }, function () { });
-    }
-    return result;
-  };
-  wrapped.__dlJsonForce = true;
-  window.fetch = wrapped;
+  function start() {
+    wrapFetch();
+    if (patchParser()) return;
+    var tries = 0;
+    var timer = setInterval(function () {
+      wrapFetch();
+      if (patchParser() || ++tries > 100) clearInterval(timer);
+    }, 80);
+  }
+  start();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  window.addEventListener('load', start);
 })();
