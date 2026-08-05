@@ -1,10 +1,12 @@
 /* Журнал показывает только реально выбранную модель.
 
-   Движок заранее добавляет строки всех fallback-кандидатов. Фильтрация по
-   общему DOM-родителю оказалась ненадёжной: вложенные div получали разных
-   родителей, поэтому рядом с GPT-OSS оставались Claude. Теперь имя каждой
-   строки сравнивается с текущей моделью. Все несовпадающие строки скрываются.
-   После стопа скрываются вообще все строки текущей генерации.
+   Движок заранее добавляет строки всех fallback-кандидатов. Имя каждой строки
+   сравнивается с текущей моделью, несовпадающие строки скрываются. После стопа
+   скрываются все строки текущей генерации.
+
+   Важно: строка модели часто находится внутри <li>. Если спрятать только span
+   или div, маркер списка остаётся на экране пустой точкой. Поэтому hideRow()
+   всегда скрывает ближайший <li>, а когда скрыты все пункты — ещё и весь ul/ol.
 
    Здесь же «Опиши сайт мечты» заменяется на «Опиши сайт». */
 (function () {
@@ -13,6 +15,7 @@
   window.__dlBoardLogTrim = true;
 
   var MARK = 'data-dl-log-trim';
+  var EMPTY = 'data-dl-log-empty';
   var RE = /^Модель\s*[:—-]\s*(.+)$/i;
   var canceled = false;
   var scheduled = false;
@@ -53,13 +56,30 @@
     }
     return out;
   }
-  function hide(el) {
-    el.setAttribute(MARK, '1');
-    el.style.setProperty('display', 'none', 'important');
+  function rowBox(el) {
+    if (!el) return null;
+    var li = el.closest && el.closest('li');
+    return li || el;
   }
-  function show(el) {
-    el.removeAttribute(MARK);
-    el.style.removeProperty('display');
+  function hideRow(el) {
+    var box = rowBox(el);
+    if (!box) return;
+    box.setAttribute(MARK, '1');
+    box.style.setProperty('display', 'none', 'important');
+    // Вложенный узел тоже помечаем для поиска его списка.
+    if (box !== el) el.setAttribute(MARK, '1');
+  }
+  function showRow(el) {
+    var box = rowBox(el);
+    if (!box) return;
+    box.removeAttribute(MARK);
+    box.style.removeProperty('display');
+    if (box !== el) el.removeAttribute(MARK);
+    var list = box.closest && box.closest('ul,ol');
+    if (list) {
+      list.removeAttribute(EMPTY);
+      list.style.removeProperty('display');
+    }
   }
   function matchesSelected(name, names) {
     if (!name || !names.length) return false;
@@ -68,17 +88,43 @@
     }
     return false;
   }
+
+  /* Если в списке не осталось ни одного видимого пункта, убираем сам список:
+     так маркеры не могут остаться даже при необычной CSS-разметке. */
+  function collapseEmptyLists() {
+    var lists = document.querySelectorAll('ul,ol');
+    for (var i = 0; i < lists.length; i++) {
+      var list = lists[i];
+      if (!list.querySelector('[' + MARK + ']')) continue;
+      var children = list.children;
+      if (!children.length) continue;
+      var visible = false;
+      for (var j = 0; j < children.length; j++) {
+        var child = children[j];
+        if (!child.hasAttribute(MARK) && child.style.display !== 'none') {
+          visible = true;
+          break;
+        }
+      }
+      if (!visible) {
+        list.setAttribute(EMPTY, '1');
+        list.style.setProperty('display', 'none', 'important');
+      }
+    }
+  }
+
   function trimRows() {
     var list = rows(), names = selectedNames(), kept = false;
     for (var i = 0; i < list.length; i++) {
       var info = list[i];
-      if (canceled) { hide(info.el); continue; }
-      // Оставляем ровно одну строку выбранной модели, всё остальное — техника fallback.
+      if (canceled) { hideRow(info.el); continue; }
+      // Оставляем ровно одну строку выбранной модели, остальное — техника fallback.
       if (!kept && matchesSelected(info.name, names)) {
         kept = true;
-        show(info.el);
-      } else hide(info.el);
+        showRow(info.el);
+      } else hideRow(info.el);
     }
+    collapseEmptyLists();
   }
   function replaceHeading() {
     var all = document.querySelectorAll('h1,h2,h3,h4,div,p,span');
@@ -97,11 +143,15 @@
     setTimeout(run, 40);
   }
 
-  window.addEventListener('dl:ai-start', function () { canceled = false; schedule(); });
+  window.addEventListener('dl:ai-start', function () {
+    canceled = false;
+    schedule();
+  });
   window.addEventListener('dl:ai-cancel', function () {
     canceled = true;
     var list = rows();
-    for (var i = 0; i < list.length; i++) hide(list[i].el);
+    for (var i = 0; i < list.length; i++) hideRow(list[i].el);
+    collapseEmptyLists();
   });
 
   run();
