@@ -1,62 +1,104 @@
-/* Журнал доски: только изначальная модель.
+/* Чистый журнал генерации и короткий заголовок главного экрана.
 
-   В плашке отчёта («Без изменений», «Меняю схему сайта») копился список
-   из всех моделей, которые перебирала цепочка. Выглядело это так, будто
-   сайт собирали десять моделей сразу. Оставляем первую запись — ту, что
-   была выбрана изначально, — а повторы убираем.
+   Fallback-движок заранее пишет «Модель: ...» для каждого кандидата. Это
+   выглядело как реальное переключение на Pro, даже когда запрос был прибит
+   к выбранной Free-модели. В каждом списке оставляем только первую строку —
+   исходный выбор. После ручного стопа скрываем все модельные строки текущей
+   генерации и продолжаем скрывать запоздалые строки до нового запроса.
 
-   Сама маркупа плашки не зашита: ищем листья с текстом «Модель: …» и
-   группируем их по общему родителю. Текст самого ответа не трогаем. */
+   Здесь же меняется только копирайт «Опиши сайт мечты» → «Опиши сайт».
+   Структура страницы и остальные подписи не затрагиваются. */
 (function () {
   'use strict';
   if (window.__dlBoardLogTrim) return;
   window.__dlBoardLogTrim = true;
 
   var MARK = 'data-dl-log-trim';
-  var RE = /^\u041c\u043e\u0434\u0435\u043b\u044c\s*[:\u2014-]\s*\S/;
+  var KEEP = 'data-dl-log-keep';
+  var RE = /^Модель\s*[:—-]\s*\S/i;
+  var canceled = false;
+  var scheduled = false;
 
+  function cleanText(value) { return String(value || '').replace(/\s+/g, ' ').trim(); }
+  function isRow(el) {
+    if (!el || el.childElementCount > 1) return false;
+    var text = cleanText(el.textContent);
+    return text.length <= 80 && RE.test(text);
+  }
   function rows() {
-    var found = [];
-    var all = document.querySelectorAll('li, div, p, span');
-    for (var i = 0; i < all.length; i++) {
-      var el = all[i];
-      if (el.childElementCount > 1) continue;
-      var text = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (text.length > 60 || !RE.test(text)) continue;
-      found.push(el);
-    }
+    var found = [], all = document.querySelectorAll('li,div,p,span');
+    for (var i = 0; i < all.length; i++) if (isRow(all[i])) found.push(all[i]);
     return found;
   }
+  function groupOf(el) {
+    var group = el.closest && el.closest('ul,ol,[role="list"]');
+    return group || el.parentElement;
+  }
+  function hide(el) {
+    if (!el) return;
+    el.setAttribute(MARK, '1');
+    el.style.setProperty('display', 'none', 'important');
+  }
+  function show(el) {
+    if (!el) return;
+    el.removeAttribute(MARK);
+    el.style.removeProperty('display');
+  }
 
-  function tick() {
-    var list = rows();
-    if (list.length < 2) return;
-
-    var seen = [];
+  function trimRows() {
+    var list = rows(), groups = [];
     for (var i = 0; i < list.length; i++) {
       var el = list[i];
-      var parent = el.parentElement;
-      if (!parent) continue;
-      // Вложенные совпадения (строка и её же внутренний span) считаем одним.
+      // Не обрабатываем одновременно контейнер и его внутренний span.
       var nested = false;
-      for (var s = 0; s < list.length; s++) {
-        if (s !== i && list[s].contains(el)) { nested = true; break; }
+      for (var n = 0; n < list.length; n++) {
+        if (n !== i && list[n].contains(el)) { nested = true; break; }
       }
       if (nested) continue;
-
-      if (seen.indexOf(parent) < 0) { seen.push(parent); continue; }
-      if (el.getAttribute(MARK)) continue;
-      el.setAttribute(MARK, '1');
-      el.style.display = 'none';
+      if (canceled) { hide(el); continue; }
+      var group = groupOf(el);
+      var index = groups.indexOf(group);
+      if (index < 0) {
+        groups.push(group);
+        el.setAttribute(KEEP, '1');
+        show(el);
+      } else hide(el);
     }
   }
 
+  function replaceHeading() {
+    var all = document.querySelectorAll('h1,h2,h3,h4,div,p,span');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.childElementCount) continue;
+      if (cleanText(el.textContent).toLowerCase() === 'опиши сайт мечты') el.textContent = 'Опиши сайт';
+    }
+  }
   function run() {
-    try { tick(); } catch (e) { /* плашка ещё не готова */ }
+    scheduled = false;
+    try { replaceHeading(); trimRows(); } catch (e) {}
+  }
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    setTimeout(run, 40);
   }
 
+  window.addEventListener('dl:ai-start', function () {
+    canceled = false;
+    // Новая генерация получает собственную первую строку.
+    var old = document.querySelectorAll('[' + KEEP + ']');
+    for (var i = 0; i < old.length; i++) old[i].removeAttribute(KEEP);
+    schedule();
+  });
+  window.addEventListener('dl:ai-cancel', function () {
+    canceled = true;
+    var list = rows();
+    for (var i = 0; i < list.length; i++) hide(list[i]);
+  });
+
   run();
-  setInterval(run, 600);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   window.addEventListener('load', run);
+  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 })();
