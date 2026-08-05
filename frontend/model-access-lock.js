@@ -1,19 +1,46 @@
-/* Design Lab — model availability for guests and Free users.
-   Scope: only model pickers. Everything stays clickable; unavailable models just look gray.
-   Rows are found two ways, so every screen is covered:
-     1. explicit markup (.mopt / onclick="pickModel('key')");
-     2. any container that lists three or more model names (the hero picker on the main page). */
+/* Design Lab — доступность моделей для гостей и тарифа Free.
+
+   Область действия — только списки моделей. Всё остаётся нажимаемым,
+   недоступные модели просто выглядят серыми. Строки находятся двумя
+   способами, чтобы был покрыт каждый экран:
+     1. явная разметка (.mopt / onclick="pickModel('key')");
+     2. любой контейнер, где перечислены три и более названия моделей.
+
+   Почему после входа всё было серым и просило зарегистрироваться. Слой брал
+   токен сам, в своём порядке ключей, и первым стоял dl_auth_token. Там могла
+   лежать старая строка от прошлой сессии, хотя живой токен лежит в dl_token.
+   Запрос тарифа получал отказ, а любой отказ считался «гость» — и гасились
+   вообще все модели, включая бесплатные.
+
+   Что изменилось:
+     • токен берётся из единого источника (auth-token-normalize.js), dl_token первый;
+     • если /api/plan отказал, спрашивается /api/profile, затем /api/auth/me;
+     • сбой сети или ошибка сервера больше не делают человека гостем: берётся
+       последний известный тариф, а если его нет — не блокируется ничего;
+     • пока список бесплатных моделей не готов, на Free ничего не гасится;
+     • состояние перечитывается после входа, выхода и возврата на вкладку. */
 (function () {
   'use strict';
   if (window.__dlModelAccessLock) return;
   window.__dlModelAccessLock = true;
 
-  var TOKEN_KEYS = ['dl_auth_token', 'dl_token', 'auth_token', 'token', 'dlToken'];
+  var TOKEN_KEYS = ['dl_token', 'dl_auth_token', 'auth_token', 'token', 'dlToken'];
+  var PLAN_CACHE = 'dl_plan_cache';
   var LOCK_ATTR = 'data-dl-model-locked';
   var PILL_ATTR = 'data-dl-model-pill-locked';
   var KEY_ATTR = 'data-dl-model-key';
-  var state = { ready: false, signedIn: false, plan: 'guest', rows: 0, locked: 0 };
+  var PLANS = { free: 1, pro: 1, team: 1 };
+  var RETRY_MS = 20000;   // повтор, пока тариф не выяснен
+  var TICK_MS = 700;      // обычная перерисовка отметок
+  var TOKEN_MS = 1200;    // слежение за появлением токена после входа
+
+  /* ready — есть ли право гасить строки. Пока false, всё выглядит обычно. */
+  var state = { ready: false, signedIn: false, plan: 'guest', rows: 0, locked: 0, source: 'boot' };
   window.dlModelLock = state;
+
+  var lastToken = null;
+  var busy = false;
+  var retryTimer = 0;
 
   function style() {
     if (document.getElementById('dl-model-lock-css')) return;
@@ -22,7 +49,6 @@
     css.textContent =
       '[' + LOCK_ATTR + '="1"]{filter:grayscale(1) !important;opacity:.42 !important;cursor:not-allowed !important;}' +
       '[' + LOCK_ATTR + '="1"]:hover{background:transparent !important;}' +
-      /* The pill stays fully clickable: only its colors are muted. */
       '[' + PILL_ATTR + '="1"]{filter:grayscale(1) !important;opacity:.55 !important;}' +
       '.dl-plan-badge{margin-left:auto;font-size:10px;letter-spacing:.04em;padding:1px 6px;border-radius:999px;' +
       'border:1px solid rgba(255,255,255,.18);opacity:.75;text-transform:uppercase;}';
@@ -30,7 +56,13 @@
   }
 
   function map() { try { return typeof MODELS !== 'undefined' ? MODELS : null; } catch (e) { return null; } }
+
+  /* Единый живой токен: сначала нормализатор, потом хранилище. */
   function token() {
+    try { if (typeof window.dlNormalizeTokens === 'function') window.dlNormalizeTokens(); } catch (e) {}
+    try {
+      if (window.__dlToken && String(window.__dlToken).length > 10) return String(window.__dlToken);
+    } catch (e) {}
     try {
       for (var i = 0; i < TOKEN_KEYS.length; i++) {
         var value = localStorage.getItem(TOKEN_KEYS[i]);
@@ -39,9 +71,28 @@
     } catch (e) {}
     return '';
   }
+
+  function readCache() {
+    try {
+      var raw = localStorage.getItem(PLAN_CACHE);
+      if (!raw) return '';
+      var data = JSON.parse(raw);
+      var name = String((data && data.plan) || '').toLowerCase();
+      return PLANS[name] ? name : '';
+    } catch (e) { return ''; }
+  }
+  function writeCache(plan) {
+    try { localStorage.setItem(PLAN_CACHE, JSON.stringify({ plan: plan, at: Date.now() })); } catch (e) {}
+  }
+  function dropCache() { try { localStorage.removeItem(PLAN_CACHE); } catch (e) {} }
+
   function norm(value) { return String(value == null ? '' : value).replace(/\s+/g, ' ').trim(); }
+
+  /* Пока список бесплатных моделей не готов, модель считается доступной:
+     иначе на Free гаснет весь список целиком. */
   function isFree(model) {
-    return typeof window.dlIsFreeModel === 'function' ? window.dlIsFreeModel(model) : false;
+    if (typeof window.dlIsFreeModel !== 'function') return true;
+    try { return !!window.dlIsFreeModel(model); } catch (e) { return true; }
   }
   function isAllowed(key) {
     var models = map(), model = models && models[key];
@@ -55,7 +106,7 @@
       : 'Зарегистрируйтесь, чтобы выбирать модели';
   }
 
-  /* name -> model key, longest names first so "Claude Opus 4.8 Thinking" wins over "Claude Opus 4.8". */
+  /* name -> model key, самые длинные названия впереди. */
   function names() {
     var models = map(), list = [];
     if (!models) return list;
@@ -91,7 +142,7 @@
     });
     return out;
   }
-  /* Any list that shows three or more model names is a model picker, whatever its markup is. */
+  /* Любой список с тремя и более названиями моделей — это список моделей. */
   function listedRows(list) {
     var out = [];
     if (!list.length) return out;
@@ -114,7 +165,6 @@
     if (window.currentModel) return window.currentModel;
     try { return localStorage.getItem('dl_model') || ''; } catch (e) { return ''; }
   }
-  /* The composer button that shows the selected model. */
   function pills() {
     var out = [];
     ['#modelPill', '[onclick*="toggleModelMenu"]'].forEach(function (selector) {
@@ -137,7 +187,7 @@
       }
     });
   }
-  /* Guard is attached to the locked row itself, never to the document. */
+  /* Страж висит на самой закрытой строке, никогда на документе. */
   function guardRow(row) {
     if (row.__dlGuarded) return;
     row.__dlGuarded = true;
@@ -149,8 +199,18 @@
       notice(message());
     }, true);
   }
+  function unlockAll() {
+    var rows;
+    try { rows = document.querySelectorAll('[' + LOCK_ATTR + '="1"]'); } catch (e) { return; }
+    Array.prototype.forEach.call(rows, function (row) {
+      row.removeAttribute(LOCK_ATTR);
+      row.removeAttribute('title');
+    });
+    pills().forEach(function (pill) { pill.removeAttribute(PILL_ATTR); });
+  }
   function mark() {
-    if (!state.ready || !map()) return;
+    if (!map()) return;
+    if (!state.ready) { unlockAll(); return; }
     var list = names();
     var rows = explicitRows();
     listedRows(list).forEach(function (row) { if (rows.indexOf(row) < 0) rows.push(row); });
@@ -176,14 +236,18 @@
     badge();
   }
   function badge() {
-    var heads = document.querySelectorAll('.mh');
+    var heads;
+    try { heads = document.querySelectorAll('.mh'); } catch (e) { return; }
     Array.prototype.forEach.call(heads, function (head) {
-      if (head.querySelector('.dl-plan-badge')) return;
       if (String(head.textContent || '').trim().toUpperCase().indexOf('PRO') !== 0) return;
-      var tag = document.createElement('span');
-      tag.className = 'dl-plan-badge';
-      tag.textContent = state.signedIn ? ('ваш тариф: ' + state.plan) : 'без входа';
-      head.appendChild(tag);
+      var tag = head.querySelector('.dl-plan-badge');
+      var text = state.signedIn ? ('ваш тариф: ' + state.plan) : 'без входа';
+      if (!tag) {
+        tag = document.createElement('span');
+        tag.className = 'dl-plan-badge';
+        head.appendChild(tag);
+      }
+      if (tag.textContent !== text) tag.textContent = text;
     });
   }
   function notice(text) {
@@ -216,24 +280,106 @@
       window[name].__dlGuarded = true;
     });
   }
-  function loadState() {
-    var value = token();
-    if (!value) { state.ready = true; state.signedIn = false; state.plan = 'guest'; mark(); return; }
-    fetch('/api/plan', { headers: { Authorization: 'Bearer ' + value } })
-      .then(function (r) { if (!r.ok) throw new Error('plan ' + r.status); return r.json(); })
-      .then(function (data) {
-        state.ready = true;
-        state.signedIn = true;
-        state.plan = String(data.plan || 'free').toLowerCase();
-        mark();
-      })
-      .catch(function () { state.ready = true; state.signedIn = false; state.plan = 'guest'; mark(); });
+
+  /* ---------- выяснение тарифа ---------- */
+
+  function planFrom(data) {
+    if (!data || typeof data !== 'object') return '';
+    var name = String(data.plan || data.tariff || (data.quota && data.quota.plan) || '').toLowerCase();
+    return PLANS[name] ? name : '';
   }
+
+  function ask(url, value) {
+    return fetch(url, { headers: { Authorization: 'Bearer ' + value }, cache: 'no-store' })
+      .then(function (response) {
+        if (response.status === 401 || response.status === 403) return { denied: true };
+        if (!response.ok) return { error: true };
+        return response.json().then(function (data) {
+          var plan = planFrom(data);
+          return plan ? { plan: plan } : { signedIn: true };
+        }, function () { return { error: true }; });
+      }, function () { return { error: true }; });
+  }
+
+  function settle(next, source) {
+    state.ready = next.ready;
+    state.signedIn = next.signedIn;
+    state.plan = next.plan;
+    state.source = source;
+    mark();
+  }
+
+  function guest() {
+    dropCache();
+    settle({ ready: true, signedIn: false, plan: 'guest' }, 'guest');
+  }
+
+  function known(plan, source) {
+    writeCache(plan);
+    settle({ ready: true, signedIn: true, plan: plan }, source);
+  }
+
+  /* Сервер недоступен: ничего не выдумываем. Есть прошлый тариф — берём его,
+     нет — не блокируем ничего и пробуем ещё раз позже. */
+  function unsure() {
+    var cached = readCache();
+    if (cached) { settle({ ready: true, signedIn: true, plan: cached }, 'cache'); }
+    else { settle({ ready: false, signedIn: false, plan: 'unknown' }, 'offline'); }
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(loadState, RETRY_MS);
+  }
+
+  function loadState() {
+    if (busy) return;
+    var value = token();
+    lastToken = value;
+    if (!value) { guest(); return; }
+    busy = true;
+    ask('/api/plan', value)
+      .then(function (result) {
+        if (result.plan) { known(result.plan, 'plan'); return null; }
+        if (result.signedIn) { known('free', 'plan'); return null; }
+        // Отказ или ошибка — второй источник: профиль пользователя.
+        return ask('/api/profile', value).then(function (profile) {
+          if (profile.plan) { known(profile.plan, 'profile'); return null; }
+          if (profile.signedIn) { known('free', 'profile'); return null; }
+          if (profile.error && result.error) { unsure(); return null; }
+          // Профиль тоже отказал — проверяем саму сессию.
+          return ask('/api/auth/me', value).then(function (me) {
+            if (me.plan) { known(me.plan, 'me'); return null; }
+            if (me.signedIn) { known('free', 'me'); return null; }
+            if (me.error) { unsure(); return null; }
+            guest();
+            return null;
+          });
+        });
+      })
+      .catch(function () { unsure(); })
+      .then(function () { busy = false; });
+  }
+  window.dlRefreshModelLock = function () { clearTimeout(retryTimer); busy = false; loadState(); };
+
+  /* Токен появился или пропал — перечитать тариф. */
+  function watchToken() {
+    var value = token();
+    if (value === lastToken) return;
+    lastToken = value;
+    clearTimeout(retryTimer);
+    busy = false;
+    loadState();
+  }
+
   function start() {
     style();
     guardPick();
     loadState();
-    setInterval(function () { guardPick(); mark(); }, 700);
+    setInterval(function () { guardPick(); mark(); }, TICK_MS);
+    setInterval(watchToken, TOKEN_MS);
+    window.addEventListener('storage', watchToken);
+    window.addEventListener('focus', function () { watchToken(); });
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) watchToken();
+    });
     new MutationObserver(function () {
       clearTimeout(start.timer);
       start.timer = setTimeout(function () { guardPick(); mark(); }, 60);
