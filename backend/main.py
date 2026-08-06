@@ -65,9 +65,10 @@ _PATCH_SCRIPTS = (
     "dl-board-ai.js", "board-json-force.js", "board-log-trim.js",
     "dl-mobile-fixes.js",
     "dl-palettes.js",
-    # После палитр: скрывает кнопку, когда её место занято панелью блоков,
-    # меню разрешения/устройства, кодом или мобильным чатом.
+    # После палитр: кнопка палитры отъезжает от панели блоков, меню разрешения,
+    # панели кода и мобильного чата; старая кнопка «Цвета» больше не нужна.
     "palette-visibility-guard.js",
+    "hide-colors-button.js",
 )
 
 _PATCH_STYLES = (
