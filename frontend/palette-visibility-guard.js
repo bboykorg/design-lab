@@ -1,23 +1,16 @@
-/* Кнопка «Палитра» не должна накладываться ни на что.
+/* Кнопка «Палитра» не должна накладываться ни на что — и не должна теряться.
 
-   dl-palettes.js ставит её position:fixed в правом нижнем углу с z-index 99998,
-   поэтому она оказывалась поверх панели блоков, меню разрешения экрана,
-   панели кода и мобильного чата.
+   Прошлые версии просто скрывали кнопку при любой открытой панели,
+   и если панель блоков висит в редакторе постоянно, кнопка исчезала навсегда.
+   Теперь логика другая: кнопка ищет свободное место и отъезжает туда —
+   сначала вверх, потом влево. Прячется она только если свободного места
+   нет вообще (развёрнутый мобильный чат, полноэкранная панель).
 
-   Первая версия этого слоя прятала кнопку на телефоне всегда: условием был
-   видимый composer, а он в редакторе виден постоянно. Теперь иначе:
+   Ничего не перехватывается и не затемняется: меняется только положение
+   и видимость самой кнопки палитры.
 
-     • на телефоне кнопка приподнимается над закреплённой строкой ввода
-       и над экранной клавиатурой (--dlm-comp и --dlm-kb ведёт dl-mobile-chat.js);
-     • кнопка скрывается, когда мобильный чат развёрнут (data-dlm = half|full);
-     • кнопка скрывается при открытой панели блоков, меню тулбара,
-       панели кода и любом модальном окне;
-     • дополнительно считается реальное пересечение с небольшими плавающими
-       панелями, поэтому новая панель тоже не окажется под кнопкой;
-     • вместе с кнопкой закрывается и окно выбора схемы.
-
-   Ничего не перехватывается и не затемняется: слой меняет только видимость
-   и отступ самой кнопки палитры. */
+   Диагностика в консоли: dlPaletteWhere() — показывает, найдена ли кнопка,
+   где она стоит, скрыта ли и кто именно ей мешает. */
 (function () {
   'use strict';
   if (window.__dlPaletteVisibilityGuard) return;
@@ -26,28 +19,34 @@
   var BTN = '[data-dl-palette-button]';
   var PANEL_ATTR = 'data-dl-palette-panel';
   var HIDDEN = 'data-dl-palette-hidden';
+  var MOVED = 'data-dl-palette-moved';
   var CSS_ID = 'dl-palette-visibility-css';
   var PHONE = window.matchMedia ? window.matchMedia('(max-width:860px)') : null;
-  var MIN_Z = 20;
-  var BIG_SHARE = 0.72;
 
-  /* Панели, которые занимают место кнопки или важнее неё. */
-  var ALWAYS_HIDE = [
-    '#sfPanel', '.sf-panel', '[data-sf-panel]',
-    '.blocks-panel', '.block-panel',
-    '#codePanel.on', '#dlIde.on'
-  ];
-  var IF_OVERLAP = [
+  var MIN_Z = 20;          /* ниже — это фон, а не панель */
+  var BIG_SHARE = 0.72;    /* огромные контейнеры не считаются помехой */
+  var MIN_W = 80;
+  var MIN_H = 36;
+  var GAP = 12;
+  var MARGIN = 14;
+  var UP_STEPS = 6;
+  var LEFT_STEPS = 4;
+
+  /* Панели, которые точно считаются помехой при пересечении (не безусловно). */
+  var KNOWN = [
+    '#sfPanel', '.sf-panel', '[data-sf-panel]', '.blocks-panel', '.block-panel',
+    '#codePanel', '#dlIde',
     '.pv-head .tb-menu', '.pv-head [role="menu"]',
     '#deviceMenu', '#devMenu', '#screenMenu', '#resolutionMenu', '#viewportMenu', '#emuMenu',
     '[data-device-menu]', '[data-resolution-menu]', '[data-viewport-menu]',
     '.device-menu', '.resolution-menu', '.viewport-menu', '.screen-menu',
-    '.modal.on', '#modal.on', '[role="dialog"]',
-    '.drawer.on', '.drawer.open', '.sheet.on', '.sheet.open',
-    '#modelMenu', '.model-menu'
+    '#modelMenu', '.model-menu',
+    '.modal', '[role="dialog"]', '.drawer', '.sheet',
+    '.editor.on .composer', '.editor.on .chat', '.dlm-top'
   ];
 
   var scheduled = false;
+  var lastReport = { found: false };
 
   function style() {
     if (document.getElementById(CSS_ID)) return;
@@ -57,36 +56,37 @@
       '[' + HIDDEN + '="1"]{visibility:hidden!important;pointer-events:none!important}';
     (document.head || document.documentElement).appendChild(node);
   }
-  function button() {
-    return document.querySelector(BTN);
-  }
+  function button() { return document.querySelector(BTN); }
   function phone() {
     return PHONE ? PHONE.matches : (window.innerWidth || 0) <= 860;
-  }
-  function shown(el) {
-    if (!el || !el.getBoundingClientRect) return false;
-    var cs;
-    try { cs = getComputedStyle(el); } catch (e) { return false; }
-    if (!cs) return false;
-    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false;
-    var box = el.getBoundingClientRect();
-    if (box.width < 2 || box.height < 2) return false;
-    return box.right > 0 && box.bottom > 0 &&
-      box.left < (window.innerWidth || 0) && box.top < (window.innerHeight || 0);
-  }
-  function hits(a, b) {
-    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
   }
   function boxOf(el) {
     try { return el.getBoundingClientRect(); } catch (e) { return null; }
   }
-  function matchAny(list) {
-    var out = [];
-    for (var i = 0; i < list.length; i++) {
-      var nodes;
-      try { nodes = document.querySelectorAll(list[i]); } catch (e) { nodes = []; }
-      for (var j = 0; j < nodes.length; j++) out.push(nodes[j]);
-    }
+  function hits(a, b) {
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  }
+  function visible(el) {
+    var cs;
+    try { cs = getComputedStyle(el); } catch (e) { return false; }
+    if (!cs) return false;
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    if (Number(cs.opacity) === 0) return false;
+    return true;
+  }
+  function cssVar(name, fallback) {
+    var raw;
+    try {
+      raw = getComputedStyle(document.documentElement).getPropertyValue(name);
+    } catch (e) { raw = ''; }
+    var n = parseFloat(String(raw || '').replace('px', ''));
+    return isNaN(n) ? fallback : n;
+  }
+  function label(el) {
+    var out = el.tagName ? el.tagName.toLowerCase() : '?';
+    if (el.id) out += '#' + el.id;
+    var cls = typeof el.className === 'string' ? el.className.trim() : '';
+    if (cls) out += '.' + cls.split(/\s+/).slice(0, 3).join('.');
     return out;
   }
 
@@ -101,77 +101,101 @@
     }
     return null;
   }
+  function paletteOpen() {
+    var panel = palettePanel();
+    return !!(panel && visible(panel));
+  }
   function closePalette() {
     var panel = palettePanel();
     if (panel && panel.style.display !== 'none') panel.style.display = 'none';
   }
-
-  /* Мобильный чат развёрнут: лента переписки занимает низ экрана. */
-  function chatExpanded() {
-    if (!phone()) return false;
-    var editor = document.querySelector('.editor.on');
-    if (!editor) return false;
-    var state = editor.getAttribute('data-dlm') || '';
-    return state === 'half' || state === 'full';
-  }
-
-  function blockingPanel(btnBox) {
-    var always = matchAny(ALWAYS_HIDE);
-    for (var i = 0; i < always.length; i++) {
-      if (shown(always[i])) return true;
-    }
-    var maybe = matchAny(IF_OVERLAP);
-    for (var j = 0; j < maybe.length; j++) {
-      var node = maybe[j];
-      if (!shown(node)) continue;
-      var box = boxOf(node);
-      if (box && hits(btnBox, box)) return true;
-    }
-    return false;
+  function movePanel(box) {
+    var panel = palettePanel();
+    if (!panel || !visible(panel)) return;
+    var pb = boxOf(panel);
+    if (!pb) return;
+    var vw = window.innerWidth || 0;
+    var left = Math.max(8, Math.min(box.left + box.width - pb.width, vw - pb.width - 8));
+    var top = Math.max(8, box.top - pb.height - 8);
+    panel.style.setProperty('left', left + 'px', 'important');
+    panel.style.setProperty('top', top + 'px', 'important');
+    panel.style.setProperty('right', 'auto', 'important');
+    panel.style.setProperty('bottom', 'auto', 'important');
   }
 
   function skip(el, btn) {
     if (!el || el === btn) return true;
     if (el.contains(btn) || btn.contains(el)) return true;
     if (el === document.body || el === document.documentElement) return true;
-    if (el.hasAttribute(PANEL_ATTR)) return true;
-    if (el.id === 'pvFrame' || el.id === 'pvStage' || el.id === 'emuStage') return true;
-    if (el.matches && el.matches('.editor,.preview,.pv,.pv-stage,.pv-fit,.pv-dev,.pv-scr,.emu,.chat')) return true;
+    if (el.hasAttribute && el.hasAttribute(PANEL_ATTR)) return true;
+    var id = el.id || '';
+    if (id === 'pvFrame' || id === 'pvStage' || id === 'emuStage') return true;
+    if (el.matches) {
+      try {
+        if (el.matches('.editor,.preview,.pv,.pv-stage,.pv-fit,.pv-dev,.pv-scr,.emu,.dlm-scrim')) return true;
+      } catch (e) { /* неважно */ }
+    }
     return false;
   }
 
-  /* Запасной путь для панелей без известных селекторов: считаем геометрию.
-     Большие контейнеры исключены, иначе кнопка пропадала бы навсегда. */
-  function overlapsFloating(btn, btnBox) {
-    var nodes = document.querySelectorAll('body *');
-    var area = Math.max(1, (window.innerWidth || 1) * (window.innerHeight || 1));
-    for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i];
-      if (skip(el, btn)) continue;
+  /* Собираем все реально видимые плавающие панели с их коробками. */
+  function blockers(btn) {
+    var vw = window.innerWidth || 1;
+    var vh = window.innerHeight || 1;
+    var area = Math.max(1, vw * vh);
+    var seen = [];
+    var out = [];
+
+    function consider(el, forced) {
+      if (skip(el, btn)) return;
+      if (seen.indexOf(el) >= 0) return;
+      seen.push(el);
+      if (!visible(el)) return;
       var cs;
-      try { cs = getComputedStyle(el); } catch (e) { continue; }
-      if (cs.position !== 'fixed' && cs.position !== 'absolute') continue;
-      if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) continue;
-      var z = parseInt(cs.zIndex, 10);
-      if (isNaN(z) || z < MIN_Z) continue;
+      try { cs = getComputedStyle(el); } catch (e) { return; }
+      if (!forced) {
+        if (cs.position !== 'fixed' && cs.position !== 'absolute') return;
+        var z = parseInt(cs.zIndex, 10);
+        if (isNaN(z) || z < MIN_Z) return;
+      }
       var box = boxOf(el);
-      if (!box || box.width < 80 || box.height < 40) continue;
-      if (box.width * box.height > area * BIG_SHARE) continue;
-      if (hits(btnBox, box)) return true;
+      if (!box) return;
+      if (box.width < MIN_W || box.height < MIN_H) return;
+      if (box.right <= 0 || box.bottom <= 0 || box.left >= vw || box.top >= vh) return;
+      if (box.width * box.height > area * BIG_SHARE) return;
+      out.push({ el: el, box: box });
     }
-    return false;
+
+    for (var i = 0; i < KNOWN.length; i++) {
+      var nodes;
+      try { nodes = document.querySelectorAll(KNOWN[i]); } catch (e) { nodes = []; }
+      for (var j = 0; j < nodes.length; j++) consider(nodes[j], true);
+    }
+    var all = document.querySelectorAll('body *');
+    for (var k = 0; k < all.length; k++) consider(all[k], false);
+    return out;
   }
 
-  /* На телефоне кнопка стоит НАД строкой ввода, а не поверх неё. */
-  function place(btn) {
-    if (phone()) {
-      btn.style.setProperty('bottom',
-        'calc(var(--dlm-comp, 92px) + var(--dlm-kb, 0px) + 14px)', 'important');
-      btn.style.setProperty('right', '12px', 'important');
-    } else {
-      btn.style.removeProperty('bottom');
-      btn.style.removeProperty('right');
+  function freeSpot(w, h, list) {
+    var vw = window.innerWidth || 0;
+    var vh = window.innerHeight || 0;
+    var baseBottom = MARGIN;
+    if (phone()) baseBottom = cssVar('--dlm-comp', 92) + cssVar('--dlm-kb', 0) + MARGIN;
+
+    for (var up = 0; up < UP_STEPS; up++) {
+      for (var left = 0; left < LEFT_STEPS; left++) {
+        var x = vw - MARGIN - w - left * (w + GAP);
+        var y = vh - baseBottom - h - up * (h + GAP);
+        if (x < 8 || y < 8) continue;
+        var probe = { left: x, top: y, right: x + w, bottom: y + h };
+        var clean = true;
+        for (var i = 0; i < list.length; i++) {
+          if (hits(probe, list[i].box)) { clean = false; break; }
+        }
+        if (clean) return probe;
+      }
     }
+    return null;
   }
 
   function setHidden(btn, hide) {
@@ -185,22 +209,50 @@
     }
   }
 
+  function put(btn, spot) {
+    btn.style.setProperty('left', Math.round(spot.left) + 'px', 'important');
+    btn.style.setProperty('top', Math.round(spot.top) + 'px', 'important');
+    btn.style.setProperty('right', 'auto', 'important');
+    btn.style.setProperty('bottom', 'auto', 'important');
+    btn.setAttribute(MOVED, '1');
+  }
+
   function sync() {
     scheduled = false;
     style();
     var btn = button();
-    if (!btn) return;
+    if (!btn) { lastReport = { found: false }; return; }
 
-    place(btn);
+    var box = boxOf(btn);
+    var w = (box && box.width) || 44;
+    var h = (box && box.height) || 44;
 
-    /* Геометрию берём до скрытия: у скрытой кнопки visibility:hidden,
-       но коробка сохраняется — поэтому проверка остаётся честной
-       и кнопка сама вернётся, когда панель закроют. */
-    var btnBox = boxOf(btn);
-    if (!btnBox || (!btnBox.width && !btnBox.height)) return;
+    var list = blockers(btn);
+    var spot = freeSpot(w, h, list);
 
-    var hide = chatExpanded() || blockingPanel(btnBox) || overlapsFloating(btn, btnBox);
-    setHidden(btn, hide);
+    if (spot) {
+      setHidden(btn, false);
+      put(btn, spot);
+      if (paletteOpen()) movePanel(spot);
+    } else {
+      setHidden(btn, true);
+    }
+
+    lastReport = {
+      found: true,
+      hidden: btn.getAttribute(HIDDEN) === '1',
+      phone: phone(),
+      spot: spot ? { left: Math.round(spot.left), top: Math.round(spot.top) } : null,
+      blockers: list.map(function (item) {
+        return {
+          node: label(item.el),
+          rect: {
+            left: Math.round(item.box.left), top: Math.round(item.box.top),
+            width: Math.round(item.box.width), height: Math.round(item.box.height)
+          }
+        };
+      })
+    };
   }
 
   function schedule() {
@@ -208,6 +260,8 @@
     scheduled = true;
     requestAnimationFrame(sync);
   }
+
+  window.dlPaletteWhere = function () { sync(); return lastReport; };
 
   function start() {
     style();
@@ -229,7 +283,7 @@
     }
     if (PHONE && PHONE.addEventListener) PHONE.addEventListener('change', schedule);
 
-    /* Страховка: часть панелей выезжает анимацией без мутаций атрибутов. */
+    /* Часть панелей выезжает анимацией без мутаций атрибутов. */
     setInterval(sync, 600);
   }
 
