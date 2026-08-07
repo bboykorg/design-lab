@@ -1,12 +1,17 @@
-/* Design Lab — мобильная панель выбора шрифта.
+/* Design Lab — мобильная панель выбора шрифта v2.
 
-   Исходное меню шрифтов рассчитано на ПК: на телефоне оно раскрывается узкой
-   полосой под верхним тулбаром, обрезается и не имеет кнопки выхода.
+   В v1 заголовок вставлялся внутрь штатного списка, фокус переводился на ×,
+   а вокруг создавался backdrop. Штатное меню воспринимало потерю фокуса как
+   клик снаружи, удаляло варианты — оставались пустая шапка и тёмный экран.
 
-   Этот слой не заменяет штатный выбор шрифта и не перехватывает его обработчики.
-   Он только находит уже открытое меню, оформляет его как мобильную шторку и
-   добавляет безопасные способы закрытия: кнопка ×, тап по фону и Escape.
-   После выбора шрифта шторка закрывается штатным кликом по исходной кнопке. */
+   v2 не меняет содержимое и фокус штатного меню вообще:
+     • только добавляет атрибут для мобильной геометрии;
+     • отдельная шапка с × живёт рядом в body, а не внутри списка;
+     • глобального overlay/backdrop и затемнения нет;
+     • закрытие идёт повторным кликом по исходной кнопке «Шрифты»;
+     • Escape тоже закрывает список.
+
+   Все элементы страницы остаются кликабельными. */
 (function () {
   'use strict';
   if (window.__dlMobileFontSheet) return;
@@ -14,8 +19,7 @@
 
   var MQ = window.matchMedia ? window.matchMedia('(max-width:860px)') : null;
   var PANEL = 'data-dl-font-sheet';
-  var HEADER = 'data-dl-font-head';
-  var BACKDROP_ID = 'dl-font-backdrop';
+  var HEAD_ID = 'dl-font-head';
   var CSS_ID = 'dl-mobile-font-sheet-css';
   var FONT_WORDS = [
     'inter', 'space grotesk', 'manrope', 'montserrat', 'roboto', 'open sans',
@@ -27,7 +31,6 @@
   var panel = null;
   var scheduled = false;
   var closing = false;
-  var previousFocus = null;
 
   function phone() {
     return MQ ? MQ.matches : (window.innerWidth || 0) <= 860;
@@ -41,16 +44,14 @@
     node.id = CSS_ID;
     node.textContent = [
       '@media(max-width:860px){',
-      'body.dl-font-open{overflow:hidden!important;touch-action:none}',
-      '#'+BACKDROP_ID+'{position:fixed;inset:0;z-index:9598;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}',
-      '['+PANEL+'="1"]{position:fixed!important;left:10px!important;right:10px!important;top:calc(var(--dlm-top,88px) + env(safe-area-inset-top,0px))!important;bottom:calc(var(--dlm-comp,92px) + var(--dlm-kb,0px) + 10px)!important;width:auto!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;padding:0 10px 12px!important;z-index:9599!important;display:flex!important;flex-direction:column!important;gap:4px!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch;background:#101114!important;border:1px solid rgba(255,255,255,.12)!important;border-radius:18px!important;box-shadow:0 24px 70px rgba(0,0,0,.72)!important;transform:none!important;opacity:1!important;visibility:visible!important;color:#f4f4f5!important;touch-action:pan-y}',
-      '['+PANEL+'="1"] ['+HEADER+'="1"]{position:sticky!important;top:0!important;z-index:3!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;flex:0 0 auto!important;min-height:58px!important;margin:0 -10px 6px!important;padding:8px 10px 8px 16px!important;background:rgba(16,17,20,.98)!important;border-bottom:1px solid rgba(255,255,255,.09)!important;border-radius:18px 18px 0 0!important;font:700 16px/1.2 Inter,system-ui,sans-serif!important;color:#f4f4f5!important}',
-      '['+PANEL+'="1"] .dl-font-close{appearance:none!important;-webkit-appearance:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 44px!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;margin:0!important;padding:0!important;border:1px solid rgba(255,255,255,.14)!important;border-radius:13px!important;background:#1a1c21!important;color:#fff!important;font:300 28px/1 system-ui,sans-serif!important;box-shadow:none!important;cursor:pointer!important}',
-      '['+PANEL+'="1"] .dl-font-close:active{background:#292c33!important;transform:scale(.96)!important}',
-      '['+PANEL+'="1"]>button,['+PANEL+'="1"]>[role="button"],['+PANEL+'="1"]>div:not(['+HEADER+']){flex:0 0 auto!important;min-height:50px!important;max-width:100%!important}',
+      '#'+HEAD_ID+'{position:fixed;left:10px;right:10px;top:calc(var(--dlm-top,76px) + env(safe-area-inset-top,0px));z-index:9599;height:58px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 9px 7px 16px;box-sizing:border-box;background:#101114;border:1px solid rgba(255,255,255,.12);border-bottom-color:rgba(255,255,255,.08);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.28);font:700 16px/1.2 Inter,system-ui,sans-serif;color:#f4f4f5;pointer-events:auto}',
+      '#'+HEAD_ID+' .dl-font-close{appearance:none;-webkit-appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;margin:0;padding:0;border:1px solid rgba(255,255,255,.14);border-radius:13px;background:#1a1c21;color:#fff;font:300 28px/1 system-ui,sans-serif;box-shadow:none;cursor:pointer;touch-action:manipulation}',
+      '#'+HEAD_ID+' .dl-font-close:active{background:#292c33;transform:scale(.96)}',
+      '['+PANEL+'="1"]{position:fixed!important;left:10px!important;right:10px!important;top:calc(var(--dlm-top,76px) + env(safe-area-inset-top,0px) + 57px)!important;bottom:calc(var(--dlm-comp,92px) + var(--dlm-kb,0px) + 10px)!important;width:auto!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;padding:8px 10px 12px!important;box-sizing:border-box!important;z-index:9598!important;display:block!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch;background:#101114!important;border:1px solid rgba(255,255,255,.12)!important;border-top:0!important;border-radius:0 0 18px 18px!important;box-shadow:0 24px 60px rgba(0,0,0,.58)!important;transform:none!important;opacity:1!important;visibility:visible!important;color:#f4f4f5!important;touch-action:pan-y}',
+      '['+PANEL+'="1"]>button,['+PANEL+'="1"]>[role="button"],['+PANEL+'="1"]>div{min-height:50px;max-width:100%;box-sizing:border-box}',
       '['+PANEL+'="1"] button,['+PANEL+'="1"] [role="button"]{touch-action:manipulation}',
       '}',
-      '@media(max-width:380px){['+PANEL+'="1"]{left:6px!important;right:6px!important;border-radius:15px!important}}'
+      '@media(max-width:380px){#'+HEAD_ID+',['+PANEL+'="1"]{left:6px!important;right:6px!important}}'
     ].join('');
     (document.head || document.documentElement).appendChild(node);
   }
@@ -82,7 +83,6 @@
     for (var i = 0; i < FONT_WORDS.length; i++) {
       if (t.indexOf(FONT_WORDS[i]) >= 0) score++;
     }
-    /* В меню каждая строка обычно имеет образец Aa. */
     var aa = (String(el.textContent || '').match(/\bAa\b/g) || []).length;
     if (aa > 1) score += Math.min(aa, 4);
     return score;
@@ -90,7 +90,7 @@
 
   function findPanel() {
     var marked = document.querySelector('[' + PANEL + '="1"]');
-    if (marked && visible(marked)) return marked;
+    if (marked && visible(marked) && fontScore(marked) >= 2) return marked;
 
     var nodes = document.querySelectorAll('body *');
     var best = null;
@@ -98,112 +98,83 @@
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       if (!visible(el) || inPreview(el)) continue;
+      if (el.id === HEAD_ID || (el.closest && el.closest('#' + HEAD_ID))) continue;
       if (el === trigger || (trigger && el.contains(trigger))) continue;
       if (fontScore(el) < 3) continue;
       var r = el.getBoundingClientRect();
       if (r.width < 150 || r.height < 70) continue;
       var area = r.width * r.height;
-      /* Берём самый маленький контейнер, содержащий весь список. Так body,
-         editor и preview не смогут стать шторкой. */
       if (area < bestArea) { best = el; bestArea = area; }
     }
     return best;
   }
 
-  function backdrop() {
-    var back = document.getElementById(BACKDROP_ID);
-    if (back) return back;
-    back = document.createElement('div');
-    back.id = BACKDROP_ID;
-    back.setAttribute('aria-hidden', 'true');
-    back.addEventListener('click', close);
-    document.body.appendChild(back);
-    return back;
-  }
-
-  function makeHeader(host) {
-    var old = host.querySelector(':scope > [' + HEADER + '="1"]');
+  function makeHead() {
+    var old = document.getElementById(HEAD_ID);
     if (old) return old;
     var head = document.createElement('div');
-    head.setAttribute(HEADER, '1');
-    head.innerHTML = '<span>Шрифты</span>';
+    head.id = HEAD_ID;
+    head.setAttribute('role', 'toolbar');
+    head.setAttribute('aria-label', 'Выбор шрифта');
+    var title = document.createElement('span');
+    title.textContent = 'Шрифты';
     var closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'dl-font-close';
     closeBtn.setAttribute('aria-label', 'Закрыть выбор шрифта');
     closeBtn.textContent = '×';
+    closeBtn.addEventListener('pointerdown', function (e) {
+      /* Не даём pointerdown увести фокус со штатного меню до click. */
+      e.preventDefault();
+    });
     closeBtn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
       close();
     });
+    head.appendChild(title);
     head.appendChild(closeBtn);
-    host.insertBefore(head, host.firstChild);
+    document.body.appendChild(head);
     return head;
   }
 
   function open(host) {
     if (!phone() || !host || !host.isConnected) return;
     style();
+    if (panel && panel !== host) panel.removeAttribute(PANEL);
     panel = host;
-    previousFocus = trigger || document.activeElement;
     host.setAttribute(PANEL, '1');
-    host.setAttribute('role', 'dialog');
-    host.setAttribute('aria-modal', 'true');
-    host.setAttribute('aria-label', 'Выбор шрифта');
-    makeHeader(host);
-    backdrop();
-    document.body.classList.add('dl-font-open');
-    var closeBtn = host.querySelector('.dl-font-close');
-    if (closeBtn) setTimeout(function () { try { closeBtn.focus({ preventScroll: true }); } catch (e) { closeBtn.focus(); } }, 0);
+    makeHead();
+    /* Важно: не вызываем focus(). Именно это закрывало исходный список в v1. */
   }
 
   function cleanup() {
-    var back = document.getElementById(BACKDROP_ID);
-    if (back) back.remove();
-    document.body.classList.remove('dl-font-open');
-    if (panel && panel.isConnected) {
-      panel.removeAttribute(PANEL);
-      panel.removeAttribute('role');
-      panel.removeAttribute('aria-modal');
-      panel.removeAttribute('aria-label');
-      var head = panel.querySelector(':scope > [' + HEADER + '="1"]');
-      if (head) head.remove();
-    }
+    var head = document.getElementById(HEAD_ID);
+    if (head) head.remove();
+    if (panel && panel.isConnected) panel.removeAttribute(PANEL);
     panel = null;
-    var focus = previousFocus;
-    previousFocus = null;
-    if (focus && focus.isConnected) setTimeout(function () { try { focus.focus({ preventScroll: true }); } catch (e) {} }, 0);
   }
 
   function close() {
     if (closing) return;
     closing = true;
-    var oldPanel = panel;
     var oldTrigger = trigger;
-
-    /* Штатный повторный клик сохраняет внутреннее состояние меню корректным. */
+    cleanup();
+    /* Повторный штатный клик синхронно закрывает меню и сохраняет его
+       внутреннее состояние. Никаких display:none вручную. */
     if (oldTrigger && oldTrigger.isConnected) {
       try { oldTrigger.click(); } catch (e) {}
     }
-
-    setTimeout(function () {
-      /* Если приложение не умеет закрывать повторным кликом, скрываем только
-         визуальное оформление. При следующем клике исходный код снова построит
-         или покажет меню, и наблюдатель оформит его заново. */
-      cleanup();
-      if (oldPanel && visible(oldPanel) && oldTrigger) {
-        try { oldTrigger.click(); } catch (e) {}
-      }
-      closing = false;
-    }, 80);
+    setTimeout(function () { closing = false; }, 100);
   }
 
   function inspect() {
     scheduled = false;
     if (!phone()) { if (panel) cleanup(); return; }
-    if (panel && !visible(panel)) { cleanup(); return; }
-    if (!trigger) return;
+    if (panel && (!visible(panel) || fontScore(panel) < 2)) {
+      cleanup();
+    }
+    if (!trigger || closing) return;
     var found = findPanel();
     if (found) open(found);
   }
@@ -217,22 +188,19 @@
     var fontButton = isFontTrigger(e.target);
     if (fontButton) {
       trigger = fontButton;
-      /* Меню строится после штатного click-обработчика. */
       scheduled = false;
       setTimeout(inspect, 0);
       setTimeout(inspect, 80);
-      setTimeout(inspect, 240);
+      setTimeout(inspect, 220);
       return;
     }
     if (panel && panel.contains(e.target)) {
-      if (e.target.closest && e.target.closest('.dl-font-close')) return;
       var choice = e.target.closest && e.target.closest('button,[role="button"],li,.option,.item');
-      if (choice && !choice.hasAttribute(HEADER)) setTimeout(function () {
-        if (panel && !visible(panel)) cleanup();
+      if (choice) setTimeout(function () {
+        if (panel && (!visible(panel) || fontScore(panel) < 2)) cleanup();
       }, 120);
     }
   }
-
   function onKey(e) {
     if (e.key === 'Escape' && panel) {
       e.preventDefault();
@@ -242,20 +210,40 @@
 
   function boot() {
     style();
+    /* Убираем остатки v1, если документ восстановлен браузером из bfcache. */
+    var oldBackdrop = document.getElementById('dl-font-backdrop');
+    if (oldBackdrop) oldBackdrop.remove();
+    document.body.classList.remove('dl-font-open');
+
     document.addEventListener('click', onClick, true);
     document.addEventListener('keydown', onKey, true);
     if (window.MutationObserver) {
       new MutationObserver(function () { if (trigger || panel) schedule(30); })
-        .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-expanded'] });
+        .observe(document.documentElement, {
+          childList: true, subtree: true, attributes: true,
+          attributeFilter: ['class', 'style', 'hidden', 'aria-expanded']
+        });
     }
     addEventListener('resize', function () { schedule(0); }, { passive: true });
     addEventListener('orientationchange', function () { schedule(180); }, { passive: true });
+    addEventListener('pageshow', function () {
+      var back = document.getElementById('dl-font-backdrop');
+      if (back) back.remove();
+      document.body.classList.remove('dl-font-open');
+      schedule(0);
+    });
     if (MQ && MQ.addEventListener) MQ.addEventListener('change', function () { schedule(0); });
   }
 
   window.dlCloseFonts = close;
   window.dlFontSheetState = function () {
-    return { phone: phone(), trigger: !!trigger, panel: !!panel, open: !!(panel && visible(panel)) };
+    return {
+      phone: phone(),
+      trigger: !!(trigger && trigger.isConnected),
+      panel: !!(panel && panel.isConnected),
+      open: !!(panel && visible(panel)),
+      options: panel ? fontScore(panel) : 0
+    };
   };
 
   if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot);
