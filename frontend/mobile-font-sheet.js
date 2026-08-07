@@ -1,36 +1,31 @@
-/* Design Lab — мобильная панель выбора шрифта v2.
+/* Design Lab — мобильная панель выбора шрифта v3.
 
-   В v1 заголовок вставлялся внутрь штатного списка, фокус переводился на ×,
-   а вокруг создавался backdrop. Штатное меню воспринимало потерю фокуса как
-   клик снаружи, удаляло варианты — оставались пустая шапка и тёмный экран.
+   v1/v2 пытались вычислить контейнер меню по тексту. В результате выбирался
+   маленький внутренний блок списка: ему задавалась геометрия всей шторки,
+   штатное меню закрывалось, строки исчезали, а оболочка оставалась.
 
-   v2 не меняет содержимое и фокус штатного меню вообще:
-     • только добавляет атрибут для мобильной геометрии;
-     • отдельная шапка с × живёт рядом в body, а не внутри списка;
-     • глобального overlay/backdrop и затемнения нет;
-     • закрытие идёт повторным кликом по исходной кнопке «Шрифты»;
-     • Escape тоже закрывает список.
+   Здесь нет поиска и нет изменений внутри списка. Настоящее меню уже известно:
+   `.editor.on .pv-head .tb-menu` (оно же используется в dl-mobile-chat.css).
+   Мы только включаем body.dl-font-mode после клика «Шрифты»:
+     • настоящий .tb-menu получает свободную область между шапкой и чатом;
+     • отдельная кнопка × закрывает меню штатным повторным кликом;
+     • палитра и её popup полностью скрываются, пока открыты шрифты;
+     • нет backdrop, затемнения, перехвата страницы и принудительного display.
 
-   Все элементы страницы остаются кликабельными. */
+   Содержимое .tb-menu вообще не трогаем — выбор шрифтов остаётся штатным. */
 (function () {
   'use strict';
   if (window.__dlMobileFontSheet) return;
   window.__dlMobileFontSheet = true;
 
   var MQ = window.matchMedia ? window.matchMedia('(max-width:860px)') : null;
-  var PANEL = 'data-dl-font-sheet';
+  var MODE = 'dl-font-mode';
   var HEAD_ID = 'dl-font-head';
   var CSS_ID = 'dl-mobile-font-sheet-css';
-  var FONT_WORDS = [
-    'inter', 'space grotesk', 'manrope', 'montserrat', 'roboto', 'open sans',
-    'playfair display', 'poppins', 'oswald', 'raleway', 'lora', 'nunito',
-    'pt sans', 'source sans', 'georgia', 'arial'
-  ];
-
+  var MENU = '.editor.on .pv-head .tb-menu';
   var trigger = null;
-  var panel = null;
-  var scheduled = false;
   var closing = false;
+  var checkTimer = 0;
 
   function phone() {
     return MQ ? MQ.matches : (window.innerWidth || 0) <= 860;
@@ -44,14 +39,14 @@
     node.id = CSS_ID;
     node.textContent = [
       '@media(max-width:860px){',
-      '#'+HEAD_ID+'{position:fixed;left:10px;right:10px;top:calc(var(--dlm-top,76px) + env(safe-area-inset-top,0px));z-index:9599;height:58px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 9px 7px 16px;box-sizing:border-box;background:#101114;border:1px solid rgba(255,255,255,.12);border-bottom-color:rgba(255,255,255,.08);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.28);font:700 16px/1.2 Inter,system-ui,sans-serif;color:#f4f4f5;pointer-events:auto}',
-      '#'+HEAD_ID+' .dl-font-close{appearance:none;-webkit-appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;margin:0;padding:0;border:1px solid rgba(255,255,255,.14);border-radius:13px;background:#1a1c21;color:#fff;font:300 28px/1 system-ui,sans-serif;box-shadow:none;cursor:pointer;touch-action:manipulation}',
+      'body.'+MODE+' [data-dl-palette-button],body.'+MODE+' [data-dl-palette-panel]{display:none!important;visibility:hidden!important;pointer-events:none!important}',
+      '#'+HEAD_ID+'{position:fixed;left:8px;right:8px;top:calc(var(--dlm-top,52px) + env(safe-area-inset-top,0px));z-index:9599;height:58px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 9px 7px 16px;background:#101114;border:1px solid rgba(255,255,255,.12);border-bottom-color:rgba(255,255,255,.08);border-radius:16px 16px 0 0;box-shadow:0 -8px 26px rgba(0,0,0,.25);font:700 16px/1.2 Inter,system-ui,sans-serif;color:#f4f4f5;pointer-events:auto}',
+      '#'+HEAD_ID+' .dl-font-close{appearance:none;-webkit-appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;margin:0;padding:0;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:#1a1c21;color:#fff;font:300 28px/1 system-ui,sans-serif;box-shadow:none;cursor:pointer;touch-action:manipulation}',
       '#'+HEAD_ID+' .dl-font-close:active{background:#292c33;transform:scale(.96)}',
-      '['+PANEL+'="1"]{position:fixed!important;left:10px!important;right:10px!important;top:calc(var(--dlm-top,76px) + env(safe-area-inset-top,0px) + 57px)!important;bottom:calc(var(--dlm-comp,92px) + var(--dlm-kb,0px) + 10px)!important;width:auto!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;padding:8px 10px 12px!important;box-sizing:border-box!important;z-index:9598!important;display:block!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch;background:#101114!important;border:1px solid rgba(255,255,255,.12)!important;border-top:0!important;border-radius:0 0 18px 18px!important;box-shadow:0 24px 60px rgba(0,0,0,.58)!important;transform:none!important;opacity:1!important;visibility:visible!important;color:#f4f4f5!important;touch-action:pan-y}',
-      '['+PANEL+'="1"]>button,['+PANEL+'="1"]>[role="button"],['+PANEL+'="1"]>div{min-height:50px;max-width:100%;box-sizing:border-box}',
-      '['+PANEL+'="1"] button,['+PANEL+'="1"] [role="button"]{touch-action:manipulation}',
+      'body.'+MODE+' '+MENU+'{position:fixed!important;left:8px!important;right:8px!important;top:calc(var(--dlm-top,52px) + env(safe-area-inset-top,0px) + 57px)!important;bottom:calc(var(--dlm-comp,92px) + var(--dlm-kb,0px) + 8px)!important;width:auto!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;box-sizing:border-box!important;z-index:9598!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch;background:#101114!important;border:1px solid rgba(255,255,255,.12)!important;border-top:0!important;border-radius:0 0 16px 16px!important;box-shadow:0 22px 58px rgba(0,0,0,.56)!important;transform:none!important;opacity:1!important;visibility:visible!important;touch-action:pan-y}',
+      'body.'+MODE+' '+MENU+' button,body.'+MODE+' '+MENU+' [role="button"],body.'+MODE+' '+MENU+' li{min-height:48px;touch-action:manipulation}',
       '}',
-      '@media(max-width:380px){#'+HEAD_ID+',['+PANEL+'="1"]{left:6px!important;right:6px!important}}'
+      '@media(max-width:380px){#'+HEAD_ID+',body.'+MODE+' '+MENU+'{left:5px!important;right:5px!important}}'
     ].join('');
     (document.head || document.documentElement).appendChild(node);
   }
@@ -62,51 +57,34 @@
     try { cs = getComputedStyle(el); } catch (e) { return false; }
     if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false;
     var r = el.getBoundingClientRect();
-    return r.width > 100 && r.height > 38 && r.bottom > 0 && r.right > 0;
+    return r.width > 100 && r.height > 20 && r.bottom > 0 && r.right > 0;
   }
-  function inPreview(el) {
-    if (!el || !el.closest) return false;
-    try { return !!el.closest('#pvFrame,#pvStage,iframe'); } catch (e) { return false; }
+  function menus() {
+    try { return document.querySelectorAll(MENU); } catch (e) { return []; }
   }
-  function isFontTrigger(el) {
+  function menuOpen() {
+    var list = menus();
+    for (var i = 0; i < list.length; i++) if (visible(list[i])) return true;
+    return false;
+  }
+  function fontButton(el) {
     if (!el || !el.closest) return null;
-    var button = el.closest('button,[role="button"],.tb-btn,.tool-btn,.seg');
-    if (!button || inPreview(button)) return null;
-    var t = norm(button.textContent || button.getAttribute('aria-label') || button.title);
-    if (t === 'шрифты' || t === 'шрифт' || t === 'fonts' || t === 'font') return button;
-    return null;
-  }
-  function fontScore(el) {
-    var t = norm(el.textContent);
-    if (!t || t.length > 4000) return 0;
-    var score = 0;
-    for (var i = 0; i < FONT_WORDS.length; i++) {
-      if (t.indexOf(FONT_WORDS[i]) >= 0) score++;
-    }
-    var aa = (String(el.textContent || '').match(/\bAa\b/g) || []).length;
-    if (aa > 1) score += Math.min(aa, 4);
-    return score;
+    var btn = el.closest('button,[role="button"],.tb-btn,.tool-btn,.seg');
+    if (!btn) return null;
+    var t = norm(btn.textContent || btn.getAttribute('aria-label') || btn.title);
+    return t === 'шрифты' || t === 'шрифт' || t === 'fonts' || t === 'font' ? btn : null;
   }
 
-  function findPanel() {
-    var marked = document.querySelector('[' + PANEL + '="1"]');
-    if (marked && visible(marked) && fontScore(marked) >= 2) return marked;
-
-    var nodes = document.querySelectorAll('body *');
-    var best = null;
-    var bestArea = Infinity;
+  function closePalettePopup() {
+    var marked = document.querySelector('[data-dl-palette-panel]');
+    if (marked) marked.style.display = 'none';
+    /* Старый popup мог ещё не получить маркер. */
+    var nodes = document.querySelectorAll('body > div');
     for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i];
-      if (!visible(el) || inPreview(el)) continue;
-      if (el.id === HEAD_ID || (el.closest && el.closest('#' + HEAD_ID))) continue;
-      if (el === trigger || (trigger && el.contains(trigger))) continue;
-      if (fontScore(el) < 3) continue;
-      var r = el.getBoundingClientRect();
-      if (r.width < 150 || r.height < 70) continue;
-      var area = r.width * r.height;
-      if (area < bestArea) { best = el; bestArea = area; }
+      if (String(nodes[i].textContent || '').indexOf('Цветовая схема сайта') >= 0) {
+        nodes[i].style.display = 'none';
+      }
     }
-    return best;
   }
 
   function makeHead() {
@@ -123,10 +101,7 @@
     closeBtn.className = 'dl-font-close';
     closeBtn.setAttribute('aria-label', 'Закрыть выбор шрифта');
     closeBtn.textContent = '×';
-    closeBtn.addEventListener('pointerdown', function (e) {
-      /* Не даём pointerdown увести фокус со штатного меню до click. */
-      e.preventDefault();
-    });
+    closeBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
     closeBtn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -138,111 +113,96 @@
     return head;
   }
 
-  function open(host) {
-    if (!phone() || !host || !host.isConnected) return;
-    style();
-    if (panel && panel !== host) panel.removeAttribute(PANEL);
-    panel = host;
-    host.setAttribute(PANEL, '1');
+  function enter() {
+    if (!phone()) return;
+    closePalettePopup();
+    document.body.classList.add(MODE);
     makeHead();
-    /* Важно: не вызываем focus(). Именно это закрывало исходный список в v1. */
+    scheduleCheck();
   }
-
-  function cleanup() {
+  function leave() {
+    clearTimeout(checkTimer);
+    checkTimer = 0;
+    document.body.classList.remove(MODE);
     var head = document.getElementById(HEAD_ID);
     if (head) head.remove();
-    if (panel && panel.isConnected) panel.removeAttribute(PANEL);
-    panel = null;
   }
-
   function close() {
     if (closing) return;
     closing = true;
-    var oldTrigger = trigger;
-    cleanup();
-    /* Повторный штатный клик синхронно закрывает меню и сохраняет его
-       внутреннее состояние. Никаких display:none вручную. */
-    if (oldTrigger && oldTrigger.isConnected) {
-      try { oldTrigger.click(); } catch (e) {}
+    leave();
+    if (trigger && trigger.isConnected) {
+      try { trigger.click(); } catch (e) {}
     }
-    setTimeout(function () { closing = false; }, 100);
+    setTimeout(function () { closing = false; }, 120);
   }
 
-  function inspect() {
-    scheduled = false;
-    if (!phone()) { if (panel) cleanup(); return; }
-    if (panel && (!visible(panel) || fontScore(panel) < 2)) {
-      cleanup();
-    }
-    if (!trigger || closing) return;
-    var found = findPanel();
-    if (found) open(found);
-  }
-  function schedule(delay) {
-    if (scheduled) return;
-    scheduled = true;
-    setTimeout(inspect, delay == null ? 20 : delay);
+  function scheduleCheck() {
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(function () {
+      checkTimer = 0;
+      if (!document.body.classList.contains(MODE)) return;
+      /* Даём штатному обработчику и анимации 500 мс. После этого, если меню
+         действительно закрылось (выбор шрифта или повторный клик), убираем шапку. */
+      if (!menuOpen()) leave();
+    }, 500);
   }
 
   function onClick(e) {
-    var fontButton = isFontTrigger(e.target);
-    if (fontButton) {
-      trigger = fontButton;
-      scheduled = false;
-      setTimeout(inspect, 0);
-      setTimeout(inspect, 80);
-      setTimeout(inspect, 220);
+    var btn = fontButton(e.target);
+    if (btn) {
+      trigger = btn;
+      if (document.body.classList.contains(MODE)) {
+        setTimeout(scheduleCheck, 0);
+      } else {
+        /* click слушается в capture: штатное меню откроется сразу после нас. */
+        enter();
+      }
       return;
     }
-    if (panel && panel.contains(e.target)) {
-      var choice = e.target.closest && e.target.closest('button,[role="button"],li,.option,.item');
-      if (choice) setTimeout(function () {
-        if (panel && (!visible(panel) || fontScore(panel) < 2)) cleanup();
-      }, 120);
+
+    if (!document.body.classList.contains(MODE)) return;
+    var menu = e.target.closest && e.target.closest(MENU);
+    if (menu) {
+      /* Выбор пункта обычно сам закрывает menu. Проверяем после обработчика. */
+      setTimeout(scheduleCheck, 0);
     }
   }
   function onKey(e) {
-    if (e.key === 'Escape' && panel) {
+    if (e.key === 'Escape' && document.body.classList.contains(MODE)) {
       e.preventDefault();
       close();
     }
   }
 
+  function cleanOldVersions() {
+    var back = document.getElementById('dl-font-backdrop');
+    if (back) back.remove();
+    document.body.classList.remove('dl-font-open');
+    var marked = document.querySelectorAll('[data-dl-font-sheet]');
+    for (var i = 0; i < marked.length; i++) marked[i].removeAttribute('data-dl-font-sheet');
+  }
+
   function boot() {
     style();
-    /* Убираем остатки v1, если документ восстановлен браузером из bfcache. */
-    var oldBackdrop = document.getElementById('dl-font-backdrop');
-    if (oldBackdrop) oldBackdrop.remove();
-    document.body.classList.remove('dl-font-open');
-
+    cleanOldVersions();
     document.addEventListener('click', onClick, true);
     document.addEventListener('keydown', onKey, true);
-    if (window.MutationObserver) {
-      new MutationObserver(function () { if (trigger || panel) schedule(30); })
-        .observe(document.documentElement, {
-          childList: true, subtree: true, attributes: true,
-          attributeFilter: ['class', 'style', 'hidden', 'aria-expanded']
-        });
-    }
-    addEventListener('resize', function () { schedule(0); }, { passive: true });
-    addEventListener('orientationchange', function () { schedule(180); }, { passive: true });
-    addEventListener('pageshow', function () {
-      var back = document.getElementById('dl-font-backdrop');
-      if (back) back.remove();
-      document.body.classList.remove('dl-font-open');
-      schedule(0);
-    });
-    if (MQ && MQ.addEventListener) MQ.addEventListener('change', function () { schedule(0); });
+    addEventListener('resize', function () { if (!phone()) leave(); }, { passive: true });
+    addEventListener('orientationchange', function () { setTimeout(scheduleCheck, 180); }, { passive: true });
+    addEventListener('pageshow', cleanOldVersions);
+    if (MQ && MQ.addEventListener) MQ.addEventListener('change', function () { if (!phone()) leave(); });
   }
 
   window.dlCloseFonts = close;
   window.dlFontSheetState = function () {
     return {
       phone: phone(),
+      mode: document.body.classList.contains(MODE),
+      menuFound: menus().length,
+      menuVisible: menuOpen(),
       trigger: !!(trigger && trigger.isConnected),
-      panel: !!(panel && panel.isConnected),
-      open: !!(panel && visible(panel)),
-      options: panel ? fontScore(panel) : 0
+      paletteVisible: !!document.querySelector('[data-dl-palette-button]:not([style*="display: none"])')
     };
   };
 
