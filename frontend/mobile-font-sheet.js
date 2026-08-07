@@ -1,18 +1,19 @@
-/* Design Lab — мобильная панель выбора шрифта v3.
+/* Design Lab — мобильная панель выбора шрифта v4.
 
-   v1/v2 пытались вычислить контейнер меню по тексту. В результате выбирался
-   маленький внутренний блок списка: ему задавалась геометрия всей шторки,
-   штатное меню закрывалось, строки исчезали, а оболочка оставалась.
+   Что выяснилось по тестам на телефоне:
+   меню шрифтов — это ГОРИЗОНТАЛЬНАЯ лента (.pv-head .tb-menu), как сам
+   тулбар. В портрете она выглядит пустой полосой, в альбоме листается вбок.
+   Поэтому просто растянуть область мало — пункты надо перестроить в столбец.
 
-   Здесь нет поиска и нет изменений внутри списка. Настоящее меню уже известно:
-   `.editor.on .pv-head .tb-menu` (оно же используется в dl-mobile-chat.css).
-   Мы только включаем body.dl-font-mode после клика «Шрифты»:
-     • настоящий .tb-menu получает свободную область между шапкой и чатом;
-     • отдельная кнопка × закрывает меню штатным повторным кликом;
-     • палитра и её popup полностью скрываются, пока открыты шрифты;
-     • нет backdrop, затемнения, перехвата страницы и принудительного display.
+   v4 при нажатии «Шрифты» включает body.dl-font-mode, который:
+     • даёт настоящему .tb-menu свободную область между шапкой и чатом;
+     • перестраивает его flex-ленту в вертикальный список (пункт = строка);
+     • добавляет отдельную шапку «Шрифты ×» (крестик закрывает меню штатным
+       повторным кликом по исходной кнопке);
+     • полностью скрывает палитру и её popup, пока открыты шрифты;
+     • не создаёт backdrop/затемнения и не трогает содержимое пунктов.
 
-   Содержимое .tb-menu вообще не трогаем — выбор шрифтов остаётся штатным. */
+   Содержимое меню не меняется — только направление раскладки и геометрия. */
 (function () {
   'use strict';
   if (window.__dlMobileFontSheet) return;
@@ -22,7 +23,7 @@
   var MODE = 'dl-font-mode';
   var HEAD_ID = 'dl-font-head';
   var CSS_ID = 'dl-mobile-font-sheet-css';
-  var MENU = '.editor.on .pv-head .tb-menu';
+  var MENU = '.tb-menu';
   var trigger = null;
   var closing = false;
   var checkTimer = 0;
@@ -39,11 +40,19 @@
     node.id = CSS_ID;
     node.textContent = [
       '@media(max-width:860px){',
+      /* Палитра не должна висеть поверх открытых шрифтов. */
       'body.'+MODE+' [data-dl-palette-button],body.'+MODE+' [data-dl-palette-panel]{display:none!important;visibility:hidden!important;pointer-events:none!important}',
+      /* Отдельная шапка с заголовком и крестиком. */
       '#'+HEAD_ID+'{position:fixed;left:8px;right:8px;top:calc(var(--dlm-top,52px) + env(safe-area-inset-top,0px));z-index:9599;height:58px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 9px 7px 16px;background:#101114;border:1px solid rgba(255,255,255,.12);border-bottom-color:rgba(255,255,255,.08);border-radius:16px 16px 0 0;box-shadow:0 -8px 26px rgba(0,0,0,.25);font:700 16px/1.2 Inter,system-ui,sans-serif;color:#f4f4f5;pointer-events:auto}',
       '#'+HEAD_ID+' .dl-font-close{appearance:none;-webkit-appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;margin:0;padding:0;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:#1a1c21;color:#fff;font:300 28px/1 system-ui,sans-serif;box-shadow:none;cursor:pointer;touch-action:manipulation}',
       '#'+HEAD_ID+' .dl-font-close:active{background:#292c33;transform:scale(.96)}',
-      'body.'+MODE+' '+MENU+'{position:fixed!important;left:8px!important;right:8px!important;top:calc(var(--dlm-top,52px) + env(safe-area-inset-top,0px) + 57px)!important;bottom:calc(var(--dlm-comp,92px) + var(--dlm-kb,0px) + 8px)!important;width:auto!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;box-sizing:border-box!important;z-index:9598!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch;background:#101114!important;border:1px solid rgba(255,255,255,.12)!important;border-top:0!important;border-radius:0 0 16px 16px!important;box-shadow:0 22px 58px rgba(0,0,0,.56)!important;transform:none!important;opacity:1!important;visibility:visible!important;touch-action:pan-y}',
+      /* Настоящее меню: область между шапкой и строкой ввода + ВЕРТИКАЛЬНЫЙ список. */
+      'body.'+MODE+' '+MENU+'{position:fixed!important;left:8px!important;right:8px!important;top:calc(var(--dlm-top,52px) + env(safe-area-inset-top,0px) + 57px)!important;bottom:calc(var(--dlm-comp,92px) + var(--dlm-kb,0px) + 8px)!important;width:auto!important;min-width:0!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;padding:10px!important;box-sizing:border-box!important;z-index:9598!important;display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;justify-content:flex-start!important;gap:4px!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch;background:#101114!important;border:1px solid rgba(255,255,255,.12)!important;border-top:0!important;border-radius:0 0 16px 16px!important;box-shadow:0 22px 58px rgba(0,0,0,.56)!important;transform:none!important;opacity:1!important;visibility:visible!important;touch-action:pan-y}',
+      /* Пункты — отдельные строки на всю ширину, под палец. */
+      'body.'+MODE+' '+MENU+'>*{flex:0 0 auto!important;width:100%!important;min-width:0!important;max-width:100%!important;min-height:48px!important;margin:0!important;box-sizing:border-box!important}',
+      /* Если пункты завёрнуты в единственный внутренний скроллер — его тоже делаем колонкой. */
+      'body.'+MODE+' '+MENU+'>*:first-child:last-child{display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;gap:4px!important;min-height:0!important;overflow:visible!important}',
+      'body.'+MODE+' '+MENU+'>*:first-child:last-child>*{flex:0 0 auto!important;width:100%!important;min-width:0!important;max-width:100%!important;min-height:48px!important;margin:0!important;box-sizing:border-box!important}',
       'body.'+MODE+' '+MENU+' button,body.'+MODE+' '+MENU+' [role="button"],body.'+MODE+' '+MENU+' li{min-height:48px;touch-action:manipulation}',
       '}',
       '@media(max-width:380px){#'+HEAD_ID+',body.'+MODE+' '+MENU+'{left:5px!important;right:5px!important}}'
@@ -78,7 +87,6 @@
   function closePalettePopup() {
     var marked = document.querySelector('[data-dl-palette-panel]');
     if (marked) marked.style.display = 'none';
-    /* Старый popup мог ещё не получить маркер. */
     var nodes = document.querySelectorAll('body > div');
     for (var i = 0; i < nodes.length; i++) {
       if (String(nodes[i].textContent || '').indexOf('Цветовая схема сайта') >= 0) {
@@ -142,8 +150,6 @@
     checkTimer = setTimeout(function () {
       checkTimer = 0;
       if (!document.body.classList.contains(MODE)) return;
-      /* Даём штатному обработчику и анимации 500 мс. После этого, если меню
-         действительно закрылось (выбор шрифта или повторный клик), убираем шапку. */
       if (!menuOpen()) leave();
     }, 500);
   }
@@ -155,18 +161,13 @@
       if (document.body.classList.contains(MODE)) {
         setTimeout(scheduleCheck, 0);
       } else {
-        /* click слушается в capture: штатное меню откроется сразу после нас. */
         enter();
       }
       return;
     }
-
     if (!document.body.classList.contains(MODE)) return;
     var menu = e.target.closest && e.target.closest(MENU);
-    if (menu) {
-      /* Выбор пункта обычно сам закрывает menu. Проверяем после обработчика. */
-      setTimeout(scheduleCheck, 0);
-    }
+    if (menu) setTimeout(scheduleCheck, 0);
   }
   function onKey(e) {
     if (e.key === 'Escape' && document.body.classList.contains(MODE)) {
@@ -196,13 +197,15 @@
 
   window.dlCloseFonts = close;
   window.dlFontSheetState = function () {
+    var m = document.querySelector(MENU);
     return {
       phone: phone(),
       mode: document.body.classList.contains(MODE),
-      menuFound: menus().length,
+      menus: menus().length,
       menuVisible: menuOpen(),
-      trigger: !!(trigger && trigger.isConnected),
-      paletteVisible: !!document.querySelector('[data-dl-palette-button]:not([style*="display: none"])')
+      menuChildren: m ? m.children.length : 0,
+      firstChildTag: m && m.firstElementChild ? m.firstElementChild.tagName : '',
+      trigger: !!(trigger && trigger.isConnected)
     };
   };
 
